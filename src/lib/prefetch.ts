@@ -141,8 +141,8 @@ export function consumeFeedPrefetch() {
 const _cachedFeedForLyric = !_isEmbedRoute ? cacheRead<any[]>("feed_posts") : null;
 const _cachedLyricData = !_isEmbedRoute ? cacheRead<Record<string, any>>("lyric_data") : null;
 const _topLyricIds = (_cachedFeedForLyric ?? [])
-  .filter((p: any) => p.lyric_dance_id)
-  .map((p: any) => p.lyric_dance_id as string)
+  .filter((p: any) => p.project_id)
+  .map((p: any) => p.project_id as string)
   .filter((id) => !_cachedLyricData?.[id]?.cinematic_direction);
 
 export let lyricDataPrefetch: Promise<{ data: any[] | null; error: any }> | null =
@@ -208,7 +208,7 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
       .from("lyric_projects" as any)
       .select(LYRIC_DANCE_COLUMNS)
       .eq("artist_slug", artistSlug)
-      .eq("song_slug", songSlug)
+      .eq("url_slug", songSlug)
       .maybeSingle(),
   ).then((result: any) => {
     if (result.data) {

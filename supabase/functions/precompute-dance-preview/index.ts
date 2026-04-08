@@ -190,10 +190,10 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const danceId = body?.dance_id ?? body?.lyric_dance_id ?? null;
+    const danceId = body?.project_id ?? body?.dance_id ?? body?.lyric_dance_id ?? null;
 
     if (!danceId) {
-      return new Response(JSON.stringify({ error: "dance_id is required" }), {
+      return new Response(JSON.stringify({ error: "project_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
     const { data: reactionRows, error: reactionError } = await supabase
       .from("lyric_dance_reactions")
       .select("emoji, line_index")
-      .eq("dance_id", danceId);
+      .eq("project_id", danceId);
 
     if (reactionError) throw reactionError;
 
@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
     if (updateError) throw updateError;
 
     return new Response(
-      JSON.stringify({ success: true, dance_id: danceId, cover_image_url: coverImageUrl, top_reaction: topReaction }),
+      JSON.stringify({ success: true, project_id: danceId, cover_image_url: coverImageUrl, top_reaction: topReaction }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

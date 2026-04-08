@@ -54,14 +54,13 @@ interface SpotifyTrack {
 
 interface CrowdFitPost {
   id: string;
-  track_title: string;
-  album_art_url: string | null;
-  likes_count: number;
-  comments_count: number;
+  project_id: string | null;
+  fires_count: number;
+  saves_count: number;
+  engagement_score: number;
+  lyric_projects?: { title: string; album_art_url: string | null; spotify_track_id: string | null } | null;
   status: string;
   peak_rank: number | null;
-  spotify_track_id: string;
-  spotify_track_url: string;
 }
 
 type Tab = "music" | "about" | "connect";
@@ -178,7 +177,7 @@ export default function ArtistStage() {
         // Load CrowdFit posts
         supabase
           .from("feed_posts" as any)
-          .select("id, track_title, album_art_url, likes_count, comments_count, status, peak_rank, spotify_track_id, spotify_track_url")
+          .select("id, project_id, fires_count, saves_count, engagement_score, status, peak_rank, lyric_projects(title, album_art_url, spotify_track_id)")
           .eq("user_id", matched.id)
           .order("engagement_score", { ascending: false })
           .limit(10)
@@ -216,10 +215,10 @@ export default function ArtistStage() {
 
   // --------------- Mini player ---------------
   const playTrack = (track: SpotifyTrack | CrowdFitPost) => {
-    const isCrowdFit = "spotify_track_id" in track;
+    const isCrowdFit = "project_id" in track;
     setMiniTrack({
-      id: isCrowdFit ? (track as CrowdFitPost).spotify_track_id : (track as SpotifyTrack).id,
-      title: isCrowdFit ? (track as CrowdFitPost).track_title : (track as SpotifyTrack).name,
+      id: isCrowdFit ? ((track as CrowdFitPost).lyric_projects?.spotify_track_id ?? "") : (track as SpotifyTrack).id,
+      title: isCrowdFit ? ((track as CrowdFitPost).lyric_projects?.title ?? "") : (track as SpotifyTrack).name,
       artist: isCrowdFit ? "" : (track as SpotifyTrack).artists.map(a => a.name).join(", "),
     });
   };
@@ -228,7 +227,7 @@ export default function ArtistStage() {
   const { r, g, b } = hexToRgb(accent);
   const accentRgb = `${r}, ${g}, ${b}`;
   const heroImage = profile?.avatar_url;
-  const featuredArt = page?.featured_track_art ?? crowdFitPosts[0]?.album_art_url ?? heroImage;
+  const featuredArt = page?.featured_track_art ?? crowdFitPosts[0]?.lyric_projects?.album_art_url ?? heroImage;
 
   const themeFont = page?.theme === "editorial" ? "font-serif" : page?.theme === "modern" ? "font-mono" : "font-sans";
 
@@ -249,9 +248,9 @@ export default function ArtistStage() {
     );
   }
 
-  const featuredTrackId = page?.featured_track_id ?? crowdFitPosts[0]?.spotify_track_id ?? null;
-  const featuredTrackTitle = page?.featured_track_title ?? crowdFitPosts[0]?.track_title ?? "Play";
-  const featuredTrackUrl = page?.featured_track_url ?? crowdFitPosts[0]?.spotify_track_url ?? null;
+  const featuredTrackId = page?.featured_track_id ?? crowdFitPosts[0]?.lyric_projects?.spotify_track_id ?? null;
+  const featuredTrackTitle = page?.featured_track_title ?? crowdFitPosts[0]?.lyric_projects?.title ?? "Play";
+  const featuredTrackUrl = page?.featured_track_url ?? (featuredTrackId ? `https://open.spotify.com/track/${featuredTrackId}` : null);
 
   const heroYtId = page?.hero_content_type === "youtube" && page.hero_content_url
     ? getYouTubeEmbedId(page.hero_content_url)
@@ -461,8 +460,9 @@ export default function ArtistStage() {
                   <p className="text-white/30 text-sm text-center py-8">No songs on CrowdFit yet.</p>
                 ) : (
                   crowdFitPosts.map((post, i) => {
-                    const isFeatured = post.spotify_track_id === featuredTrackId;
-                    const isPlaying = miniTrack?.id === post.spotify_track_id;
+                    const postTrackId = post.lyric_projects?.spotify_track_id;
+                    const isFeatured = postTrackId === featuredTrackId;
+                    const isPlaying = miniTrack?.id === postTrackId;
                     return (
                       <button
                         key={post.id}
@@ -477,8 +477,8 @@ export default function ArtistStage() {
                       >
                         {/* Album art + play indicator */}
                         <div className="relative w-12 h-12 shrink-0">
-                          {post.album_art_url ? (
-                            <img src={post.album_art_url} alt="" className="w-full h-full rounded-lg object-cover" />
+                          {post.lyric_projects?.album_art_url ? (
+                            <img src={post.lyric_projects.album_art_url} alt="" className="w-full h-full rounded-lg object-cover" />
                           ) : (
                             <div className="w-full h-full rounded-lg bg-white/10 flex items-center justify-center">
                               <Music2 size={18} className="text-white/30" />
@@ -493,7 +493,7 @@ export default function ArtistStage() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate text-white">{post.track_title}</p>
+                          <p className="text-sm font-medium truncate text-white">{post.lyric_projects?.title ?? ""}</p>
                           <div className="flex items-center gap-2 mt-0.5">
                             {isFeatured && (
                               <span
@@ -513,7 +513,7 @@ export default function ArtistStage() {
                               #{post.peak_rank}
                             </p>
                           )}
-                          <p className="text-[10px] text-white/30">♥ {post.likes_count}</p>
+                          <p className="text-[10px] text-white/30">🔥 {post.fires_count}</p>
                         </div>
                       </button>
                     );
