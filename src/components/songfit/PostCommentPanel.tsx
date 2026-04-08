@@ -176,7 +176,7 @@ export function PostCommentPanel({
       }
 
       const { data } = await supabase
-        .from("songfit_comment_reactions" as any)
+        .from("lyric_dance_comment_reactions")
         .select("comment_id, emoji")
         .in("comment_id", commentIds);
       const counts: Record<string, Record<string, number>> = {};
@@ -220,11 +220,10 @@ export function PostCommentPanel({
         [emoji]: (prev[commentId]?.[emoji] ?? 0) + 1,
       },
     }));
-    await supabase.from("songfit_comment_reactions" as any).insert({
+    await supabase.from("lyric_dance_comment_reactions").insert({
       comment_id: commentId,
       emoji,
       session_id: sessionId,
-      user_id: user?.id ?? null,
     });
   };
 
