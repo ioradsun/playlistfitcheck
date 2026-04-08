@@ -313,7 +313,7 @@ export class ParticleEngine {
     if (nextConfig) this.config = nextConfig;
     if (this.config.system === "none") return;
 
-    const dt = deltaMs / 16.67;
+    const dt = Math.min(deltaMs / 16.67, 3);
     const onBeat = beatIntensity > 0.6 && this.lastBeatIntensity <= 0.6;
     if (beatIntensity > 0.7 && this.config.beatReactive) {
       this.beatBoostFrames = Math.max(this.beatBoostFrames, 10);
