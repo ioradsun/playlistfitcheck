@@ -1100,7 +1100,7 @@ export function FitTab({
     const { data } = await supabase
       .from("project_angle_votes" as any)
       .select("hook_index")
-      .eq("dance_id", danceId);
+      .eq("project_id", danceId);
     if (!data) return;
     const counts = Array(6).fill(0);
     (data as any[]).forEach((row) => {
@@ -1220,20 +1220,20 @@ export function FitTab({
       supabase
         .from("v_closing_distribution" as any)
         .select("hook_index, pick_count, pct")
-        .eq("dance_id", publishedDanceId),
+        .eq("project_id", publishedDanceId),
       supabase
         .from("v_free_form_responses" as any)
         .select("free_text, repeat_count")
-        .eq("dance_id", publishedDanceId)
+        .eq("project_id", publishedDanceId)
         .limit(20),
       supabase
         .from("project_fires" as any)
         .select("id", { count: "exact", head: true })
-        .eq("dance_id", publishedDanceId),
+        .eq("project_id", publishedDanceId),
       supabase
         .from("project_exposures" as any)
         .select("session_id")
-        .eq("dance_id", publishedDanceId),
+        .eq("project_id", publishedDanceId),
     ]).then(([strength, fires, dist, free, count, exposures]) => {
       setFireStrength(strength);
       setRawFires(fires);

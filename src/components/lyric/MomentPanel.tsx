@@ -173,7 +173,7 @@ export function MomentPanel({
     await supabase
       .from("project_comments" as any)
       .insert({
-        dance_id: danceId,
+        project_id: danceId,
         line_index: lineIndex,
         text,
         session_id: getSessionId(),

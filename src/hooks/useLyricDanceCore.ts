@@ -175,7 +175,7 @@ export function useLyricDanceCore({
       const { data: fires } = await supabase
         .from("project_fires" as any)
         .select("line_index, hold_ms, user_id")
-        .eq("dance_id", data.id);
+        .eq("project_id", data.id);
 
       if (!mounted || !fires) return;
 

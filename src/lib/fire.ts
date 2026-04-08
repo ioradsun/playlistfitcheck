@@ -19,7 +19,7 @@ export async function emitFire(
   if (!fireTableAvailable) return;
 
   const { error } = await supabase.from('project_fires' as any).insert({
-    dance_id: danceId,
+    project_id: danceId,
     session_id: getSessionId(),
     line_index: lineIndex,
     time_sec: timeSec,
@@ -38,7 +38,7 @@ export async function emitExposure(
 ): Promise<void> {
   supabase.from('project_exposures' as any)
     .upsert({
-      dance_id: danceId,
+      project_id: danceId,
       session_id: getSessionId(),
       line_index: lineIndex,
       ...(source ? { source } : {}),
@@ -54,7 +54,7 @@ export async function emitClosingPick(
 ): Promise<void> {
   supabase.from('project_closing_picks' as any)
     .upsert({
-      dance_id: danceId,
+      project_id: danceId,
       session_id: getSessionId(),
       hook_index: hookIndex,
       free_text: freeText?.trim() || null,
@@ -80,7 +80,7 @@ export async function upsertPlay(
     .from('project_plays' as any)
     .upsert(
       {
-        dance_id: danceId,
+        project_id: danceId,
         session_id: sessionId,
         user_id: opts.userId ?? null,
         was_muted: opts.wasMuted,
@@ -107,7 +107,7 @@ export async function fetchFireData(danceId: string): Promise<Array<{
     const { data, error } = await supabase
       .from('project_fires' as any)
       .select('line_index, time_sec, hold_ms, created_at')
-      .eq('dance_id', danceId)
+      .eq('project_id', danceId)
       .order('time_sec', { ascending: true });
 
     if (isMissingTableError(error)) fireTableAvailable = false;
@@ -127,7 +127,7 @@ export async function fetchFireStrength(danceId: string): Promise<Array<{
   const { data } = await supabase
     .from('v_fire_strength' as any)
     .select('line_index, fire_strength, fire_count, avg_hold_ms')
-    .eq('dance_id', danceId)
+    .eq('project_id', danceId)
     .order('fire_strength', { ascending: false });
   return (data as any[]) ?? [];
 }
@@ -142,7 +142,7 @@ export async function fetchSessionFires(
     const { data, error } = await supabase
       .from('project_fires' as any)
       .select('line_index, hold_ms')
-      .eq('dance_id', danceId)
+      .eq('project_id', danceId)
       .eq('session_id', sessionId);
 
     if (isMissingTableError(error)) fireTableAvailable = false;

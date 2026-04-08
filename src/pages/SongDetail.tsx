@@ -820,27 +820,27 @@ const SongDetail = () => {
       supabase
         .from("v_closing_distribution" as any)
         .select("hook_index, pick_count, pct")
-        .eq("dance_id", danceId),
+        .eq("project_id", danceId),
       supabase
         .from("v_free_form_responses" as any)
         .select("free_text, repeat_count")
-        .eq("dance_id", danceId)
+        .eq("project_id", danceId)
         .limit(20),
       supabase
         .from("project_fires" as any)
         .select("id", { count: "exact", head: true })
-        .eq("dance_id", danceId),
-      supabase.from("project_exposures" as any).select("session_id").eq("dance_id", danceId),
+        .eq("project_id", danceId),
+      supabase.from("project_exposures" as any).select("session_id").eq("project_id", danceId),
       supabase
         .from("project_comments" as any)
         .select("id, text, line_index, submitted_at")
-        .eq("dance_id", danceId)
+        .eq("project_id", danceId)
         .order("submitted_at", { ascending: true })
         .limit(200),
       supabase
         .from("project_fires" as any)
         .select("source")
-        .eq("dance_id", danceId),
+        .eq("project_id", danceId),
     ]).then(([strength, fires, dist, free, count, exposures, commentRes, sourceRes]) => {
       setFireStrength(strength);
       setRawFires(fires);
@@ -859,10 +859,10 @@ const SongDetail = () => {
     });
 
     Promise.all([
-      supabase.from("project_exposures" as any).select("session_id").eq("dance_id", danceId),
-      supabase.from("project_fires" as any).select("session_id, line_index, created_at").eq("dance_id", danceId),
-      supabase.from("project_closing_picks" as any).select("session_id").eq("dance_id", danceId),
-      supabase.from("project_comments" as any).select("session_id").eq("dance_id", danceId),
+      supabase.from("project_exposures" as any).select("session_id").eq("project_id", danceId),
+      supabase.from("project_fires" as any).select("session_id, line_index, created_at").eq("project_id", danceId),
+      supabase.from("project_closing_picks" as any).select("session_id").eq("project_id", danceId),
+      supabase.from("project_comments" as any).select("session_id").eq("project_id", danceId),
     ]).then(([expRes, fireRes, closeRes, commentRes]) => {
       const expSessions = new Set(((expRes.data ?? []) as any[]).map((r: any) => r.session_id).filter(Boolean));
       const fireSessions = new Set(((fireRes.data ?? []) as any[]).map((r: any) => r.session_id).filter(Boolean));
