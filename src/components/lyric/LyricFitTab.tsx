@@ -1,7 +1,7 @@
 /* cache-bust: 2026-03-06-V2 */
 
 import * as React from "react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
@@ -56,8 +56,6 @@ export function LyricFitTab({
   const siteCopy = useSiteCopy();
 
   const [activeTab, setActiveTab] = React.useState<LyricFitView>("lyrics");
-  const [fitPlayerReady, setFitPlayerReady] = React.useState(false);
-  const [fontReady, setFontReady] = React.useState(false);
   const [sceneDescription, setSceneDescription] = React.useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const [filmMode, setFilmMode] = React.useState<FilmMode>(() => {
@@ -91,27 +89,7 @@ export function LyricFitTab({
     filmMode,
   });
 
-  useEffect(() => {
-    if (typeof document === "undefined" || !document.fonts) {
-      setFontReady(true);
-      return;
-    }
-    setFontReady(document.fonts.check('600 48px "Montserrat"'));
-  }, [p.cinematicDirection]);
-
-  const projectAlreadyComplete = useMemo(
-    () =>
-      !!(
-        p.cinematicDirection &&
-        p.beatGrid &&
-        p.pipelineDanceId &&
-        (p.sectionImageUrls.some(Boolean) ||
-          !(p.cinematicDirection as any)?.sections?.length)
-      ),
-    [p.cinematicDirection, p.beatGrid, p.pipelineDanceId, p.sectionImageUrls],
-  );
-
-  const fitReady = fitPlayerReady || (projectAlreadyComplete && fontReady);
+  const fitReady = p.isComplete;
 
   const handleFilmModeChange = React.useCallback((m: FilmMode) => {
     setFilmMode(m);
@@ -123,9 +101,9 @@ export function LyricFitTab({
 
   const handleViewChange = useCallback((nextView: LyricFitView) => {
     if ((nextView === "fit" || nextView === "data") && !fitReady) return;
-    if (nextView === "data" && !p.pipelineDanceId) return;
+    if (nextView === "data" && !p.savedId) return;
     setActiveTab(nextView);
-  }, [fitReady, p.pipelineDanceId]);
+  }, [fitReady, p.savedId]);
 
   const handleBackToLyrics = useCallback(
     () => handleViewChange("lyrics"),
@@ -134,18 +112,18 @@ export function LyricFitTab({
 
   useEffect(() => {
     if (!claimMeta) return;
-    if (p.lyricData && p.audioFile && activeTab === "lyrics" && fitPlayerReady) {
+    if (p.lyricData && p.audioFile && activeTab === "lyrics" && p.isComplete) {
       setActiveTab("fit");
     }
-  }, [claimMeta, p.lyricData, p.audioFile, activeTab, fitPlayerReady]);
+  }, [claimMeta, p.lyricData, p.audioFile, activeTab, p.isComplete]);
 
   useEffect(() => {
     if (filmMode !== "beat") return;
     if (activeTab !== "lyrics") return;
-    if (p.audioFile || p.pipelineDanceId || p.cinematicDirection) {
+    if (p.audioFile || p.savedId || p.cinematicDirection) {
       setActiveTab("fit");
     }
-  }, [filmMode, activeTab, p.audioFile, p.pipelineDanceId, p.cinematicDirection]);
+  }, [filmMode, activeTab, p.audioFile, p.savedId, p.cinematicDirection]);
 
   const sceneInputNode = !p.lyricData ? (
     <div className="space-y-1.5">
@@ -180,7 +158,7 @@ export function LyricFitTab({
             p.generationStatus.sectionImages === "running"
           }
           isError={Object.values(p.generationStatus).includes("error")}
-          hasData={!!p.pipelineDanceId}
+          hasData={!!p.savedId}
         />
       )}
 
@@ -262,19 +240,17 @@ export function LyricFitTab({
             cinematicDirection={p.cinematicDirection}
             generationStatus={p.generationStatus}
             words={p.words}
+            initialLyric={initialLyric}
             onHeaderProject={activeTab === "fit" || activeTab === "data" ? onHeaderProject : undefined}
             onBack={handleBackToLyrics}
             
             parentWaveform={p.waveformData}
-            initialDanceId={p.pipelineDanceId}
-            initialDanceUrl={p.pipelineDanceUrl}
             sectionImageUrls={p.sectionImageUrls}
             sectionImageProgress={p.sectionImageProgress}
             sectionImageError={p.sectionImageError}
             onTitleChange={p.handleTitleChange}
             subView={activeTab === "data" ? "data" : "fit"}
             filmMode={filmMode}
-            onPlayerReady={setFitPlayerReady}
           />
         </div>
       )}

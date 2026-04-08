@@ -51,8 +51,6 @@ interface UsePipelineSchedulerParams {
     React.SetStateAction<{ done: number; total: number } | null>
   >;
   setSectionImageError: React.Dispatch<React.SetStateAction<string | null>>;
-  setPipelineDanceId: React.Dispatch<React.SetStateAction<string | null>>;
-  setPipelineDanceUrl: React.Dispatch<React.SetStateAction<string | null>>;
   runIdRef: React.MutableRefObject<number>;
   lastCompletedRunIdRef: React.MutableRefObject<number>;
 
@@ -98,8 +96,6 @@ async function createDanceRowAndGenerateImages({
   words,
   renderData,
   audioDurationSec,
-  setPipelineDanceId,
-  setPipelineDanceUrl,
   setGenerationStatus,
   setSectionImageUrls,
   setSectionImageProgress,
@@ -115,8 +111,6 @@ async function createDanceRowAndGenerateImages({
   words: Array<{ word: string; start: number; end: number }> | null;
   renderData: any | null;
   audioDurationSec: number;
-  setPipelineDanceId: React.Dispatch<React.SetStateAction<string | null>>;
-  setPipelineDanceUrl: React.Dispatch<React.SetStateAction<string | null>>;
   setGenerationStatus: React.Dispatch<React.SetStateAction<GenerationStatus>>;
   setSectionImageUrls: React.Dispatch<React.SetStateAction<(string | null)[]>>;
   setSectionImageProgress: React.Dispatch<
@@ -235,10 +229,6 @@ async function createDanceRowAndGenerateImages({
     };
   }
 
-  setPipelineDanceId(resolvedDanceId);
-  setPipelineDanceUrl(`/${artistSlugVal}/${songSlugVal}/lyric-dance`);
-  // pipelineDanceId/Url derived from the project row — no render_data persist needed.
-
   if (!hasSections) {
     setSectionImageUrls([]);
     setSectionImageProgress(null);
@@ -305,8 +295,6 @@ export function usePipelineScheduler({
   setSectionImageUrls,
   setSectionImageProgress,
   setSectionImageError,
-  setPipelineDanceId,
-  setPipelineDanceUrl,
   runIdRef,
   lastCompletedRunIdRef,
   startCinematicDirection,
@@ -585,8 +573,6 @@ export function usePipelineScheduler({
     setSectionImageUrls([]);
     setSectionImageProgress(null);
     setSectionImageError(null);
-    setPipelineDanceId(null);
-    setPipelineDanceUrl(null);
     setGenerationStatus((prev) => ({
       beatGrid: prev.beatGrid === "done" ? "done" : "idle",
       renderData: "done",
@@ -619,8 +605,6 @@ export function usePipelineScheduler({
     setSectionImageUrls,
     setSectionImageProgress,
     setSectionImageError,
-    setPipelineDanceId,
-    setPipelineDanceUrl,
     hookDetectionRunRef,
     savedIdRef,
   ]);
@@ -779,37 +763,6 @@ export function useLyricPipeline({
     },
   );
   const phraseResultRef = useRef<ReturnType<typeof buildPhrases> | null>(null);
-  const _projectId = (initialLyric as any)?.id ?? null;
-  const _artistSlug = (initialLyric as any)?.artist_slug ?? null;
-  const _urlSlug = (initialLyric as any)?.url_slug ?? null;
-  const _rd = (initialLyric as any)?.render_data;
-  const _hasCinematic = !!(
-    (initialLyric as any)?.cinematic_direction ||
-    _rd?.cinematicDirection ||
-    _rd?.cinematic_direction
-  );
-  const _hasBeatGrid = !!((initialLyric as any)?.beat_grid);
-  const _sections =
-    (initialLyric as any)?.cinematic_direction?.sections ??
-    _rd?.cinematicDirection?.sections ??
-    _rd?.cinematic_direction?.sections ??
-    null;
-  const _hasImages =
-    !Array.isArray(_sections) || _sections.length === 0
-      ? true
-      : Array.isArray((initialLyric as any)?.section_images) &&
-        (initialLyric as any).section_images.some(Boolean);
-  const _projectReady = _hasCinematic && _hasBeatGrid && _hasImages;
-  const [pipelineDanceId, setPipelineDanceId] = useState<string | null>(
-    _projectReady && _projectId ? _projectId : null,
-  );
-  const [pipelineDanceUrl, setPipelineDanceUrl] = useState<string | null>(
-    _projectReady && _artistSlug && _urlSlug
-      ? `/${_artistSlug}/${_urlSlug}/lyric-dance`
-      : _projectReady && _projectId
-        ? null
-      : null,
-  );
   const [sectionImageUrls, setSectionImageUrls] = useState<(string | null)[]>(
     Array.isArray((initialLyric as any)?.section_images)
       ? ((initialLyric as any).section_images as (string | null)[])
@@ -1165,22 +1118,6 @@ export function useLyricPipeline({
     }
   }, [initialLyric]);
 
-  useEffect(() => {
-    if (pipelineDanceId) return;
-    const row = initialLyric as any;
-    if (!row?.id || !row?.cinematic_direction || !row?.beat_grid) return;
-    const sections = row.cinematic_direction?.sections;
-    const hasImages =
-      !Array.isArray(sections) || sections.length === 0
-        ? true
-        : Array.isArray(row.section_images) && row.section_images.some(Boolean);
-    if (!hasImages) return;
-    setPipelineDanceId(row.id);
-    if (row.artist_slug && row.url_slug) {
-      setPipelineDanceUrl(`/${row.artist_slug}/${row.url_slug}/lyric-dance`);
-    }
-  }, [initialLyric, pipelineDanceId]);
-
   const claimPublishedRef = useRef(false);
   useEffect(() => {
     if (!claimMeta || claimPublishedRef.current) return;
@@ -1301,8 +1238,6 @@ export function useLyricPipeline({
             .catch(() => {});
         }
 
-        setPipelineDanceId(danceRow?.id ?? null);
-        setPipelineDanceUrl(lyricDanceUrl);
         onClaimPublished?.(lyricDanceUrl);
       } catch (e) {
         console.error("[ClaimPublish] Error:", e);
@@ -1325,9 +1260,6 @@ export function useLyricPipeline({
     }, 1500);
     return () => clearTimeout(timer);
   }, [renderData, cinematicDirection]);
-
-  // pipelineDanceId/Url are now derived from the project row directly —
-  // no need to persist them into render_data.
 
   const hookDetectionRunRef = useRef(false);
   const startHookDetection = useCallback(async () => {
@@ -1558,8 +1490,6 @@ export function useLyricPipeline({
               words,
               renderData,
               audioDurationSec,
-              setPipelineDanceId,
-              setPipelineDanceUrl,
               setGenerationStatus,
               setSectionImageUrls,
               setSectionImageProgress,
@@ -1643,8 +1573,6 @@ export function useLyricPipeline({
     setSectionImageUrls,
     setSectionImageProgress,
     setSectionImageError,
-    setPipelineDanceId,
-    setPipelineDanceUrl,
     runIdRef,
     lastCompletedRunIdRef,
     startCinematicDirection,
@@ -1830,8 +1758,6 @@ export function useLyricPipeline({
               words,
               renderData,
               audioDurationSec,
-              setPipelineDanceId,
-              setPipelineDanceUrl,
               setGenerationStatus,
               setSectionImageUrls,
               setSectionImageProgress,
@@ -1850,7 +1776,7 @@ export function useLyricPipeline({
         setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "error" }));
       }
     },
-    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, setPipelineDanceId, setPipelineDanceUrl, setSectionImageUrls, setSectionImageProgress],
+    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, setSectionImageUrls, setSectionImageProgress],
   );
 
   useEffect(() => {
@@ -1899,6 +1825,14 @@ export function useLyricPipeline({
   );
 
   const fitDisabled = filmMode === "beat" ? false : !transcriptionDone;
+  const isComplete = !!(
+    beatGrid &&
+    cinematicDirection &&
+    (
+      !(cinematicDirection as any)?.sections?.length ||
+      sectionImageUrls.some(Boolean)
+    )
+  );
 
   const resetProject = useCallback(() => {
     setRenderData(null);
@@ -1919,8 +1853,6 @@ export function useLyricPipeline({
     setSectionImageProgress(null);
     setSectionImageError(null);
     setFitReadiness("not_started");
-    setPipelineDanceId(null);
-    setPipelineDanceUrl(null);
     setSpotifyTrackId(null);
     claimPublishedRef.current = false;
     cinematicTriggeredRef.current = false;
@@ -1954,10 +1886,6 @@ export function useLyricPipeline({
     setBeatGrid,
     cinematicDirection,
     setCinematicDirection,
-    pipelineDanceId,
-    setPipelineDanceId,
-    pipelineDanceUrl,
-    setPipelineDanceUrl,
     sectionImageUrls,
     setSectionImageUrls,
     sectionImageProgress,
@@ -1979,6 +1907,7 @@ export function useLyricPipeline({
     pipelineStages,
     setPipelineStages,
     fitDisabled,
+    isComplete,
     pipelineRetryCount,
     handleAudioSubmitted,
     handleTitleChange,
