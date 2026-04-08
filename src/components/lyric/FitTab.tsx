@@ -796,6 +796,15 @@ export function FitTab({
     return () => clearTimeout(timer);
   }, [allGenDone, publishedDanceId, refetchDanceData, sectionImageUrls]);
 
+  // Refetch once more when section images finish generating but DB data is stale
+  useEffect(() => {
+    if (generationStatus.sectionImages !== "done") return;
+    if (!publishedDanceId) return;
+    if (prefetchedDanceData?.section_images?.some(Boolean)) return;
+    // Images just finished generating — refetch to get the URLs
+    refetchDanceData();
+  }, [generationStatus.sectionImages, publishedDanceId, prefetchedDanceData, refetchDanceData]);
+
   const allReady =
     generationStatus.beatGrid === "done" &&
     generationStatus.renderData === "done" &&
