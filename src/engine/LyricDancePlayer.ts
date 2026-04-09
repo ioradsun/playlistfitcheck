@@ -2511,6 +2511,9 @@ export class LyricDancePlayer {
       this._buildChunkCacheFromScene(this.compiledScene);
       this._markCompiledViewport(width, height);
     }
+    if (!this.compiledScene) {
+      console.warn('[LyricDancePlayer] setupExportResolution: no compiledScene after resize — export may have blank frames');
+    }
     if (!this.fullModeEnabled && this.payload) {
       this.enableFullVisualMode();
     }
@@ -4383,11 +4386,11 @@ export class LyricDancePlayer {
   }
 
   private drawWatermark(): void {
-    const margin = 20;
-    const padX = 14;
-    const padY = 8;
+    const margin = Math.round(this.width * 0.022);
+    const padX = Math.round(this.width * 0.014);
+    const padY = Math.round(this.width * 0.008);
     const text = "♥ tools.FMLY";
-    const fontSize = Math.max(12, this.width * 0.013);
+    const fontSize = Math.max(12, Math.round(this.width * 0.022));
     const font = `400 ${fontSize}px "Space Mono", "Geist Mono", monospace`;
 
     // Recompute only when font changes (i.e. on resize). measureText is a DOM
