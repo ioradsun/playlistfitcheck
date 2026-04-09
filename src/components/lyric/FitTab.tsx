@@ -45,6 +45,8 @@ import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { persistQueue } from "@/lib/persistQueue";
 import { preloadImage } from "@/lib/imagePreloadCache";
 
+const ExportStudio = lazy(() => import("./ExportStudio").then((m) => ({ default: m.ExportStudio })));
+
 interface Props {
   pipeline: {
     retryImages: () => void | Promise<void>;
@@ -310,6 +312,7 @@ export function FitTab({
   }, [initialLyric, danceId, lyricData?.title, user?.id]);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
   const [viralClipOpen, setViralClipOpen] = useState(false);
+  const [exportStudioOpen, setExportStudioOpen] = useState(false);
   const dancePlayerRef =
     useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(
       null,
@@ -1092,7 +1095,7 @@ export function FitTab({
                 Watch
               </a>
               <button
-                onClick={() => setViralClipOpen(true)}
+                onClick={() => setExportStudioOpen(true)}
                 className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40"
                 title="Download"
               >
@@ -1965,6 +1968,29 @@ export function FitTab({
         artistName={profile?.display_name || "artist"}
         audioUrl={dancePlayerRef.current?.getAudioUrl?.() ?? audioUrl ?? ""}
       />
+
+      {exportStudioOpen && (
+        <Suspense fallback={null}>
+          <ExportStudio
+            isOpen={exportStudioOpen}
+            onClose={() => {
+              setExportStudioOpen(false);
+              const player = dancePlayerRef.current?.getPlayer();
+              if (player) player.setRegion(undefined, undefined);
+            }}
+            getPlayer={getViralClipPlayer}
+            moments={dancePlayerRef.current?.getMoments?.() ?? []}
+            fireHeat={dancePlayerRef.current?.getFireHeat?.() ?? {}}
+            comments={dancePlayerRef.current?.getComments?.() ?? []}
+            songTitle={lyricData.title || "Untitled"}
+            artistName={profile?.display_name || "artist"}
+            audioUrl={dancePlayerRef.current?.getAudioUrl?.() ?? audioUrl ?? ""}
+            durationSec={activeWaveform?.duration ?? beatGrid?._duration ?? 0}
+            empowermentHooks={empowermentPromise?.hooks}
+            hookVoteCounts={hookVoteCounts}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
