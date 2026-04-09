@@ -43,6 +43,11 @@ interface ExportOptions {
     style: "stroke" | "bar" | "pill" | "none";
     position: "top" | "bottom";
   };
+  credit?: {
+    artistName: string;
+    songTitle: string;
+    avatarImg: HTMLImageElement | null;
+  };
   /** Optional audio to mux alongside video. When provided, output is an A/V MP4. */
   audioSlice?: {
     audioUrl: string;
@@ -270,6 +275,64 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
               break;
             }
           }
+        }
+      }
+
+      // ── Artist credit pill ──
+      if (options.credit) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const { artistName, songTitle, avatarImg } = options.credit;
+          const isPortrait = height > width;
+          const pillFontSize = Math.max(10, Math.round(width * 0.018));
+          const avatarSize = Math.round(pillFontSize * 1.8);
+          const pillPadX = Math.round(pillFontSize * 0.7);
+          const pillPadY = Math.round(pillFontSize * 0.4);
+          const pillGap = Math.round(pillFontSize * 0.5);
+          const pillX = Math.round(width * (isPortrait ? 0.05 : 0.08));
+          const pillY = Math.round(height * (isPortrait ? 0.08 : 0.06));
+
+          const creditText = `${artistName} · ${songTitle}`;
+          ctx.font = `400 ${pillFontSize}px "SF Mono", "Geist Mono", monospace`;
+          const textMetrics = ctx.measureText(creditText);
+          const textW = Math.min(textMetrics.width, width * 0.6);
+
+          const totalW = avatarSize + pillGap + textW + pillPadX * 2;
+          const totalH = avatarSize + pillPadY * 2;
+          const radius = totalH / 2;
+
+          // Pill background
+          ctx.save();
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.beginPath();
+          ctx.roundRect(pillX, pillY, totalW, totalH, radius);
+          ctx.fill();
+
+          // Avatar circle
+          const avatarX = pillX + pillPadX;
+          const avatarY = pillY + pillPadY;
+          const avatarR = avatarSize / 2;
+          if (avatarImg && avatarImg.naturalWidth > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(avatarX + avatarR, avatarY + avatarR, avatarR, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = "rgba(255,255,255,0.15)";
+            ctx.beginPath();
+            ctx.arc(avatarX + avatarR, avatarY + avatarR, avatarR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Text
+          ctx.fillStyle = "rgba(255,255,255,0.8)";
+          ctx.font = `400 ${pillFontSize}px "SF Mono", "Geist Mono", monospace`;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "middle";
+          ctx.fillText(creditText, avatarX + avatarSize + pillGap, pillY + totalH / 2, textW);
+          ctx.restore();
         }
       }
 
