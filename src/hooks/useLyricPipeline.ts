@@ -1096,9 +1096,6 @@ export function useLyricPipeline({
         }));
       }
 
-      import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
-        deriveFrameState(loadedCinematicDirection, 0, 0.5);
-      });
     }
 
     // Audio — single playback resource
@@ -1574,9 +1571,7 @@ export function useLyricPipeline({
           });
         }
 
-        const { deriveFrameState } = await import("@/engine/presetDerivation");
         if (myRunId !== runIdRef.current) return;
-        deriveFrameState(enrichedScene, 0, 0.5);
 
         setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));
 
