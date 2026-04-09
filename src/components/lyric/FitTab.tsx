@@ -1536,7 +1536,11 @@ export function FitTab({
                 if (player) player.setRegion(undefined, undefined);
               }}
               getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
-              moments={dancePlayerRef.current?.getMoments?.() ?? []}
+              moments={(() => {
+                const m = dancePlayerRef.current?.getMoments?.() ?? [];
+                if (m.length === 0) console.warn("[FitTab] ViralClipModal received empty moments");
+                return m;
+              })()}
               fireHeat={dancePlayerRef.current?.getFireHeat?.() ?? {}}
               comments={dancePlayerRef.current?.getComments?.() ?? []}
               songTitle={lyricData.title || "Untitled"}

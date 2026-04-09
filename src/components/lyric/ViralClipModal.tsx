@@ -224,8 +224,13 @@ export function ViralClipModal({
 
   const handleDownload = useCallback(async () => {
     if (!browserSupported) return;
+    if (!selected) return;
     const player = getPlayer();
-    if (!player || !selected) return;
+    if (!player) {
+      console.error("[ViralClipModal] No player available");
+      setStage("error");
+      return;
+    }
 
     const { w, h } = PLATFORMS[platform];
     const scale = QUALITY_SCALE[quality];
@@ -405,7 +410,7 @@ export function ViralClipModal({
               )}
 
               <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 8 }}>
-                <button onClick={handleDownload} disabled={!selected || !browserSupported} style={{ flex: 1, height: 48, border: "none", background: "rgba(255,140,40,0.9)", color: "#ffffff", fontSize: 15, fontWeight: 700, cursor: !selected || !browserSupported ? "not-allowed" : "pointer", opacity: !selected || !browserSupported ? 0.6 : 1 }}>
+                <button onClick={handleDownload} disabled={!selected || !browserSupported} style={{ flex: 1, height: 48, border: "none", background: "rgba(255,140,40,0.9)", color: "#ffffff", fontSize: 15, fontWeight: 700, cursor: selected && browserSupported ? "pointer" : "not-allowed", opacity: selected && browserSupported ? 1 : 0.35 }}>
                   Download for {PLATFORMS[platform].label}
                 </button>
                 <button onClick={cyclePlatform} style={{ width: 48, height: 48, border: "none", borderLeft: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,140,40,0.75)", color: "rgba(255,255,255,0.9)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
