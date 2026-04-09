@@ -112,6 +112,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
   const [hasUnlocked, setHasUnlocked] = useState(false);
+  const [truthCompleted, setTruthCompleted] = useState(false);
 
   // Auto-play for non-feed embeds (FitTab) when player is ready
   useEffect(() => {
@@ -485,7 +486,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               text: line?.text ?? "",
               lineIndex,
             }))}
-            onContinue={() => setCardMode("moments")}
+            initialBeat={truthCompleted ? "meaning" : undefined}
+            onContinue={() => {
+              setTruthCompleted(true);
+              setCardMode("moments");
+            }}
             onCommentSubmitted={(comment) => {
               setComments((prev) => [...prev, comment]);
             }}
