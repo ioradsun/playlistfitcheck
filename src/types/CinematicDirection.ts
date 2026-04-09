@@ -3,8 +3,7 @@
  * - NEW format (sceneTone, sections, wordDirectives as array, storyboard)
  * - OLD format fields (kept as optional for backward compat during migration)
  *
- * New consumers should use directionResolvers.ts utilities.
- * Old fields will be removed once all consumers are migrated.
+ * Contains active and legacy fields for DB compatibility.
  */
 
 // ── Primary new-schema fields ────────────────────────────────
@@ -30,11 +29,11 @@ export interface CinematicDirection {
   sections?: CinematicSection[];
 
   // WordDirectives: new format = array, old format = Record
-  // Consumers should use directionResolvers.buildWordDirectiveMap() for lookup
+  // Legacy field — word emphasis data from old AI prompt format
   wordDirectives?: WordDirective[] | Record<string, WordDirective>;
 
-  // Storyboard: new format = StoryboardEntry[], old = LineDirection[]
-  storyboard?: StoryboardEntry[] | LineDirection[];
+  // Storyboard: new format = StoryboardEntry[], old legacy objects
+  storyboard?: StoryboardEntry[] | Record<string, any>[];
 
   /** AI-grouped phrases: which words appear on screen together.
    *  Each phrase is one "reading beat" — a complete thought the viewer reads and absorbs. */
@@ -46,16 +45,16 @@ export interface CinematicDirection {
   // ── Legacy fields (deprecated — use resolvers instead) ─────
   /** @deprecated Use emotionalArc + resolvers */
   thesis?: string;
-  /** @deprecated Use resolvers: resolveTypography(), resolveMotionPhysics() */
-  visualWorld?: VisualWorld;
+  /** @deprecated Legacy visual world from V1 prompt */
+  visualWorld?: Record<string, any>;
   /** @deprecated Use sections + enrichSections() */
   chapters?: Chapter[];
-  /** @deprecated Use emotionalArc + deriveTensionCurve() */
-  tensionCurve?: TensionStage[];
-  /** @deprecated Use emotionalArc + deriveClimaxRatio() */
-  climax?: ClimaxDirective;
-  /** @deprecated */
-  ending?: EndingDirective;
+  /** @deprecated Legacy tension curve from V1 prompt */
+  tensionCurve?: any[];
+  /** @deprecated Legacy climax directive from V1 prompt */
+  climax?: Record<string, any>;
+  /** @deprecated Legacy ending directive from V1 prompt */
+  ending?: Record<string, any>;
 }
 
 // ── New section type ─────────────────────────────────────────
@@ -154,40 +153,7 @@ export interface WordDirective {
   evolutionRule?: string | null;
 }
 
-// ── Tension stage (used by deriveTensionCurve) ───────────────
-
-export interface TensionStage {
-  stage: 'Setup' | 'Build' | 'Peak' | 'Release';
-  startRatio: number;
-  endRatio: number;
-  motionIntensity: number;
-  particleDensity: number;
-  lightBrightness: number;
-  cameraMovement: string;
-  typographyAggression: number;
-}
-
 // (SymbolSystem, CameraLanguage, ShotType, SilenceDirective removed — dead V2 fields)
-
-export interface VisualWorld {
-  palette: [string, string, string];
-  backgroundSystem: string;
-  lightSource: string;
-  particleSystem: string;
-  typographyProfile: {
-    fontFamily: string;
-    fontWeight: number;
-    personality: string;
-    letterSpacing: string;
-    textTransform: string;
-  };
-  physicsProfile: {
-    weight: 'featherlight' | 'light' | 'normal' | 'heavy' | 'crushing';
-    chaos: 'still' | 'restrained' | 'building' | 'chaotic' | 'explosive';
-    heat: number;
-    beatResponse: 'breath' | 'pulse' | 'slam' | 'drift' | 'shatter';
-  };
-}
 
 export interface Chapter {
   sectionIndices?: number[];
@@ -214,37 +180,5 @@ export interface Chapter {
   mood?: string;
 }
 
-export interface LineDirection {
-  lineIndex: number;
-  text: string;
-  emotionalIntent: string;
-  heroWord: string;
-  visualTreatment: string;
-  entryStyle:
-    | 'fades' | 'slams-in' | 'rises' | 'materializes' | 'fractures-in' | 'cuts'
-    | string;
-  exitStyle:
-    | 'fades' | 'dissolves-upward' | 'shatters' | 'burns-out' | 'drops' | 'lingers'
-    | string;
-  particleBehavior: string;
-  beatAlignment: string;
-  transitionToNext: string;
-}
-
 // (SilenceDirective removed — dead V2 field)
 
-export interface ClimaxDirective {
-  timeRatio: number;
-  triggerLine: string;
-  maxParticleDensity: number;
-  maxLightIntensity: number;
-  typographyBehavior: string;
-  worldTransformation: string;
-}
-
-export interface EndingDirective {
-  style: 'linger' | 'fade' | 'snap' | 'dissolve';
-  emotionalAftertaste: string;
-  particleResolution: string;
-  lightResolution: string;
-}
