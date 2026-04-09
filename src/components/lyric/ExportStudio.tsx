@@ -62,6 +62,8 @@ export function ExportStudio({
   const [openPanel, setOpenPanel] = useState<"moment" | "caption" | "platform" | null>(null);
   const [downloadBlob, setDownloadBlob] = useState<Blob | null>(null);
   const [browserSupported, setBrowserSupported] = useState(true);
+  const [mobileTab, setMobileTab] = useState<"config" | "preview">("config");
+  const [isMobile, setIsMobile] = useState(false);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -92,25 +94,26 @@ export function ExportStudio({
 
   const totalVotes = (hookVoteCounts ?? []).reduce((sum, n) => sum + n, 0);
 
-  const captionPositions = [
-    { bottom: "22%", left: "8%", right: "20%", textAlign: "left" as const },
-    { bottom: "18%", left: "8%", right: "8%", textAlign: "center" as const },
-    { bottom: "18%", left: "10%", right: "10%", textAlign: "center" as const },
-  ];
-
-  const captionStyle: CSSProperties = {
-    position: "absolute",
-    ...captionPositions[platformIdx],
-    fontSize: platformIdx === 2 ? 11 : 13,
-    fontWeight: 800,
-    color: "#ffffff",
-    textShadow: "0 1px 4px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.4)",
-    fontFamily: '"SF Pro Display", -apple-system, sans-serif',
-    zIndex: 2,
-    lineHeight: 1.3,
-    wordBreak: "break-word",
-    pointerEvents: "none",
-  };
+  const captionStyle = useMemo<CSSProperties>(() => {
+    const positions = [
+      { bottom: "22%", left: "8%", right: "20%", textAlign: "left" as const },
+      { bottom: "18%", left: "8%", right: "8%", textAlign: "center" as const },
+      { bottom: "18%", left: "10%", right: "10%", textAlign: "center" as const },
+    ];
+    return {
+      position: "absolute",
+      ...positions[platformIdx],
+      fontSize: platformIdx === 2 ? 11 : 13,
+      fontWeight: 800,
+      color: "#ffffff",
+      textShadow: "0 1px 4px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.4)",
+      fontFamily: '"SF Pro Display", -apple-system, sans-serif',
+      zIndex: 2,
+      lineHeight: 1.3,
+      wordBreak: "break-word",
+      pointerEvents: "none",
+    };
+  }, [platformIdx]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -119,19 +122,39 @@ export function ExportStudio({
     setExportProgress(0);
     setOpenPanel(null);
     setDownloadBlob(null);
+    setSelectedMomentIdx(1);
+    setMobileTab("config");
   }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (exportStage === "rendering") return;
         e.preventDefault();
         onClose();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, exportStage]);
+
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 680px)");
+    const onChange = (e: MediaQueryListEvent | MediaQueryList) => setIsMobile(e.matches);
+    onChange(mql);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || !openPanel) return;
@@ -164,6 +187,7 @@ export function ExportStudio({
 
   useEffect(() => {
     if (!isOpen || exportStage === "rendering") return;
+    if (isMobile && mobileTab !== "preview") return;
     const player = getPlayer();
     const canvas = previewCanvasRef.current;
     if (!player || !canvas) return;
@@ -185,7 +209,7 @@ export function ExportStudio({
       stopped = true;
       cancelAnimationFrame(rafId);
     };
-  }, [isOpen, exportStage, getPlayer]);
+  }, [isOpen, exportStage, getPlayer, isMobile, mobileTab]);
 
   // Save player dimensions on open so we can restore on close.
   // Do NOT resize the player to export resolution for the preview —
@@ -301,7 +325,9 @@ export function ExportStudio({
   if (!isOpen || typeof document === "undefined") return null;
 
   const aspectRatios = ["9 / 16", "1 / 1", "16 / 9"] as const;
-  const maxPreviewHeights = ["min(480px, 70vh)", "min(360px, 50vh)", "min(280px, 40vh)"] as const;
+  const maxPreviewHeights = isMobile
+    ? ["min(65vh, 520px)", "min(55vh, 400px)", "min(45vh, 320px)"] as const
+    : ["min(480px, 70vh)", "min(360px, 50vh)", "min(280px, 40vh)"] as const;
   const momentTag = selectedMomentIdx === 0 ? "full" : `#${selectedMomentIdx} hottest`;
   const captionTag = captionMode === "custom"
     ? "custom"
@@ -311,7 +337,6 @@ export function ExportStudio({
 
   return createPortal(
     <div
-      className="export-studio-root"
       ref={rootRef}
       style={{
         position: "fixed",
@@ -321,23 +346,15 @@ export function ExportStudio({
         fontFamily: '"SF Pro Display", -apple-system, sans-serif',
         color: "rgba(255,255,255,0.9)",
         display: "flex",
-        flexDirection: "row",
+        flexDirection: isMobile ? "column" : "row",
       }}
     >
-      <style>{`
-        @media (max-width: 680px) {
-          .export-studio-root { flex-direction: column-reverse !important; }
-          .export-studio-panel { width: 100% !important; max-width: none !important; border-right: none !important; border-top: 0.5px solid rgba(255,255,255,0.06) !important; max-height: 55vh !important; }
-          .export-studio-preview { min-height: 200px !important; max-height: 45vh !important; }
-          .export-studio-canvas { max-height: 38vh !important; }
-        }
-      `}</style>
       <button
         type="button"
         onClick={onClose}
         style={{
           position: "absolute",
-          top: 16,
+          top: "calc(16px + env(safe-area-inset-top, 0px))",
           right: 16,
           zIndex: 10,
           width: 32,
@@ -353,16 +370,76 @@ export function ExportStudio({
       >
         ×
       </button>
+      {isMobile && (
+        <div
+          style={{
+            display: "flex",
+            borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+            flexShrink: 0,
+            paddingTop: "env(safe-area-inset-top, 0px)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setMobileTab("preview")}
+            style={{
+              flex: 1,
+              height: 44,
+              border: "none",
+              background: "transparent",
+              color: mobileTab === "preview" ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)",
+              fontFamily: '"SF Mono", monospace',
+              fontSize: 10,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              borderBottom: mobileTab === "preview" ? "2px solid #44d27e" : "2px solid transparent",
+              transition: "all 0.15s",
+            }}
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab("config")}
+            style={{
+              flex: 1,
+              height: 44,
+              border: "none",
+              background: "transparent",
+              color: mobileTab === "config" ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)",
+              fontFamily: '"SF Mono", monospace',
+              fontSize: 10,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              borderBottom: mobileTab === "config" ? "2px solid #44d27e" : "2px solid transparent",
+              transition: "all 0.15s",
+            }}
+          >
+            Config
+          </button>
+        </div>
+      )}
 
       <div
-        className="export-studio-panel"
         style={{
-          width: 320,
-          maxWidth: "45vw",
-          flexShrink: 0,
-          borderRight: "0.5px solid rgba(255,255,255,0.06)",
+          ...(isMobile
+            ? {
+              width: "100%",
+              maxWidth: "none",
+              borderRight: "none",
+              flex: 1,
+              display: mobileTab === "config" ? "flex" : "none",
+            }
+            : {
+              width: 320,
+              maxWidth: "45vw",
+              flexShrink: 0,
+              borderRight: "0.5px solid rgba(255,255,255,0.06)",
+            }),
+          overflowX: "hidden",
           overflowY: "auto",
-          display: "flex",
           flexDirection: "column",
           padding: "16px 0",
           gap: 12,
@@ -390,6 +467,7 @@ export function ExportStudio({
                 onClick={() => {
                   setSelectedMomentIdx(idx);
                   setOpenPanel(null);
+                  if (isMobile) setMobileTab("preview");
                 }}
                 style={{
                   width: "100%",
@@ -448,8 +526,12 @@ export function ExportStudio({
               setCaptionMode("custom");
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") setOpenPanel(null);
+              if (e.key === "Enter") {
+                setOpenPanel(null);
+                if (isMobile) setMobileTab("preview");
+              }
             }}
+            maxLength={120}
             style={{
               width: "100%",
               border: "none",
@@ -467,6 +549,7 @@ export function ExportStudio({
               onClick={() => {
                 setCaptionMode("custom");
                 setOpenPanel(null);
+                if (isMobile) setMobileTab("preview");
               }}
               style={{
                 width: "100%",
@@ -495,6 +578,7 @@ export function ExportStudio({
                   setCaptionMode("hook");
                   setSelectedHookIdx(idx);
                   setOpenPanel(null);
+                  if (isMobile) setMobileTab("preview");
                 }}
                 style={{
                   width: "100%",
@@ -521,6 +605,7 @@ export function ExportStudio({
               setCaptionMode("hook");
               setSelectedHookIdx(hooks.length);
               setOpenPanel(null);
+              if (isMobile) setMobileTab("preview");
             }}
             style={{
               width: "100%",
@@ -554,6 +639,7 @@ export function ExportStudio({
                 onClick={() => {
                   setPlatformIdx(idx);
                   setOpenPanel(null);
+                  if (isMobile) setMobileTab("preview");
                 }}
                 style={{
                   width: "100%",
@@ -579,7 +665,7 @@ export function ExportStudio({
           })}
         </SelectorCard>
 
-        <div style={{ marginTop: "auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ marginTop: "auto", padding: "0 16px", display: isMobile ? "none" : "flex", flexDirection: "column", gap: 10 }}>
           <button
             type="button"
             onClick={() => setIncludeAudio((v) => !v)}
@@ -587,17 +673,32 @@ export function ExportStudio({
               width: "100%",
               height: 34,
               borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.03)",
-              color: "rgba(255,255,255,0.8)",
+              border: includeAudio ? "1px solid rgba(68,210,126,0.25)" : "1px solid rgba(255,255,255,0.1)",
+              background: includeAudio ? "rgba(68,210,126,0.06)" : "rgba(255,255,255,0.03)",
+              color: includeAudio ? "#44d27e" : "rgba(255,255,255,0.4)",
               fontSize: 11,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               fontFamily: '"SF Mono", monospace',
               cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              transition: "all 0.15s",
             }}
           >
-            Audio: {includeAudio ? "On" : "Off"}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 5L6 9H2v6h4l5 4V5z" />
+              {includeAudio && <path d="M15.54 8.46a5 5 0 010 7.07" />}
+              {!includeAudio && (
+                <>
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </>
+              )}
+            </svg>
+            {includeAudio ? "Audio on" : "Audio off"}
           </button>
 
           {exportStage === "ready" && (
@@ -617,7 +718,7 @@ export function ExportStudio({
                 opacity: browserSupported ? 1 : 0.5,
               }}
             >
-              Download
+              Download for {PLATFORMS[platformIdx].label.split(" / ")[0]}
             </button>
           )}
 
@@ -659,9 +760,18 @@ export function ExportStudio({
         </div>
       </div>
 
-      <div className="export-studio-preview" style={{ flex: 1, background: "#060608", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, minWidth: 0 }}>
+      <div
+        style={{
+          flex: 1,
+          background: "#060608",
+          display: isMobile && mobileTab !== "preview" ? "none" : "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: isMobile ? 16 : 24,
+          minWidth: 0,
+        }}
+      >
         <div
-          className="export-studio-canvas"
           style={{
             aspectRatio: aspectRatios[platformIdx],
             maxHeight: maxPreviewHeights[platformIdx],
@@ -672,6 +782,7 @@ export function ExportStudio({
             overflow: "hidden",
             position: "relative",
             transition: "all 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+            willChange: "width, height",
             background: "#000",
           }}
         >
@@ -679,6 +790,114 @@ export function ExportStudio({
           {activeCaption && <div style={captionStyle}>{activeCaption}</div>}
         </div>
       </div>
+      {isMobile && exportStage === "ready" && (
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "10px 16px",
+            paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+            borderTop: "0.5px solid rgba(255,255,255,0.06)",
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setIncludeAudio((v) => !v)}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: includeAudio ? "rgba(68,210,126,0.08)" : "rgba(255,255,255,0.03)",
+              color: includeAudio ? "#44d27e" : "rgba(255,255,255,0.4)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 5L6 9H2v6h4l5 4V5z" />
+              {includeAudio && <path d="M15.54 8.46a5 5 0 010 7.07" />}
+              {!includeAudio && (
+                <>
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </>
+              )}
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            disabled={!browserSupported}
+            style={{
+              flex: 1,
+              height: 40,
+              borderRadius: 12,
+              border: "none",
+              background: "#44d27e",
+              color: "#06170e",
+              fontWeight: 800,
+              fontSize: 13,
+              cursor: browserSupported ? "pointer" : "not-allowed",
+              opacity: browserSupported ? 1 : 0.5,
+            }}
+          >
+            Download for {PLATFORMS[platformIdx].label.split(" / ")[0]}
+          </button>
+        </div>
+      )}
+      {isMobile && exportStage !== "ready" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 30,
+            background: "rgba(10,10,10,0.92)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 16,
+            padding: 32,
+          }}
+        >
+          {exportStage === "rendering" && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Rendering {Math.round(exportProgress)}%</div>
+              <div style={{ width: "60%", height: 6, borderRadius: 999, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+                <div style={{ width: `${Math.round(exportProgress)}%`, height: "100%", background: "#44d27e", transition: "width 0.3s" }} />
+              </div>
+              <button type="button" onClick={() => abortRef.current?.abort()} style={{ border: "1px solid rgba(255,255,255,0.16)", background: "transparent", color: "rgba(255,255,255,0.72)", borderRadius: 10, height: 36, padding: "0 20px", cursor: "pointer" }}>
+                Cancel
+              </button>
+            </>
+          )}
+          {exportStage === "done" && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>Done</div>
+              <button type="button" onClick={() => downloadBlob && triggerDownload(downloadBlob)} style={{ height: 40, borderRadius: 12, border: "none", background: "#44d27e", color: "#06170e", fontWeight: 800, padding: "0 28px", cursor: "pointer" }}>
+                Download again
+              </button>
+              <button type="button" onClick={onClose} style={{ height: 36, borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.82)", padding: "0 28px", cursor: "pointer" }}>
+                Close
+              </button>
+            </>
+          )}
+          {exportStage === "error" && (
+            <>
+              <div style={{ color: "#ffadad", fontSize: 13 }}>Export failed</div>
+              <button type="button" onClick={() => void handleDownload()} style={{ height: 40, borderRadius: 12, border: "none", background: "#44d27e", color: "#06170e", fontWeight: 800, padding: "0 28px", cursor: "pointer" }}>
+                Retry
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>,
     document.body,
   );
