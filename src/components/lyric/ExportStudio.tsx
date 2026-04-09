@@ -111,7 +111,7 @@ export function ExportStudio({
   const [includeFireReaction, setIncludeFireReaction] = useState(true);
   const [exportStage, setExportStage] = useState<"ready" | "rendering" | "done" | "error">("ready");
   const [exportProgress, setExportProgress] = useState(0);
-  const [openPanel, setOpenPanel] = useState<"moment" | "caption" | "platform" | null>(null);
+  const [openPanel, setOpenPanel] = useState<"moment" | "caption" | "platform" | "options" | null>(null);
   const [downloadBlob, setDownloadBlob] = useState<Blob | null>(null);
   const [browserSupported, setBrowserSupported] = useState(true);
   const [mobileTab, setMobileTab] = useState<"config" | "preview">("config");
@@ -487,6 +487,19 @@ export function ExportStudio({
     : selectedHookIdx >= hooks.length
       ? "none"
       : `fmly hook #${selectedHookIdx + 1}`;
+  const optionsList = [
+    { label: "Audio", value: includeAudio },
+    { label: "Progress wick", value: includeWickBar },
+    { label: "Beat bars", value: includeBeatVis },
+    { label: "Fire reaction", value: includeFireReaction },
+  ];
+  const enabledOptions = optionsList.filter((o) => o.value);
+  const optionsTag = `${enabledOptions.length} of ${optionsList.length} on`;
+  const optionsSummary = enabledOptions.length === 0
+    ? "All off"
+    : enabledOptions.length === optionsList.length
+      ? "All on"
+      : enabledOptions.map((o) => o.label).join(" · ");
 
   return createPortal(
     <div
@@ -914,87 +927,76 @@ export function ExportStudio({
           })}
         </SelectorCard>
 
-        {/* ── Options ── */}
-        <div style={{ padding: "0 16px" }}>
-          <div
-            style={{
-              fontSize: 9,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "rgba(255,255,255,0.2)",
-              fontFamily: '"SF Mono", monospace',
-              marginBottom: 6,
-            }}
-          >
-            Options
-          </div>
-          <div
-            style={{
-              borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.02)",
-              overflow: "hidden",
-            }}
-          >
-            {([
-              { label: "Audio", value: includeAudio, setter: setIncludeAudio },
-              { label: "Progress wick", value: includeWickBar, setter: setIncludeWickBar },
-              { label: "Beat bars", value: includeBeatVis, setter: setIncludeBeatVis },
-              { label: "Fire reaction", value: includeFireReaction, setter: setIncludeFireReaction },
-            ] as const).map(({ label, value, setter }, i) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => (setter as (update: (v: boolean) => boolean) => void)((v: boolean) => !v)}
+        <SelectorCard
+          label="Options"
+          tag={optionsTag}
+          mainText={optionsSummary}
+          subTexts={[]}
+          isOpen={openPanel === "options"}
+          onToggle={() => setOpenPanel((curr) => (curr === "options" ? null : "options"))}
+        >
+          {([
+            { label: "Audio", value: includeAudio, setter: setIncludeAudio },
+            { label: "Progress wick", value: includeWickBar, setter: setIncludeWickBar },
+            { label: "Beat bars", value: includeBeatVis, setter: setIncludeBeatVis },
+            { label: "Fire reaction", value: includeFireReaction, setter: setIncludeFireReaction },
+          ] as const).map(({ label, value, setter }, i, arr) => (
+            <button
+              key={label}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                (setter as any)((v: boolean) => !v);
+              }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 14px",
+                border: "none",
+                borderBottom: i < arr.length - 1 ? "0.5px solid rgba(255,255,255,0.04)" : "none",
+                background: "transparent",
+                cursor: "pointer",
+                color: "inherit",
+              }}
+            >
+              <span
                 style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "9px 12px",
-                  border: "none",
-                  borderBottom: i < 3 ? "0.5px solid rgba(255,255,255,0.04)" : "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  color: "inherit",
+                  fontSize: 12,
+                  color: value ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
+                  transition: "color 0.15s",
                 }}
               >
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: value ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
-                    transition: "color 0.15s",
-                  }}
-                >
-                  {label}
-                </span>
+                {label}
+              </span>
+              <div
+                style={{
+                  width: 32,
+                  height: 18,
+                  borderRadius: 9,
+                  background: value ? "#44d27e" : "rgba(255,255,255,0.08)",
+                  transition: "background 0.2s",
+                  position: "relative",
+                  flexShrink: 0,
+                }}
+              >
                 <div
                   style={{
-                    width: 32,
-                    height: 18,
-                    borderRadius: 9,
-                    background: value ? "#44d27e" : "rgba(255,255,255,0.08)",
-                    transition: "background 0.2s",
-                    position: "relative",
+                    width: 14,
+                    height: 14,
+                    borderRadius: 7,
+                    background: value ? "#fff" : "rgba(255,255,255,0.3)",
+                    position: "absolute",
+                    top: 2,
+                    left: value ? 16 : 2,
+                    transition: "left 0.2s, background 0.2s",
                   }}
-                >
-                  <div
-                    style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: 7,
-                      background: value ? "#fff" : "rgba(255,255,255,0.3)",
-                      position: "absolute",
-                      top: 2,
-                      left: value ? 16 : 2,
-                      transition: "left 0.2s, background 0.2s",
-                    }}
-                  />
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+                />
+              </div>
+            </button>
+          ))}
+        </SelectorCard>
 
         <div style={{ marginTop: "auto", padding: "0 16px", display: isMobile ? "none" : "flex", flexDirection: "column", gap: 10 }}>
           {exportStage === "ready" && (
