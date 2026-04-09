@@ -1528,22 +1528,6 @@ export function FitTab({
               );
             })}
 
-            <ViralClipModal
-              isOpen={viralClipOpen}
-              onClose={() => {
-                setViralClipOpen(false);
-                const player = dancePlayerRef.current?.getPlayer();
-                if (player) player.setRegion(undefined, undefined);
-              }}
-              getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
-              moments={dancePlayerRef.current?.getMoments?.() ?? []}
-              fireHeat={dancePlayerRef.current?.getFireHeat?.() ?? {}}
-              comments={dancePlayerRef.current?.getComments?.() ?? []}
-              songTitle={lyricData.title || "Untitled"}
-              artistName={profile?.display_name || "artist"}
-              audioUrl={dancePlayerRef.current?.getAudioUrl?.() ?? audioUrl ?? ""}
-            />
-
             {/* ── Empty state ── */}
                 {fireData.totalFires === 0 && fireData.resultsLoaded && (
                   <div className="flex flex-col items-center gap-3 py-12">
@@ -1960,6 +1944,22 @@ export function FitTab({
           </>
         )}
       </div>
+
+      <ViralClipModal
+        isOpen={viralClipOpen}
+        onClose={() => {
+          setViralClipOpen(false);
+          const player = dancePlayerRef.current?.getPlayer();
+          if (player) player.setRegion(undefined, undefined);
+        }}
+        getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
+        moments={dancePlayerRef.current?.getMoments?.() ?? []}
+        fireHeat={dancePlayerRef.current?.getFireHeat?.() ?? {}}
+        comments={dancePlayerRef.current?.getComments?.() ?? []}
+        songTitle={lyricData.title || "Untitled"}
+        artistName={profile?.display_name || "artist"}
+        audioUrl={dancePlayerRef.current?.getAudioUrl?.() ?? audioUrl ?? ""}
+      />
     </>
   );
 }
