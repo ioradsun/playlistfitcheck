@@ -80,6 +80,26 @@ function pickCodecString(w: number, h: number): string {
   return 'avc1.640028';                        // High @ 4.0 — 720p and below
 }
 
+/** Word-wrap text to fit within maxWidth. Returns an array of lines. */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines.length > 0 ? lines : [text];
+}
+
 export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
   const {
     player,
@@ -199,79 +219,112 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
           const style = options.captionOptions?.style ?? "stroke";
           const pos = options.captionOptions?.position ?? "bottom";
           const isPortrait = height > width;
-          const isSquare = Math.abs(width - height) < 100;
-          const fontSize = Math.round(height * 0.032);
+          const fontSize = Math.round(height * 0.028);
+          const lineHeight = Math.round(fontSize * 1.5);
 
-          const captionY = pos === "top"
-            ? Math.round(height * (isPortrait ? 0.12 : 0.10))
-            : isPortrait
-              ? Math.round(height * 0.76)
-              : isSquare
-                ? Math.round(height * 0.80)
-                : Math.round(height * 0.80);
+          // Max width: leave margins for social UI
+          const maxW = isPortrait
+            ? Math.round(width * 0.76)
+            : Math.round(width * 0.65);
+
           ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
           ctx.textBaseline = "middle";
           ctx.lineJoin = "round";
 
+          // Word-wrap the caption
+          const lines = wrapText(ctx, options.captionText, maxW);
+          const totalTextHeight = lines.length * lineHeight;
+
+          // Alignment
           const leftAligned = pos === "bottom" && isPortrait;
-          const leftPad = leftAligned ? Math.round(width * 0.06) : 0;
-          const maxW = leftAligned
-            ? Math.round(width * 0.76)
-            : Math.round(width * 0.80);
-          const textX = leftAligned ? leftPad : width / 2;
+          ctx.textAlign = leftAligned ? "left" : "center";
+          const textX = leftAligned
+            ? Math.round(width * 0.06)
+            : Math.round(width / 2);
+
+          // Y position: center the text block at the target position
+          const targetY = pos === "top"
+            ? Math.round(height * (isPortrait ? 0.10 : 0.08))
+            : isPortrait
+              ? Math.round(height * 0.78)
+              : Math.round(height * 0.82);
+
+          // Offset so the block is centered on targetY
+          const blockStartY = targetY - totalTextHeight / 2 + lineHeight / 2;
+
+          // Measure widest line for bar/pill background
+          let widestLine = 0;
+          for (const line of lines) {
+            const w = ctx.measureText(line).width;
+            if (w > widestLine) widestLine = w;
+          }
+
           ctx.textAlign = leftAligned ? "left" : "center";
 
           switch (style) {
             case "bar": {
-              const metrics = ctx.measureText(options.captionText);
-              const textW = Math.min(metrics.width, maxW);
-              const padX = Math.round(fontSize * 0.5);
-              const padY = Math.round(fontSize * 0.35);
+              const padX = Math.round(fontSize * 0.6);
+              const padY = Math.round(fontSize * 0.45);
+              const rectW = widestLine + padX * 2;
+              const rectH = totalTextHeight + padY * 2;
               const rectX = leftAligned
                 ? textX - padX
-                : textX - textW / 2 - padX;
-              const rectY = captionY - fontSize / 2 - padY;
-              const rectW = textW + padX * 2;
-              const rectH = fontSize + padY * 2;
+                : textX - rectW / 2;
+              const rectY = blockStartY - lineHeight / 2 - padY;
+              const r = Math.round(fontSize * 0.25);
 
               ctx.fillStyle = "rgba(0,0,0,0.7)";
-              const r = Math.round(fontSize * 0.2);
               ctx.beginPath();
               ctx.roundRect(rectX, rectY, rectW, rectH, r);
               ctx.fill();
 
               ctx.fillStyle = "#ffffff";
-              ctx.fillText(options.captionText, textX, captionY, maxW);
+              for (let li = 0; li < lines.length; li++) {
+                ctx.fillText(lines[li], textX, blockStartY + li * lineHeight);
+              }
               break;
             }
             case "pill": {
-              const metrics = ctx.measureText(options.captionText);
-              const textW = Math.min(metrics.width, maxW);
-              const padX = Math.round(fontSize * 0.6);
+              // Pill: one pill per line
+              const padX = Math.round(fontSize * 0.7);
               const padY = Math.round(fontSize * 0.3);
-              const rectX = leftAligned
-                ? textX - padX
-                : textX - textW / 2 - padX;
-              const rectY = captionY - fontSize / 2 - padY;
-              const rectW = textW + padX * 2;
-              const rectH = fontSize + padY * 2;
-
               ctx.fillStyle = "#000000";
-              ctx.beginPath();
-              ctx.roundRect(rectX, rectY, rectW, rectH, rectH / 2);
-              ctx.fill();
+
+              for (let li = 0; li < lines.length; li++) {
+                const lw = ctx.measureText(lines[li]).width;
+                const pillW = lw + padX * 2;
+                const pillH = fontSize + padY * 2;
+                const cy = blockStartY + li * lineHeight;
+                const pillX = leftAligned
+                  ? textX - padX
+                  : textX - pillW / 2;
+                const pillY = cy - pillH / 2;
+
+                ctx.beginPath();
+                ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+                ctx.fill();
+              }
 
               ctx.fillStyle = "#ffffff";
-              ctx.fillText(options.captionText, textX, captionY, maxW);
+              for (let li = 0; li < lines.length; li++) {
+                ctx.fillText(lines[li], textX, blockStartY + li * lineHeight);
+              }
               break;
             }
             case "stroke":
             default: {
               ctx.strokeStyle = "#000000";
-              ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.12));
-              ctx.strokeText(options.captionText, textX, captionY, maxW);
+              ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.14));
+
+              for (let li = 0; li < lines.length; li++) {
+                const y = blockStartY + li * lineHeight;
+                ctx.strokeText(lines[li], textX, y);
+              }
               ctx.fillStyle = "#ffffff";
-              ctx.fillText(options.captionText, textX, captionY, maxW);
+              for (let li = 0; li < lines.length; li++) {
+                const y = blockStartY + li * lineHeight;
+                ctx.fillText(lines[li], textX, y);
+              }
               break;
             }
           }

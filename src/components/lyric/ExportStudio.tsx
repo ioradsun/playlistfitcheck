@@ -192,7 +192,7 @@ export function ExportStudio({
       base.textAlign = "left";
       base.left = "6%";
       base.right = "18%";
-      base.maxWidth = "none";
+      base.maxWidth = "76%";
       base.marginLeft = undefined;
       base.marginRight = undefined;
     }
@@ -209,6 +209,7 @@ export function ExportStudio({
       case "bar":
         return {
           ...base,
+          maxWidth: isPortrait ? "76%" : "65%",
           color: "#ffffff",
           background: "rgba(0,0,0,0.7)",
           borderRadius: 6,
