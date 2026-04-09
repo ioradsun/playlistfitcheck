@@ -395,6 +395,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
     return 0;
   }, [activeLine, player, moments]);
+  const getPlayerStable = useCallback(() => player ?? null, [player]);
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
@@ -566,7 +567,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       <ViralClipModal
         isOpen={viralClipOpen}
         onClose={() => setViralClipOpen(false)}
-        getPlayer={() => player ?? null}
+        getPlayer={getPlayerStable}
         moments={moments}
         fireHeat={fireHeat}
         comments={comments}

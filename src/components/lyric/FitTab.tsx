@@ -730,6 +730,10 @@ export function FitTab({
 
   // Live vote counts per hook index — fetched after promise is generated
   const [hookVoteCounts, setHookVoteCounts] = useState<number[]>([]);
+  const getViralClipPlayer = useCallback(
+    () => dancePlayerRef.current?.getPlayer() ?? null,
+    [],
+  );
 
   const fetchVoteCounts = useCallback(async (danceId: string) => {
     try {
@@ -1953,7 +1957,7 @@ export function FitTab({
           const player = dancePlayerRef.current?.getPlayer();
           if (player) player.setRegion(undefined, undefined);
         }}
-        getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
+        getPlayer={getViralClipPlayer}
         moments={dancePlayerRef.current?.getMoments?.() ?? []}
         fireHeat={dancePlayerRef.current?.getFireHeat?.() ?? {}}
         comments={dancePlayerRef.current?.getComments?.() ?? []}
