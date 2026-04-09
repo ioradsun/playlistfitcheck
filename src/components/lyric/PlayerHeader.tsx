@@ -99,15 +99,11 @@ function AvatarWithBadges({
       {isVerified && (
         <span className="absolute -bottom-0.5 -right-0.5 pointer-events-none">
           <VerifiedBadge size={11} />
-          {serial && (
-            <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[7px] font-mono leading-none text-white/60 whitespace-nowrap pointer-events-none">
-              {serial}
-            </span>
-          )}
         </span>
       )}
-      {!isVerified && serial && (
-        <span className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 text-[7px] font-mono leading-none text-white/60 whitespace-nowrap pointer-events-none">
+
+      {serial && (
+        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/80 border border-white/10 rounded-full px-1 text-[6px] font-mono leading-none text-white/70 whitespace-nowrap pointer-events-none">
           {serial}
         </span>
       )}
