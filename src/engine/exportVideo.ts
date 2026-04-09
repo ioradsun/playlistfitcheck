@@ -19,6 +19,7 @@
  * 6. Configurable bitrate scaling — adapts to resolution automatically.
  */
 import * as Mp4Muxer from 'mp4-muxer';
+import { sliceAudio } from "@/engine/audioSlice";
 
 interface ExportOptions {
   player: any; // LyricDancePlayer instance
@@ -35,8 +36,25 @@ interface ExportOptions {
   maxQueueDepth?: number;
   /** Override bitrate in bps. Default scales with resolution. */
   bitrate?: number;
-  /** White caption bar text rendered at top of frame. */
-  captionBar?: string;
+  /** Optional caption text rendered in stroked MrBeast-style text above lyrics. */
+  captionText?: string;
+  /** Optional audio to mux alongside video. When provided, output is an A/V MP4. */
+  audioSlice?: {
+    audioUrl: string;
+    startSec: number;
+    endSec: number;
+  };
+}
+
+function interleaveChannels(channels: Float32Array[]): Float32Array {
+  const channelCount = channels.length;
+  if (channelCount === 0) return new Float32Array();
+  const frameCount = channels[0]?.length ?? 0;
+  const out = new Float32Array(frameCount * channelCount);
+  for (let ch = 0; ch < channelCount; ch += 1) {
+    out.set(channels[ch], ch * frameCount);
+  }
+  return out;
 }
 
 // ── Bitrate heuristic: ~5 bits/pixel/frame, clamped to [2Mbps, 20Mbps] ──
@@ -63,6 +81,7 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
     signal,
     maxQueueDepth = 8,
     bitrate,
+    audioSlice,
   } = options;
 
   const totalFrames = Math.ceil(songDuration * fps);
@@ -82,6 +101,7 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
   const muxer = new Mp4Muxer.Muxer({
     target: new Mp4Muxer.ArrayBufferTarget(),
     video: { codec: 'avc', width, height },
+    audio: audioSlice ? { codec: 'aac', sampleRate: 44100, numberOfChannels: 2 } : undefined,
     fastStart: 'in-memory',
     firstTimestampBehavior: 'offset',
   });
@@ -133,19 +153,20 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
       // ── Render ──
       player.drawAtTime((options.startOffset ?? 0) + i / fps);
 
-      if (options.captionBar) {
+      if (options.captionText) {
         const ctx = canvas.getContext("2d");
         if (ctx) {
-          const barHeight = Math.round(height * 0.08);
-          ctx.fillStyle = "rgba(255,255,255,0.95)";
-          ctx.fillRect(0, 0, width, barHeight);
-
-          const fontSize = Math.round(barHeight * 0.45);
-          ctx.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
-          ctx.fillStyle = "#0a0a0a";
+          const fontSize = Math.round(height * 0.032);
+          const y = Math.round(height * 0.65);
+          ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText(`this song made me feel ${options.captionBar}`, width / 2, barHeight / 2, width - 40);
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.12));
+          ctx.lineJoin = "round";
+          ctx.strokeText(options.captionText, width / 2, y, width - 80);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(options.captionText, width / 2, y, width - 80);
         }
       }
 
@@ -192,6 +213,49 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
     // ── Flush + finalize ──
     await videoEncoder.flush();
     videoEncoder.close();
+
+    if (audioSlice) {
+      if (typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") {
+        console.warn("[exportVideo] AudioEncoder unavailable; exporting video-only MP4.");
+      } else {
+        const sliceResult = await sliceAudio(
+          audioSlice.audioUrl,
+          audioSlice.startSec,
+          audioSlice.endSec,
+          0.05,
+          signal,
+        );
+        if (encodeError) throw encodeError;
+
+        const audioEncoder = new AudioEncoder({
+          output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? undefined),
+          error: (e) => { encodeError = e as Error; },
+        });
+
+        audioEncoder.configure({
+          codec: "mp4a.40.2",
+          sampleRate: sliceResult.sampleRate,
+          numberOfChannels: sliceResult.numberOfChannels,
+          bitrate: 128_000,
+        });
+
+        const planar = interleaveChannels(sliceResult.samples);
+        const audioData = new AudioData({
+          format: "f32-planar",
+          sampleRate: sliceResult.sampleRate,
+          numberOfFrames: sliceResult.samples[0]?.length ?? 0,
+          numberOfChannels: sliceResult.numberOfChannels,
+          timestamp: 0,
+          data: planar,
+        });
+        audioEncoder.encode(audioData);
+        audioData.close();
+        await audioEncoder.flush();
+        audioEncoder.close();
+        if (encodeError) throw encodeError;
+      }
+    }
+
     muxer.finalize();
 
     const { buffer } = muxer.target as Mp4Muxer.ArrayBufferTarget;

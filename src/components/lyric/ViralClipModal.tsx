@@ -1,0 +1,348 @@
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { deriveMomentFireCounts } from "@/lib/momentUtils";
+import type { Moment } from "@/lib/buildMoments";
+import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
+import { exportVideoAsMP4 } from "@/engine/exportVideo";
+import { ChevronDown, Heart, Play, Volume2, VolumeX, X } from "lucide-react";
+
+interface ViralClipModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  getPlayer: () => LyricDancePlayer | null;
+  moments: Moment[];
+  fireHeat: Record<string, { line: Record<number, number>; total: number }>;
+  comments: Array<{ text: string; line_index: number | null }>;
+  songTitle: string;
+  artistName: string;
+  audioUrl: string;
+}
+
+type Platform = "tiktok" | "reels" | "shorts" | "twitter";
+type Quality = "1080p" | "720p" | "480p";
+
+const PLATFORMS: Record<Platform, { label: string; w: number; h: number }> = {
+  tiktok: { label: "TikTok", w: 1080, h: 1920 },
+  reels: { label: "Reels", w: 1080, h: 1920 },
+  shorts: { label: "Shorts", w: 1080, h: 1920 },
+  twitter: { label: "Twitter/X", w: 1920, h: 1080 },
+};
+
+const QUALITY_SCALE: Record<Quality, number> = { "1080p": 1, "720p": 0.667, "480p": 0.444 };
+const PLATFORM_ORDER: Platform[] = ["tiktok", "reels", "shorts", "twitter"];
+const QUALITY_ORDER: Quality[] = ["1080p", "720p", "480p"];
+
+function safeName(input: string): string {
+  return (input || "").replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "clip";
+}
+
+export function ViralClipModal({
+  isOpen,
+  onClose,
+  getPlayer,
+  moments,
+  fireHeat,
+  comments,
+  songTitle,
+  artistName,
+  audioUrl,
+}: ViralClipModalProps) {
+  const [selectedMoment, setSelectedMoment] = useState(0);
+  const [caption, setCaption] = useState("");
+  const [includeAudio, setIncludeAudio] = useState(true);
+  const [platform, setPlatform] = useState<Platform>("tiktok");
+  const [quality, setQuality] = useState<Quality>("1080p");
+  const [stage, setStage] = useState<"config" | "rendering" | "done" | "error">("config");
+  const [progress, setProgress] = useState(0);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const sortedMoments = useMemo(() => {
+    const fireCounts = deriveMomentFireCounts(fireHeat, moments);
+    return moments
+      .map((moment, index) => ({ moment, index, fires: fireCounts[index] ?? 0 }))
+      .sort((a, b) => b.fires - a.fires);
+  }, [fireHeat, moments]);
+
+  const selected = sortedMoments[selectedMoment] ?? null;
+
+  const commentSuggestions = useMemo(() => {
+    if (!selected) return [] as Array<{ text: string; votes: number }>;
+    const matchLineIndexes = new Set<number>(selected.moment.lines.map((l) => l.lineIndex));
+    const bucket = new Map<string, number>();
+    for (const c of comments) {
+      const trimmed = c.text?.trim();
+      if (!trimmed) continue;
+      if (c.line_index == null || !matchLineIndexes.has(c.line_index)) continue;
+      bucket.set(trimmed, (bucket.get(trimmed) ?? 0) + 1);
+    }
+    return [...bucket.entries()]
+      .map(([text, votes]) => ({ text, votes }))
+      .sort((a, b) => b.votes - a.votes || a.text.localeCompare(b.text));
+  }, [comments, selected]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setStage("config");
+    setProgress(0);
+    setSelectedMoment(0);
+    setDropdownOpen(false);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const next = commentSuggestions[0]?.text ?? "";
+    setCaption(next);
+  }, [selectedMoment, commentSuggestions, isOpen]);
+
+  const drawPreview = useCallback(() => {
+    if (!isOpen || !selected || stage !== "config") return;
+    const player = getPlayer();
+    const preview = previewCanvasRef.current;
+    if (!player || !preview) return;
+    player.drawAtTime(selected.moment.startSec);
+    const source = player.getExportCanvas();
+    const ctx = preview.getContext("2d");
+    if (!ctx) return;
+
+    const w = preview.width;
+    const h = preview.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(source, 0, 0, w, h);
+
+    if (caption.trim()) {
+      const fontSize = Math.round(h * 0.05);
+      const y = Math.round(h * 0.65);
+      ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.12));
+      ctx.lineJoin = "round";
+      ctx.strokeText(caption.trim(), w / 2, y, w - 36);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(caption.trim(), w / 2, y, w - 36);
+    }
+  }, [caption, getPlayer, isOpen, selected, stage]);
+
+  useEffect(() => {
+    drawPreview();
+  }, [drawPreview]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const cyclePlatform = () => {
+    setPlatform((prev) => PLATFORM_ORDER[(PLATFORM_ORDER.indexOf(prev) + 1) % PLATFORM_ORDER.length]);
+  };
+
+  const cycleQuality = () => {
+    setQuality((prev) => QUALITY_ORDER[(QUALITY_ORDER.indexOf(prev) + 1) % QUALITY_ORDER.length]);
+  };
+
+  const handlePreviewPlay = () => {
+    if (!selected) return;
+    const player = getPlayer();
+    if (!player) return;
+    player.setRegion(selected.moment.startSec, selected.moment.endSec);
+    player.seek(selected.moment.startSec);
+    player.setMuted(!includeAudio);
+    player.play(true);
+  };
+
+  const handleDownload = useCallback(async () => {
+    const player = getPlayer();
+    if (!player || !selected) return;
+
+    const { w, h } = PLATFORMS[platform];
+    const scale = QUALITY_SCALE[quality];
+    const width = Math.round(w * scale);
+    const height = Math.round(h * scale);
+
+    player.pause();
+    player.wickBarEnabled = true;
+    player.beatVisEnabled = true;
+
+    const abort = new AbortController();
+    abortRef.current = abort;
+    setStage("rendering");
+    setProgress(0);
+
+    try {
+      const blob = await exportVideoAsMP4({
+        player,
+        width,
+        height,
+        fps: 30,
+        songDuration: selected.moment.endSec - selected.moment.startSec,
+        startOffset: selected.moment.startSec,
+        captionText: caption.trim() || undefined,
+        audioSlice: includeAudio && audioUrl
+          ? {
+            audioUrl,
+            startSec: selected.moment.startSec,
+            endSec: selected.moment.endSec,
+          }
+          : undefined,
+        onProgress: setProgress,
+        signal: abort.signal,
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName(artistName)}-${safeName(songTitle)}-moment${selectedMoment + 1}.mp4`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setProgress(100);
+      setStage("done");
+      window.setTimeout(() => {
+        onClose();
+        setStage("config");
+      }, 900);
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        console.error("[ViralClipModal] export failed", err);
+        setStage("error");
+      } else {
+        setStage("config");
+      }
+    } finally {
+      player.wickBarEnabled = false;
+      player.beatVisEnabled = false;
+      abortRef.current = null;
+      player.setRegion(undefined, undefined);
+    }
+  }, [artistName, audioUrl, caption, getPlayer, includeAudio, onClose, platform, quality, selected, selectedMoment, songTitle]);
+
+  const selectionDuration = selected ? Math.max(0, selected.moment.endSec - selected.moment.startSec) : 0;
+  const scaledResolution = useMemo(() => {
+    const { w, h } = PLATFORMS[platform];
+    const scale = QUALITY_SCALE[quality];
+    return { w: Math.round(w * scale), h: Math.round(h * scale) };
+  }, [platform, quality]);
+
+  const closeSafe = () => {
+    if (stage === "rendering") return;
+    onClose();
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) closeSafe(); }}>
+      <DialogContent className="sm:max-w-[780px] p-0 border-0 [&>button]:hidden" style={{ background: "transparent" }}>
+        <div style={{ background: "#0c0c0c", borderRadius: 24, padding: 18, color: "rgba(255,255,255,0.92)", fontFamily: '"SF Pro Display", "Helvetica Neue", -apple-system, sans-serif' }}>
+          {stage === "rendering" && (
+            <div style={{ minHeight: 420, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 999, border: "3px solid rgba(255,255,255,0.16)", borderTopColor: "rgba(255,140,40,0.9)", animation: "spin 1s linear infinite" }} />
+              <div style={{ fontSize: 17, fontWeight: 700 }}>Rendering... {Math.round(progress)}%</div>
+              <button onClick={() => abortRef.current?.abort()} style={{ border: "1px solid rgba(255,255,255,0.16)", background: "transparent", color: "rgba(255,255,255,0.78)", borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>Cancel</button>
+              <style>{"@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }"}</style>
+            </div>
+          )}
+
+          {stage === "done" && (
+            <div style={{ minHeight: 420, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700 }}>
+              Done ✓
+            </div>
+          )}
+
+          {(stage === "config" || stage === "error") && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.3 }}>Share clip</div>
+                <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 999, border: "1px solid rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.74)", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent" }}>
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: 12 }}>
+                {sortedMoments.map((m, idx) => {
+                  const selectedStyle = idx === selectedMoment;
+                  const dur = Math.max(0, m.moment.endSec - m.moment.startSec);
+                  return (
+                    <button
+                      key={`${m.moment.index}-${idx}`}
+                      onClick={() => setSelectedMoment(idx)}
+                      style={{
+                        borderRadius: 12,
+                        border: selectedStyle ? "1px solid rgba(255,140,40,0.9)" : "1px solid rgba(255,255,255,0.12)",
+                        background: selectedStyle ? "rgba(255,140,40,0.13)" : "rgba(255,255,255,0.02)",
+                        color: "inherit",
+                        minWidth: 120,
+                        padding: "10px 10px",
+                        textAlign: "left",
+                      }}
+                    >
+                      {idx === 0 && <div style={{ color: "#44d27e", fontSize: 11, fontWeight: 700, marginBottom: 2 }}>top</div>}
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>Moment {m.moment.index + 1}</div>
+                      <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{Math.round(m.fires)} · {Math.round(dur)}s</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ position: "relative", marginBottom: 14 }}>
+                <input
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Add a caption..."
+                  style={{ width: "100%", height: 42, borderRadius: 12, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.03)", color: "white", padding: "0 42px 0 12px", fontSize: 13, outline: "none" }}
+                />
+                <button onClick={() => setDropdownOpen((v) => !v)} style={{ position: "absolute", right: 8, top: 7, width: 28, height: 28, border: "none", background: "transparent", color: "rgba(255,255,255,0.7)" }}>
+                  <ChevronDown size={16} />
+                </button>
+
+                {dropdownOpen && (
+                  <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, background: "#161616", zIndex: 10, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: 8 }}>
+                    {commentSuggestions.length === 0 && (
+                      <div style={{ fontSize: 11, opacity: 0.5, padding: "6px 4px" }}>No community caption suggestions yet.</div>
+                    )}
+                    {commentSuggestions.map((s) => (
+                      <button key={s.text} onClick={() => { setCaption(s.text); setDropdownOpen(false); }} style={{ width: "100%", border: "none", background: "transparent", color: "inherit", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 8px", fontSize: 12 }}>
+                        <span style={{ textAlign: "left", opacity: 0.9 }}>{s.text}</span>
+                        <span style={{ opacity: 0.7, fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }}><Heart size={11} /> {s.votes}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", background: "#070707", width: "100%", maxWidth: 420, aspectRatio: "9 / 10", margin: "0 auto 14px" }}>
+                <canvas ref={previewCanvasRef} width={900} height={1000} style={{ width: "100%", height: "100%", display: "block" }} />
+                <button onClick={handlePreviewPlay} style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 48, height: 48, borderRadius: 999, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(0,0,0,0.45)", color: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Play size={18} fill="currentColor" />
+                </button>
+                <div style={{ position: "absolute", top: 10, right: 10, fontSize: 11, borderRadius: 999, background: "rgba(0,0,0,0.55)", padding: "4px 8px" }}>{Math.round(selectionDuration)}s</div>
+              </div>
+
+              {stage === "error" && (
+                <div style={{ marginBottom: 10, fontSize: 12, color: "#ff9f9f" }}>
+                  Export failed. Please retry.
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <button onClick={handleDownload} disabled={!selected} style={{ flex: 1, height: 44, borderRadius: 12, border: "none", background: "rgba(255, 140, 40, 0.9)", color: "#141414", fontSize: 15, fontWeight: 700 }}>
+                  Download for {PLATFORMS[platform].label}
+                </button>
+                <button onClick={cyclePlatform} style={{ width: 44, height: 44, borderRadius: 12, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.02)", color: "rgba(255,255,255,0.85)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ChevronDown size={16} />
+                </button>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, opacity: 0.86 }}>
+                <button onClick={cycleQuality} style={{ border: "none", background: "transparent", color: "inherit", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  {quality} <ChevronDown size={13} />
+                </button>
+                <div>{scaledResolution.w} × {scaledResolution.h}</div>
+                <button onClick={() => setIncludeAudio((v) => !v)} style={{ border: "none", background: "transparent", color: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  {includeAudio ? <Volume2 size={14} /> : <VolumeX size={14} />} {includeAudio ? "On" : "Off"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
