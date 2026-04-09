@@ -108,6 +108,7 @@ export function ExportStudio({
   const [includeAudio, setIncludeAudio] = useState(true);
   const [includeBeatVis, setIncludeBeatVis] = useState(false);
   const [includeWickBar, setIncludeWickBar] = useState(true);
+  const [includeFireReaction, setIncludeFireReaction] = useState(true);
   const [exportStage, setExportStage] = useState<"ready" | "rendering" | "done" | "error">("ready");
   const [exportProgress, setExportProgress] = useState(0);
   const [openPanel, setOpenPanel] = useState<"moment" | "caption" | "platform" | null>(null);
@@ -236,6 +237,7 @@ export function ExportStudio({
     setDownloadBlob(null);
     setIncludeBeatVis(false);
     setIncludeWickBar(true);
+    setIncludeFireReaction(true);
     setCaptionStyle("bar");
     setCaptionPos("bottom");
     setSelectedMomentIdx(1);
@@ -374,7 +376,8 @@ export function ExportStudio({
     if (!player || !isOpen) return;
     player.wickBarEnabled = includeWickBar;
     player.beatVisEnabled = includeBeatVis;
-  }, [includeWickBar, includeBeatVis, getPlayer, isOpen]);
+    player.setEmojiStreamEnabled(includeFireReaction);
+  }, [includeWickBar, includeBeatVis, includeFireReaction, getPlayer, isOpen]);
 
   useEffect(() => {
     if (isOpen) return;
@@ -385,6 +388,7 @@ export function ExportStudio({
       player.setRegion(undefined, undefined);
       player.wickBarEnabled = false;
       player.beatVisEnabled = false;
+      player.setEmojiStreamEnabled(false);
       const prev = prevSizeRef.current;
       if (prev) {
         player.resize(prev.w, prev.h);
@@ -427,6 +431,7 @@ export function ExportStudio({
       // Set export visual flags.
       player.wickBarEnabled = includeWickBar;
       player.beatVisEnabled = includeBeatVis;
+      player.setEmojiStreamEnabled(includeFireReaction);
       const blob = await exportVideoAsMP4({
         player,
         width: w,
@@ -466,6 +471,7 @@ export function ExportStudio({
       // Restore preview visual flags.
       player.wickBarEnabled = false;
       player.beatVisEnabled = false;
+      player.setEmojiStreamEnabled(false);
     }
   };
 
@@ -932,8 +938,9 @@ export function ExportStudio({
           >
             {([
               { label: "Audio", value: includeAudio, setter: setIncludeAudio },
-              { label: "Wick bar", value: includeWickBar, setter: setIncludeWickBar },
-              { label: "Beat vis", value: includeBeatVis, setter: setIncludeBeatVis },
+              { label: "Progress wick", value: includeWickBar, setter: setIncludeWickBar },
+              { label: "Beat bars", value: includeBeatVis, setter: setIncludeBeatVis },
+              { label: "Fire reaction", value: includeFireReaction, setter: setIncludeFireReaction },
             ] as const).map(({ label, value, setter }, i) => (
               <button
                 key={label}
@@ -946,7 +953,7 @@ export function ExportStudio({
                   justifyContent: "space-between",
                   padding: "9px 12px",
                   border: "none",
-                  borderBottom: i < 2 ? "0.5px solid rgba(255,255,255,0.04)" : "none",
+                  borderBottom: i < 3 ? "0.5px solid rgba(255,255,255,0.04)" : "none",
                   background: "transparent",
                   cursor: "pointer",
                   color: "inherit",
