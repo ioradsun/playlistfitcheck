@@ -22,7 +22,7 @@ interface Props {
   artistName: string;
   clipStart?: number;
   clipEnd?: number;
-  captionBar?: string;
+  captionText?: string;
 }
 
 const ASPECT_OPTIONS: { value: AspectRatio; label: string; sub: string }[] = [
@@ -43,7 +43,7 @@ const RESOLUTIONS: Record<Quality, Record<AspectRatio, { width: number; height: 
   "480p":  { "9:16": { width: 480, height: 854 },   "16:9": { width: 854, height: 480 },   "1:1": { width: 480, height: 480 } },
 };
 
-export function FitExportModal({ isOpen, onClose, getPlayer, songTitle, artistName, clipStart, clipEnd, captionBar }: Props) {
+export function FitExportModal({ isOpen, onClose, getPlayer, songTitle, artistName, clipStart, clipEnd, captionText }: Props) {
   const [ratio, setRatio] = useState<AspectRatio>("9:16");
   const [quality, setQuality] = useState<Quality>("720p");
   const [stage, setStage] = useState<ExportStage>("config");
@@ -150,7 +150,7 @@ export function FitExportModal({ isOpen, onClose, getPlayer, songTitle, artistNa
         fps: 30,
         songDuration,
         startOffset: isClip ? clipStart : undefined,
-        captionBar,
+        captionText,
         onProgress: (pct) => {
           setProgress(pct);
           if (pct >= 95) setStage("encoding");
@@ -179,7 +179,7 @@ export function FitExportModal({ isOpen, onClose, getPlayer, songTitle, artistNa
       }
       abortRef.current = null;
     }
-  }, [getPlayer, quality, ratio, resetState, clipStart, clipEnd, captionBar]);
+  }, [getPlayer, quality, ratio, resetState, clipStart, clipEnd, captionText]);
 
   const handleDownloadFile = useCallback(() => {
     if (!blobUrl) return;

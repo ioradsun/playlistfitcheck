@@ -512,7 +512,7 @@ export function ClipComposer({
         artistName=""
         clipStart={clipStart}
         clipEnd={clipEnd}
-        captionBar={caption.trim() || undefined}
+        captionText={caption.trim() || undefined}
       />
     </>
   );

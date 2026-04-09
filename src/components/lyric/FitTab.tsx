@@ -24,7 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
-import { FitExportModal } from "./FitExportModal";
+import { ViralClipModal } from "./ViralClipModal";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -41,7 +41,6 @@ import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { useVoteGate } from "@/hooks/useVoteGate";
 
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
-import { ClipComposer } from "@/components/lyric/ClipComposer";
 import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { persistQueue } from "@/lib/persistQueue";
 import { preloadImage } from "@/lib/imagePreloadCache";
@@ -309,13 +308,8 @@ export function FitTab({
     }
     return null;
   }, [initialLyric, danceId, lyricData?.title, user?.id]);
-  const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
-  const [clipComposerVisible, setClipComposerVisible] = useState(false);
-  const [clipComposerStart, setClipComposerStart] = useState(0);
-  const [clipComposerCaption, setClipComposerCaption] = useState<string | null>(
-    null,
-  );
+  const [viralClipOpen, setViralClipOpen] = useState(false);
   const dancePlayerRef =
     useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(
       null,
@@ -1225,13 +1219,6 @@ export function FitTab({
               />
             ) : null}
 
-              <FitExportModal
-                isOpen={showExportModal}
-                onClose={() => setShowExportModal(false)}
-                getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
-                songTitle={lyricData.title || "Untitled"}
-                artistName=""
-              />
             </div>
           ) : hasRealAudio ? (
             <div className="glass-card rounded-xl p-3">
@@ -1530,9 +1517,7 @@ export function FitTab({
                     </button>
                     <button
                       onClick={() => {
-                        setClipComposerVisible(true);
-                        setClipComposerCaption(caption);
-                        setClipComposerStart(Math.max(0, (topLine?.startSec ?? 0) - 1.5));
+                        setViralClipOpen(true);
                       }}
                       className="flex-1 py-2 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-primary/30 text-primary/70 hover:text-primary hover:bg-primary/5 transition-colors"
                     >
@@ -1543,31 +1528,21 @@ export function FitTab({
               );
             })}
 
-            {clipComposerVisible && (
-              <ClipComposer
-                visible={clipComposerVisible}
-                player={dancePlayerRef.current?.getPlayer() ?? null}
-                durationSec={dancePlayerRef.current?.getPlayer()?.audio?.duration ?? 0}
-                fires={fireData.rawFires}
-                lines={allLines.map((l) => ({
-                  lineIndex: l.lineIndex,
-                  text: l.text,
-                  startSec: l.startSec,
-                  endSec: l.startSec + 5,
-                }))}
-                initialStart={clipComposerStart}
-                initialEnd={clipComposerStart + 12}
-                initialCaption={clipComposerCaption}
-                songTitle={lyricData.title || "Untitled"}
-                onClose={() => {
-                  setClipComposerVisible(false);
-                  const player = dancePlayerRef.current?.getPlayer();
-                  if (player) {
-                    player.setRegion(undefined, undefined);
-                  }
-                }}
-              />
-            )}
+            <ViralClipModal
+              isOpen={viralClipOpen}
+              onClose={() => {
+                setViralClipOpen(false);
+                const player = dancePlayerRef.current?.getPlayer();
+                if (player) player.setRegion(undefined, undefined);
+              }}
+              getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
+              moments={dancePlayerRef.current?.getMoments?.() ?? []}
+              fireHeat={dancePlayerRef.current?.getFireHeat?.() ?? {}}
+              comments={dancePlayerRef.current?.getComments?.() ?? []}
+              songTitle={lyricData.title || "Untitled"}
+              artistName={profile?.display_name || "artist"}
+              audioUrl={dancePlayerRef.current?.getAudioUrl?.() ?? audioUrl ?? ""}
+            />
 
             {/* ── Empty state ── */}
                 {fireData.totalFires === 0 && fireData.resultsLoaded && (

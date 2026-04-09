@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useSyncExternalStore, memo } from "react";
-import { VolumeX } from "lucide-react";
+import { Share2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
@@ -8,6 +8,7 @@ import type { CardMode } from "@/components/lyric/PlayerHeader";
 import { MomentPanel } from "@/components/lyric/MomentPanel";
 import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
+import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { audioController } from "@/lib/audioController";
@@ -34,6 +35,10 @@ interface LyricDanceEmbedProps {
 
 export interface LyricDanceEmbedHandle {
   getPlayer: () => import("@/engine/LyricDancePlayer").LyricDancePlayer | null;
+  getMoments: () => import("@/lib/buildMoments").Moment[];
+  getFireHeat: () => Record<string, { line: Record<number, number>; total: number }>;
+  getComments: () => Array<{ text: string; line_index: number | null }>;
+  getAudioUrl: () => string;
   reloadTranscript: (lines: any[], words?: any[]) => void;
   wickBarEnabled: boolean;
 }
@@ -78,6 +83,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
   const [comments, setComments] = useState<Comment[]>([]);
+  const [viralClipOpen, setViralClipOpen] = useState(false);
   const [profileMap, setProfileMap] = useState<Record<string, { avatarUrl: string | null; displayName: string | null }>>({});
 
   const audioState = useSyncExternalStore(audioController.subscribe, audioController.getSnapshot, audioController.getSnapshot);
@@ -86,6 +92,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   useImperativeHandle(ref, () => ({
     getPlayer: () => player ?? null,
+    getMoments: () => moments,
+    getFireHeat: () => fireHeat,
+    getComments: () => comments,
+    getAudioUrl: () => ((data ?? prefetchedData) as any)?.audio_url ?? "",
     reloadTranscript: (lines: any[], words?: any[]) => {
       player?.updateTranscript(lines, words ?? null);
     },
@@ -95,7 +105,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     set wickBarEnabled(enabled: boolean) {
       if (player) player.wickBarEnabled = enabled;
     },
-  }), [player]);
+  }), [player, moments, fireHeat, comments, data, prefetchedData]);
 
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
@@ -424,6 +434,31 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               </div>
             )}
 
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setViralClipOpen(true);
+              }}
+              style={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                zIndex: 45,
+                width: 34,
+                height: 34,
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(0,0,0,0.35)",
+                color: "rgba(255,255,255,0.9)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              aria-label="Share clip"
+            >
+              <Share2 size={14} />
+            </button>
+
           </>
         )}
 
@@ -527,6 +562,18 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           />
         </div>
       )}
+
+      <ViralClipModal
+        isOpen={viralClipOpen}
+        onClose={() => setViralClipOpen(false)}
+        getPlayer={() => player ?? null}
+        moments={moments}
+        fireHeat={fireHeat}
+        comments={comments}
+        songTitle={songTitle}
+        artistName={artistName ?? "artist"}
+        audioUrl={((data ?? prefetchedData) as any)?.audio_url ?? ""}
+      />
     </div>
   );
 }));
