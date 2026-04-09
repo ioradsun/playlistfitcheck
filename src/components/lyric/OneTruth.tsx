@@ -19,6 +19,7 @@ interface OneTruthProps {
   comments: Comment[];
   userFires: Record<number, number>;
   allLines: Array<{ text: string; lineIndex: number }>;
+  initialBeat?: "yours" | "witness" | "meaning";
   onContinue: () => void;
   onCommentSubmitted: (comment: Comment) => void;
 }
@@ -59,12 +60,13 @@ export function OneTruth({
   comments,
   userFires,
   allLines,
+  initialBeat,
   onContinue,
   onCommentSubmitted,
 }: OneTruthProps) {
   const { user } = useAuth();
   type Beat = "yours" | "witness" | "meaning";
-  const [beat, setBeat] = useState<Beat>("yours");
+  const [beat, setBeat] = useState<Beat>(initialBeat ?? "yours");
   const [text, setText] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
@@ -107,12 +109,12 @@ export function OneTruth({
     .join(" ")
     .trim();
 
-  const getCommentsForMoment = (moment: Moment) => comments
-    .filter((comment) => moment.lines.some((line) => line.lineIndex === comment.line_index));
-
   const witnessComment = useMemo(() => {
     if (!fmlyMoment) return null;
-    return pickBestComment(getCommentsForMoment(fmlyMoment));
+    const momentComments = comments.filter((c) =>
+      fmlyMoment.lines.some((line) => line.lineIndex === c.line_index)
+    );
+    return pickBestComment(momentComments);
   }, [fmlyMoment, comments]);
 
   const handleSubmit = useCallback(async () => {
