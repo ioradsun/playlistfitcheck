@@ -6,7 +6,7 @@ import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { LyricDanceEmbed, type LyricDanceEmbedHandle } from "@/components/lyric/LyricDanceEmbed";
-import { ClipComposer } from "@/components/lyric/ClipComposer";
+import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 import { LazySpotifyEmbed } from "@/components/songfit/LazySpotifyEmbed";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Music, Share2 } from "lucide-react";
@@ -1257,24 +1257,21 @@ const SongDetail = () => {
           </div>
         )}
 
-        {clipEditorOpen && clipRegion && (
-          <ClipComposer
-            visible={clipEditorOpen}
-            player={playerRef.current?.getPlayer() ?? null}
-            durationSec={audioDuration}
-            fires={rawFires}
-            lines={lines}
-            initialStart={clipRegion.start}
-            initialEnd={clipRegion.end}
-            initialCaption={clipCaption}
-            songTitle={post.lyric_projects?.title ?? post.caption}
-            onClose={() => {
-              setClipEditorOpen(false);
-              const p = playerRef.current?.getPlayer();
-              if (p) p.setRegion(undefined, undefined);
-            }}
-          />
-        )}
+        <ViralClipModal
+          isOpen={clipEditorOpen}
+          onClose={() => {
+            setClipEditorOpen(false);
+            const p = playerRef.current?.getPlayer();
+            if (p) p.setRegion(undefined, undefined);
+          }}
+          getPlayer={() => playerRef.current?.getPlayer() ?? null}
+          moments={playerRef.current?.getMoments() ?? []}
+          fireHeat={playerRef.current?.getFireHeat() ?? {}}
+          comments={playerRef.current?.getComments() ?? []}
+          songTitle={post.lyric_projects?.title ?? post.caption}
+          artistName={(post as any).artist_name || (post.lyric_projects?.title ?? post.caption) || "artist"}
+          audioUrl={playerRef.current?.getAudioUrl() ?? ""}
+        />
 
         {/* Player (collapsed, expandable) */}
         {danceData && (

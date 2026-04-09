@@ -46,7 +46,7 @@ interface ExportOptions {
   };
 }
 
-function interleaveChannels(channels: Float32Array[]): Float32Array {
+function concatPlanarChannels(channels: Float32Array[]): Float32Array {
   const channelCount = channels.length;
   if (channelCount === 0) return new Float32Array();
   const frameCount = channels[0]?.length ?? 0;
@@ -88,6 +88,25 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
   const usPerFrame = Math.round(1_000_000 / fps);
   const keyFrameInterval = Math.round(fps * 2); // every 2s
   const effectiveBitrate = bitrate ?? defaultBitrate(width, height, fps);
+  let audioSliceResult: Awaited<ReturnType<typeof sliceAudio>> | null = null;
+
+  if (audioSlice) {
+    if (typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") {
+      console.warn("[exportVideo] AudioEncoder unavailable; exporting video-only.");
+    } else {
+      try {
+        audioSliceResult = await sliceAudio(
+          audioSlice.audioUrl,
+          audioSlice.startSec,
+          audioSlice.endSec,
+          0.05,
+          signal,
+        );
+      } catch (e) {
+        console.warn("[exportVideo] Audio slice failed; exporting video-only.", e);
+      }
+    }
+  }
 
   // ── Prime render pipeline (images/Ken Burns/sims) before resize/export ──
   if (typeof player.prepareExportFramePipeline === 'function') {
@@ -101,7 +120,13 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
   const muxer = new Mp4Muxer.Muxer({
     target: new Mp4Muxer.ArrayBufferTarget(),
     video: { codec: 'avc', width, height },
-    audio: audioSlice ? { codec: 'aac', sampleRate: 44100, numberOfChannels: 2 } : undefined,
+    audio: audioSliceResult
+      ? {
+        codec: 'aac',
+        sampleRate: audioSliceResult.sampleRate,
+        numberOfChannels: audioSliceResult.numberOfChannels,
+      }
+      : undefined,
     fastStart: 'in-memory',
     firstTimestampBehavior: 'offset',
   });
@@ -202,7 +227,7 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
 
       // ── Progress (avoid excessive calls — only on integer % change) ──
       if (onProgress) {
-        const pct = Math.round((i / totalFrames) * 100);
+        const pct = Math.round((i / totalFrames) * (audioSliceResult ? 90 : 100));
         if (pct !== lastProgressPct) {
           lastProgressPct = pct;
           onProgress(pct);
@@ -214,46 +239,37 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
     await videoEncoder.flush();
     videoEncoder.close();
 
-    if (audioSlice) {
-      if (typeof AudioEncoder === "undefined" || typeof AudioData === "undefined") {
-        console.warn("[exportVideo] AudioEncoder unavailable; exporting video-only MP4.");
-      } else {
-        const sliceResult = await sliceAudio(
-          audioSlice.audioUrl,
-          audioSlice.startSec,
-          audioSlice.endSec,
-          0.05,
-          signal,
-        );
-        if (encodeError) throw encodeError;
+    if (audioSliceResult) {
+      onProgress?.(95);
+      if (encodeError) throw encodeError;
 
-        const audioEncoder = new AudioEncoder({
-          output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? undefined),
-          error: (e) => { encodeError = e as Error; },
-        });
+      const audioEncoder = new AudioEncoder({
+        output: (chunk, meta) => muxer.addAudioChunk(chunk, meta ?? undefined),
+        error: (e) => { encodeError = e as Error; },
+      });
 
-        audioEncoder.configure({
-          codec: "mp4a.40.2",
-          sampleRate: sliceResult.sampleRate,
-          numberOfChannels: sliceResult.numberOfChannels,
-          bitrate: 128_000,
-        });
+      audioEncoder.configure({
+        codec: "mp4a.40.2",
+        sampleRate: audioSliceResult.sampleRate,
+        numberOfChannels: audioSliceResult.numberOfChannels,
+        bitrate: 128_000,
+      });
 
-        const planar = interleaveChannels(sliceResult.samples);
-        const audioData = new AudioData({
-          format: "f32-planar",
-          sampleRate: sliceResult.sampleRate,
-          numberOfFrames: sliceResult.samples[0]?.length ?? 0,
-          numberOfChannels: sliceResult.numberOfChannels,
-          timestamp: 0,
-          data: planar,
-        });
-        audioEncoder.encode(audioData);
-        audioData.close();
-        await audioEncoder.flush();
-        audioEncoder.close();
-        if (encodeError) throw encodeError;
-      }
+      const planar = concatPlanarChannels(audioSliceResult.samples);
+      const audioData = new AudioData({
+        format: "f32-planar",
+        sampleRate: audioSliceResult.sampleRate,
+        numberOfFrames: audioSliceResult.samples[0]?.length ?? 0,
+        numberOfChannels: audioSliceResult.numberOfChannels,
+        timestamp: 0,
+        data: planar,
+      });
+      audioEncoder.encode(audioData);
+      audioData.close();
+      await audioEncoder.flush();
+      audioEncoder.close();
+      if (encodeError) throw encodeError;
+      onProgress?.(100);
     }
 
     muxer.finalize();

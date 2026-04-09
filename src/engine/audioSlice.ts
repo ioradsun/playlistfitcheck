@@ -39,7 +39,9 @@ export async function sliceAudio(
   const arrayBuffer = await response.arrayBuffer();
   if (signal?.aborted) throw new DOMException("Audio slice cancelled", "AbortError");
 
-  const decodeCtx = new OfflineAudioContext(2, 2, 44100);
+  // OfflineAudioContext needs a non-zero length to construct.
+  // We only use it for decodeAudioData — the context's own rendering is unused.
+  const decodeCtx = new OfflineAudioContext(2, 44100, 44100);
   const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer.slice(0));
 
   const sampleRate = audioBuffer.sampleRate;
