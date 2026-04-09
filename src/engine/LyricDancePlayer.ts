@@ -2502,9 +2502,16 @@ export class LyricDancePlayer {
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
       willReadFrequently: true,
-      desynchronized: true,
     })!;
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+
+    // Force recompile with fresh context — metrics may differ.
+    if (this.payload) {
+      this.compiledScene = compileScene(this.payload, { viewportWidth: width, viewportHeight: height });
+      this._buildChunkCacheFromScene(this.compiledScene);
+      this._markCompiledViewport(width, height);
+      this._textMetricsCache.clear();
+    }
 
     // Force quality tier 0 for export — maximum visual quality, CPU doesn't matter
     this._qualityTier = 0 as 0;
@@ -2564,12 +2571,23 @@ export class LyricDancePlayer {
       dpr: this.dpr,
       effectiveDpr: this._effectiveDpr,
       compiledScene: !!this.compiledScene,
+      phraseGroups: this.compiledScene?.phraseGroups?.length ?? 0,
       payload: !!this.payload,
+      payloadWords: this.payload?.words?.length ?? 0,
+      payloadLines: this.payload?.lines?.length ?? 0,
+      payloadPhrases: (this.payload?.cinematic_direction as any)?.phrases?.length ?? 0,
       fullMode: this.fullModeEnabled,
-      chunks: this.compiledScene?.chunks?.length ?? 0,
       songStart: this.songStartSec,
       songEnd: this.songEndSec,
     });
+    if (this.compiledScene && this.compiledScene.phraseGroups.length === 0) {
+      console.error('[LyricDancePlayer] EXPORT: compiledScene has ZERO phraseGroups — lyrics will not appear.', {
+        payloadWords: this.payload?.words?.length ?? 0,
+        payloadLines: this.payload?.lines?.length ?? 0,
+        payloadPhrases: (this.payload?.cinematic_direction as any)?.phrases?.length ?? 0,
+        hasCinematicDirection: !!this.payload?.cinematic_direction,
+      });
+    }
   }
 
   drawAtTime(tSec: number): void {
@@ -2619,20 +2637,25 @@ export class LyricDancePlayer {
     }
 
     const frame = this.evaluateFrame(clamped);
-    if (this.isExporting && this._exportFrameCount === undefined) {
-      this._exportFrameCount = 0;
-    }
+    // Export frame diagnostic — log first 3 frames to trace rendering
     if (this.isExporting) {
-      this._exportFrameCount += 1;
-      if (this._exportFrameCount === 1) {
-        console.info('[LyricDancePlayer] EXPORT first frame:', {
-          tSec,
-          timeSec,
-          clamped,
-          frame: !!frame,
-          chunksVisible: frame?.chunks?.filter((chunk) => chunk.visible)?.length ?? 0,
-          compiledScene: !!this.compiledScene,
-          payload: !!this.payload,
+      if (this._exportFrameCount === undefined) this._exportFrameCount = 0;
+      this._exportFrameCount++;
+      if (this._exportFrameCount <= 3) {
+        const visibleChunks = frame?.chunks?.filter((c: any) => c.visible)?.length ?? 0;
+        const totalChunks = frame?.chunks?.length ?? 0;
+        console.info(`[LyricDancePlayer] EXPORT frame #${this._exportFrameCount}:`, {
+          tSec: Math.round(tSec * 1000) / 1000,
+          timeSec: Math.round(timeSec * 1000) / 1000,
+          clamped: Math.round(clamped * 1000) / 1000,
+          frameExists: !!frame,
+          totalChunks,
+          visibleChunks,
+          phraseGroups: this.compiledScene?.phraseGroups?.length ?? 0,
+          fullMode: this.fullModeEnabled,
+          songStart: this.songStartSec,
+          songEnd: this.songEndSec,
+          activeGroupCursor: this._activeGroupCursor,
         });
       }
     }
@@ -2738,12 +2761,14 @@ export class LyricDancePlayer {
         if (
           Math.abs(w - this._compiledWidth) < 4 &&
           Math.abs(h - this._compiledHeight) < 4
-        )
-          return;
-        this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
-        this._buildChunkCacheFromScene(this.compiledScene);
-        this._markCompiledViewport(w, h);
-        this._textMetricsCache.clear();
+        ) {
+          // Dimensions close enough — skip recompile but continue resize setup
+        } else {
+          this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
+          this._buildChunkCacheFromScene(this.compiledScene);
+          this._markCompiledViewport(w, h);
+          this._textMetricsCache.clear();
+        }
       }
     }
   }
