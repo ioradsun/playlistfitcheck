@@ -308,7 +308,7 @@ export function ViralClipModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) closeSafe(); }}>
       <DialogContent className="sm:max-w-[780px] p-0 border-0 [&>button]:hidden" style={{ background: "transparent", maxHeight: "calc(100dvh - 32px)" }}>
-        <div style={{ background: "#0c0c0c", borderRadius: 20, padding: "14px 16px", color: "rgba(255,255,255,0.92)", fontFamily: '"SF Pro Display", "Helvetica Neue", -apple-system, sans-serif', display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "calc(100dvh - 32px)" }}>
+        <div style={{ background: "#0c0c0c", borderRadius: 20, padding: "14px 16px", color: "rgba(255,255,255,0.92)", fontFamily: '"SF Pro Display", "Helvetica Neue", -apple-system, sans-serif', display: "flex", flexDirection: "column", maxHeight: "calc(100dvh - 32px)" }}>
           {stage === "rendering" && (
             <div style={{ minHeight: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
               <div style={{ width: 40, height: 40, borderRadius: 999, border: "3px solid rgba(255,255,255,0.16)", borderTopColor: "rgba(68,210,126,0.9)", animation: "spin 1s linear infinite" }} />
@@ -341,7 +341,7 @@ export function ViralClipModal({
               </div>
 
               {/* Two-column: left config, right preview */}
-              <div style={{ display: "flex", gap: 14, flex: "1 1 0", minHeight: 0, overflow: "hidden" }}>
+              <div style={{ display: "flex", gap: 14, minHeight: 320 }}>
 
                 {/* Left column — config */}
                 <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 8 }}>
@@ -431,7 +431,7 @@ export function ViralClipModal({
 
                 {/* Right column — preview */}
                 <div style={{ width: 220, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#070707", width: "100%", maxHeight: "calc(100dvh - 140px)", aspectRatio: previewAspect }}>
+                  <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#070707", width: "100%", height: 320, aspectRatio: previewAspect }}>
                     <canvas ref={previewCanvasRef} width={previewW} height={previewH} style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }} />
                     <button onClick={handlePreviewPlay} style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 40, height: 40, borderRadius: 999, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(0,0,0,0.45)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                       {previewing ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
