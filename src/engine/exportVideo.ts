@@ -182,16 +182,31 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           const fontSize = Math.round(height * 0.032);
-          const y = Math.round(height * 0.65);
+          const isPortrait = height > width;
+          const isSquare = Math.abs(width - height) < 100;
+          const captionY = isPortrait
+            ? Math.round(height * 0.76)
+            : isSquare
+              ? Math.round(height * 0.80)
+              : Math.round(height * 0.80);
           ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
-          ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.strokeStyle = "#000000";
           ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.12));
           ctx.lineJoin = "round";
-          ctx.strokeText(options.captionText, width / 2, y, width - 80);
           ctx.fillStyle = "#ffffff";
-          ctx.fillText(options.captionText, width / 2, y, width - 80);
+
+          if (isPortrait) {
+            ctx.textAlign = "left";
+            const leftPad = Math.round(width * 0.08);
+            const maxW = Math.round(width * 0.77);
+            ctx.strokeText(options.captionText, leftPad, captionY, maxW);
+            ctx.fillText(options.captionText, leftPad, captionY, maxW);
+          } else {
+            ctx.textAlign = "center";
+            ctx.strokeText(options.captionText, width / 2, captionY, width - 80);
+            ctx.fillText(options.captionText, width / 2, captionY, width - 80);
+          }
         }
       }
 
