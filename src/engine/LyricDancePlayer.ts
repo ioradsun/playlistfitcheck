@@ -1975,9 +1975,9 @@ export class LyricDancePlayer {
   }
 
   /**
-   * Resolve the Google Font family name from cinematic_direction.typography.
-   * Reads from this.data (available at construction time, before payload is built).
-   * Falls back to Montserrat if no typography key or unknown key.
+   * Resolve the primary font family name via the typography resolver.
+   * Handles typographyPlan (new), fontProfile, and legacy typography keys.
+   * Falls back to Montserrat if no valid font is found.
    */
   private getTargetFontFamily(): string {
     const resolved = resolveTypographyFromDirection(this.data?.cinematic_direction);

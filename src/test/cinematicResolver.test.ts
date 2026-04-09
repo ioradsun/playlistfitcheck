@@ -14,7 +14,6 @@ describe('cinematicResolver', () => {
     const lines = [{ start: 0, end: 1, text: 'we fire up' }];
     const resolved = resolveCinematicState(direction, lines, 4);
     expect(resolved.lineSettings[0].entryStyle).toBe('cuts');
-    expect(resolved.lineSettings[0].typography).toBe('serif');
     expect(resolved.wordSettings.fire.emphasisLevel).toBeGreaterThanOrEqual(0);
   });
 

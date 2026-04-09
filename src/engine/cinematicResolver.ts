@@ -7,7 +7,6 @@ export interface ResolvedLineSettings {
   heroToken: string;
   entryStyle: string;
   exitStyle: string;
-  typography: string;
   texture: string;
   atmosphere: string;
 }
@@ -106,7 +105,6 @@ export function resolveCinematicState(
       heroToken,
       entryStyle: String(story.entryStyle ?? (section as any).motion ?? songDefaults.entryStyle ?? "fades"),
       exitStyle: String(story.exitStyle ?? (section as any).motion ?? songDefaults.exitStyle ?? "fades"),
-      typography: String((story as any).typography ?? (section as any).typography ?? d.typography ?? songDefaults.typography ?? "clean-modern"),
       texture: String((story as any).texture ?? (section as any).texture ?? d.texture ?? songDefaults.texture ?? "dust"),
       atmosphere: String((story as any).atmosphere ?? (section as any).atmosphere ?? d.atmosphere ?? songDefaults.atmosphere ?? "cinematic"),
     };

@@ -1096,9 +1096,7 @@ export function useLyricPipeline({
         }));
       }
 
-      import("@/engine/presetDerivation").then(({ deriveFrameState, getTypography }) => {
-        const typoPreset = loadedCinematicDirection.typography || "clean-modern";
-        getTypography(typoPreset);
+      import("@/engine/presetDerivation").then(({ deriveFrameState }) => {
         deriveFrameState(loadedCinematicDirection, 0, 0.5);
       });
     }
@@ -1577,10 +1575,7 @@ export function useLyricPipeline({
         }
 
         const { deriveFrameState } = await import("@/engine/presetDerivation");
-        const { getTypography } = await import("@/engine/presetDerivation");
         if (myRunId !== runIdRef.current) return;
-        const typoPreset = enrichedScene.typography || "clean-modern";
-        getTypography(typoPreset);
         deriveFrameState(enrichedScene, 0, 0.5);
 
         setGenerationStatus((prev) => ({ ...prev, sectionImages: "running" }));

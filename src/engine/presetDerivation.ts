@@ -9,32 +9,6 @@ function clamp(x: number, min: number, max: number): number {
 }
 
 
-// ─── Typography ──────────────────────────────────────────────────
-
-interface TypographyConfig {
-  fontFamily: string;
-  fontWeight: number;
-  letterSpacing: string;
-  textTransform: "uppercase" | "none";
-  lineHeight: number;
-}
-
-const TYPOGRAPHY: Record<string, TypographyConfig> = {
-  "bold-impact": { fontFamily: "Oswald", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", lineHeight: 1.2 },
-  "clean-modern": { fontFamily: "Montserrat", fontWeight: 500, letterSpacing: "0.02em", textTransform: "none", lineHeight: 1.4 },
-  "elegant-serif": { fontFamily: "Playfair Display", fontWeight: 400, letterSpacing: "0.08em", textTransform: "none", lineHeight: 1.6 },
-  "raw-condensed": { fontFamily: "Barlow Condensed", fontWeight: 600, letterSpacing: "0.01em", textTransform: "uppercase", lineHeight: 1.2 },
-  "whisper-soft": { fontFamily: "Nunito", fontWeight: 300, letterSpacing: "0.10em", textTransform: "none", lineHeight: 1.8 },
-  "tech-mono": { fontFamily: "JetBrains Mono", fontWeight: 400, letterSpacing: "0.00em", textTransform: "none", lineHeight: 1.4 },
-  "display-heavy": { fontFamily: "Bebas Neue", fontWeight: 400, letterSpacing: "0.06em", textTransform: "uppercase", lineHeight: 1.1 },
-  "editorial-light": { fontFamily: "Cormorant Garamond", fontWeight: 300, letterSpacing: "0.12em", textTransform: "none", lineHeight: 1.7 },
-};
-
-export function getTypography(preset: string): TypographyConfig {
-  return TYPOGRAPHY[preset] ?? TYPOGRAPHY["clean-modern"];
-}
-
-
 // ─── Motion → Physics ────────────────────────────────────────────
 
 interface PhysicsConfig {
@@ -330,11 +304,16 @@ export function deriveFrameState(
   const section = sections[sectionIndex] ?? {};
 
   const motionPreset = section.motion ?? direction.motion ?? "fluid";
-  const typographyPreset = section.typography ?? direction.typography ?? "clean-modern";
   const texturePreset = section.texture ?? direction.texture ?? "dust";
   const atmospherePreset = section.atmosphere ?? direction.atmosphere ?? "cinematic";
 
-  const typo = getTypography(typographyPreset);
+  const typo = {
+    fontFamily: "Montserrat",
+    fontWeight: 700,
+    letterSpacing: "0.02em",
+    textTransform: "none" as const,
+    lineHeight: 1.4,
+  };
   const physics = getPhysics(motionPreset);
   const particles = getParticles(texturePreset);
   const overlay = getOverlay(atmospherePreset);
