@@ -37,6 +37,53 @@ const PREVIEW_BUFFERS = [
   { w: 640, h: 360 }, // 16:9
 ] as const;
 
+type SortedMoment = {
+  moment: Moment;
+  index: number;
+  fires: number;
+  isFull?: boolean;
+};
+
+const STYLE = {
+  mono9: {
+    fontFamily: '"SF Mono", monospace',
+    fontSize: 9,
+  } as CSSProperties,
+  dropdownRow: {
+    width: "100%",
+    border: "none",
+    borderBottom: "0.5px solid rgba(255,255,255,0.04)",
+    color: "inherit",
+    padding: "9px 14px",
+    textAlign: "left" as const,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    cursor: "pointer",
+  } as CSSProperties,
+  activeRow: {
+    background: "rgba(68,210,126,0.06)",
+  } as CSSProperties,
+  inactiveRow: {
+    background: "transparent",
+  } as CSSProperties,
+  dot: (active: boolean): CSSProperties => ({
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    background: active ? "#44d27e" : "rgba(255,255,255,0.2)",
+    boxShadow: active ? "0 0 8px rgba(68,210,126,0.7)" : "none",
+  }),
+  greenButton: {
+    borderRadius: 12,
+    border: "none",
+    background: "#44d27e",
+    color: "#06170e",
+    fontWeight: 800,
+    cursor: "pointer",
+  } as CSSProperties,
+} as const;
+
 export function ExportStudio({
   isOpen,
   onClose,
@@ -73,13 +120,13 @@ export function ExportStudio({
 
   const hooks = empowermentHooks ?? [];
 
-  const sortedMoments = useMemo(() => {
+  const sortedMoments = useMemo((): SortedMoment[] => {
     const fireCounts = deriveMomentFireCounts(fireHeat, moments);
-    const ranked = moments
+    const ranked: SortedMoment[] = moments
       .map((moment, index) => ({ moment, index, fires: fireCounts[index] ?? 0 }))
       .sort((a, b) => b.fires - a.fires);
-    const fullVideo = {
-      moment: { startSec: 0, endSec: durationSec, lines: [], index: -1 } as any,
+    const fullVideo: SortedMoment = {
+      moment: { startSec: 0, endSec: durationSec, lines: [], index: -1 },
       index: -1,
       fires: 0,
       isFull: true,
@@ -191,16 +238,22 @@ export function ExportStudio({
     const player = getPlayer();
     const canvas = previewCanvasRef.current;
     if (!player || !canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     let stopped = false;
     let rafId = 0;
-    const draw = () => {
+    let lastDrawTime = 0;
+    const FRAME_INTERVAL = 1000 / 30;
+    const draw = (now: number) => {
       if (stopped) return;
-      const source = player.getExportCanvas();
-      const ctx = canvas.getContext("2d");
-      if (ctx && source && source.width > 0 && source.height > 0) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+      if (now - lastDrawTime >= FRAME_INTERVAL) {
+        lastDrawTime = now;
+        const source = player.getExportCanvas();
+        if (source && source.width > 0 && source.height > 0) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        }
       }
       rafId = requestAnimationFrame(draw);
     };
@@ -232,7 +285,7 @@ export function ExportStudio({
     if (!isOpen) return;
     const player = getPlayer();
     if (!player || !activeSelection) return;
-    if ((activeSelection as any).isFull) {
+    if (activeSelection?.isFull) {
       player.setRegion(undefined, undefined);
       player.seek(0);
     } else {
@@ -280,8 +333,8 @@ export function ExportStudio({
     }
 
     const { w, h } = PLATFORMS[platformIdx];
-    const startSec = (activeSelection as any).isFull ? 0 : activeSelection.moment.startSec;
-    const endSec = (activeSelection as any).isFull ? durationSec : activeSelection.moment.endSec;
+    const startSec = activeSelection?.isFull ? 0 : activeSelection.moment.startSec;
+    const endSec = activeSelection?.isFull ? durationSec : activeSelection.moment.endSec;
 
     const abort = new AbortController();
     abortRef.current = abort;
@@ -349,27 +402,29 @@ export function ExportStudio({
         flexDirection: isMobile ? "column" : "row",
       }}
     >
-      <button
-        type="button"
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          top: "calc(16px + env(safe-area-inset-top, 0px))",
-          right: 16,
-          zIndex: 10,
-          width: 32,
-          height: 32,
-          borderRadius: 999,
-          border: "1px solid rgba(255,255,255,0.14)",
-          background: "rgba(255,255,255,0.02)",
-          color: "rgba(255,255,255,0.78)",
-          fontSize: 18,
-          lineHeight: "30px",
-          cursor: "pointer",
-        }}
-      >
-        ×
-      </button>
+      {!isMobile && (
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 10,
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: "rgba(255,255,255,0.02)",
+            color: "rgba(255,255,255,0.78)",
+            fontSize: 18,
+            lineHeight: "30px",
+            cursor: "pointer",
+          }}
+        >
+          ×
+        </button>
+      )}
       {isMobile && (
         <div
           style={{
@@ -377,6 +432,7 @@ export function ExportStudio({
             borderBottom: "0.5px solid rgba(255,255,255,0.06)",
             flexShrink: 0,
             paddingTop: "env(safe-area-inset-top, 0px)",
+            position: "relative",
           }}
         >
           <button
@@ -419,6 +475,28 @@ export function ExportStudio({
           >
             Config
           </button>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              position: "absolute",
+              right: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              marginTop: "calc(env(safe-area-inset-top, 0px) / 2)",
+              width: 28,
+              height: 28,
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(255,255,255,0.02)",
+              color: "rgba(255,255,255,0.78)",
+              fontSize: 16,
+              lineHeight: "26px",
+              cursor: "pointer",
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -437,6 +515,7 @@ export function ExportStudio({
               maxWidth: "45vw",
               flexShrink: 0,
               borderRight: "0.5px solid rgba(255,255,255,0.06)",
+              display: "flex",
             }),
           overflowX: "hidden",
           overflowY: "auto",
@@ -470,43 +549,42 @@ export function ExportStudio({
                   if (isMobile) setMobileTab("preview");
                 }}
                 style={{
-                  width: "100%",
-                  border: "none",
-                  background: isActive ? "rgba(68,210,126,0.06)" : "transparent",
-                  color: "inherit",
+                  ...STYLE.dropdownRow,
+                  ...(isActive ? STYLE.activeRow : STYLE.inactiveRow),
                   padding: "9px 12px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  cursor: "pointer",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: 999, background: isActive ? "#44d27e" : "rgba(255,255,255,0.2)", boxShadow: isActive ? "0 0 8px rgba(68,210,126,0.7)" : "none" }} />
+                  <div style={STYLE.dot(isActive)} />
                   <div style={{ minWidth: 0, textAlign: "left" }}>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.83)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {idx === 0 ? "Full video" : (entry.moment?.lines?.[0]?.text ?? `Moment #${idx}`)}
                     </div>
-                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: '"SF Mono", monospace' }}>
+                    <div style={{ ...STYLE.mono9, color: "rgba(255,255,255,0.3)" }}>
                       {duration.toFixed(1)}s · {entry.moment.lines?.length ?? 0} lines
                     </div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {idx === 0 ? (
-                    <span style={{ fontSize: 9, fontFamily: '"SF Mono", monospace', color: "rgba(255,255,255,0.42)", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 999, padding: "2px 6px" }}>full</span>
+                    <span style={{ ...STYLE.mono9, color: "rgba(255,255,255,0.42)", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 999, padding: "2px 6px" }}>full</span>
                   ) : (
                     <>
                       <div style={{ width: 36, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
                         <div style={{ width: `${Math.round(firePct * 100)}%`, height: "100%", background: "#44d27e" }} />
                       </div>
-                      <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontFamily: '"SF Mono", monospace' }}>{Math.round(entry.fires)}</span>
+                      <span style={{ ...STYLE.mono9, color: "rgba(255,255,255,0.55)" }}>{Math.round(entry.fires)}</span>
                     </>
                   )}
                 </div>
               </button>
             );
           })}
+          {sortedMoments.length <= 1 && (
+            <div style={{ padding: "12px 14px", fontSize: 11, color: "rgba(255,255,255,0.25)", fontStyle: "italic" }}>
+              Publish your song to generate clip moments from listener fire data.
+            </div>
+          )}
         </SelectorCard>
 
         <SelectorCard
@@ -581,24 +659,23 @@ export function ExportStudio({
                   if (isMobile) setMobileTab("preview");
                 }}
                 style={{
-                  width: "100%",
-                  border: "none",
-                  borderBottom: "0.5px solid rgba(255,255,255,0.04)",
-                  background: active ? "rgba(68,210,126,0.06)" : "transparent",
+                  ...STYLE.dropdownRow,
+                  ...(active ? STYLE.activeRow : STYLE.inactiveRow),
                   color: "rgba(255,255,255,0.82)",
                   padding: "8px 14px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
                   gap: 8,
                 }}
               >
                 <span style={{ fontStyle: "italic", fontSize: 12, textAlign: "left" }}>{hook}</span>
-                <span style={{ fontFamily: '"SF Mono", monospace', fontSize: 9, color: "rgba(255,255,255,0.45)" }}>{pct}</span>
+                <span style={{ ...STYLE.mono9, color: "rgba(255,255,255,0.45)" }}>{pct}</span>
               </button>
             );
           })}
+          {hooks.length === 0 && (
+            <div style={{ padding: "8px 14px", fontSize: 11, color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>
+              FMLY hooks will appear here once generated.
+            </div>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -642,24 +719,15 @@ export function ExportStudio({
                   if (isMobile) setMobileTab("preview");
                 }}
                 style={{
-                  width: "100%",
-                  border: "none",
-                  borderBottom: "0.5px solid rgba(255,255,255,0.04)",
-                  background: active ? "rgba(68,210,126,0.06)" : "transparent",
-                  color: "inherit",
-                  padding: "9px 14px",
-                  textAlign: "left",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  cursor: "pointer",
+                  ...STYLE.dropdownRow,
+                  ...(active ? STYLE.activeRow : STYLE.inactiveRow),
                 }}
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                   <span style={{ width: 6, height: 6, borderRadius: 999, background: active ? "#44d27e" : "rgba(255,255,255,0.25)" }} />
                   <span style={{ fontSize: 12, color: "rgba(255,255,255,0.83)" }}>{platform.label}</span>
                 </span>
-                <span style={{ fontFamily: '"SF Mono", monospace', fontSize: 9, color: "rgba(255,255,255,0.45)" }}>{platform.w}×{platform.h}</span>
+                <span style={{ ...STYLE.mono9, color: "rgba(255,255,255,0.45)" }}>{platform.w}×{platform.h}</span>
               </button>
             );
           })}
@@ -709,17 +777,18 @@ export function ExportStudio({
               style={{
                 width: "100%",
                 height: 42,
-                borderRadius: 12,
-                border: "none",
-                background: "#44d27e",
-                color: "#06170e",
-                fontWeight: 800,
+                ...STYLE.greenButton,
                 cursor: browserSupported ? "pointer" : "not-allowed",
                 opacity: browserSupported ? 1 : 0.5,
               }}
             >
               Download for {PLATFORMS[platformIdx].label.split(" / ")[0]}
             </button>
+          )}
+          {exportStage === "ready" && (
+            <div style={{ ...STYLE.mono9, color: "rgba(255,255,255,0.18)", textAlign: "center", marginTop: -6 }}>
+              {PLATFORMS[platformIdx].w}×{PLATFORMS[platformIdx].h} · {Math.round(((activeSelection?.moment.endSec ?? 0) - (activeSelection?.moment.startSec ?? 0)) || durationSec)}s
+            </div>
           )}
 
           {exportStage === "rendering" && (
@@ -799,7 +868,7 @@ export function ExportStudio({
             borderTop: "0.5px solid rgba(255,255,255,0.06)",
             display: "flex",
             gap: 8,
-            alignItems: "center",
+            alignItems: "stretch",
           }}
         >
           <button
@@ -830,25 +899,26 @@ export function ExportStudio({
               )}
             </svg>
           </button>
-          <button
-            type="button"
-            onClick={() => void handleDownload()}
-            disabled={!browserSupported}
-            style={{
-              flex: 1,
-              height: 40,
-              borderRadius: 12,
-              border: "none",
-              background: "#44d27e",
-              color: "#06170e",
-              fontWeight: 800,
-              fontSize: 13,
-              cursor: browserSupported ? "pointer" : "not-allowed",
-              opacity: browserSupported ? 1 : 0.5,
-            }}
-          >
-            Download for {PLATFORMS[platformIdx].label.split(" / ")[0]}
-          </button>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={!browserSupported}
+              style={{
+                width: "100%",
+                height: 40,
+                ...STYLE.greenButton,
+                fontSize: 13,
+                cursor: browserSupported ? "pointer" : "not-allowed",
+                opacity: browserSupported ? 1 : 0.5,
+              }}
+            >
+              Download for {PLATFORMS[platformIdx].label.split(" / ")[0]}
+            </button>
+            <div style={{ ...STYLE.mono9, color: "rgba(255,255,255,0.18)", textAlign: "center", marginTop: 4 }}>
+              {PLATFORMS[platformIdx].w}×{PLATFORMS[platformIdx].h} · {Math.round(((activeSelection?.moment.endSec ?? 0) - (activeSelection?.moment.startSec ?? 0)) || durationSec)}s
+            </div>
+          </div>
         </div>
       )}
       {isMobile && exportStage !== "ready" && (
