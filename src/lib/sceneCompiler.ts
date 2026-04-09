@@ -89,8 +89,7 @@ export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: numbe
 
 
 
-const FILLER_WORDS = new Set(['a','an','the','to','of','and','or','but','in','on','at','for','with','from','by','up','down','is','am','are','was','were','be','been','being','it','its','that','this','these','those','i','you','he','she','we','they']);
-const CONNECTOR_WORDS = new Set(['i', 'you', 'we', 'they', 'he', 'she', 'it', 'and', 'but', 'or', 'so', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'if', 'when', 'while', 'that']);
+const FILLER_WORDS = new Set(['a','an','the','to','of','and','or','but','in','on','at','for','with','from','by','up','down','is','am','are','was','were','be','been','being','it','its','that','this','these','those','i','you','he','she','we','they','if','when','while','so']);
 const MIN_GROUP_DURATION = 0.5;
 const MAX_GROUP_SIZE = 5;
 const WEIGHT_STEPS = [300, 400, 700, 800];
@@ -98,19 +97,12 @@ const WEIGHT_STEPS = [300, 400, 700, 800];
 
 function isFillerWord(word: string): boolean { return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase()); }
 
-function getVisualMode(_payload: ScenePayload): VisualMode {
-  return 'cinematic'; // scattered layouts removed — fitTextToViewport handles all positioning
-}
-
 function findAnchorWord(words: WordMetaEntry[]): number {
-  let maxScore = -1; let maxIdx = words.length - 1;
+  let maxScore = -1;
+  let maxIdx = words.length - 1;
   for (let i = 0; i < words.length; i += 1) {
-    const emp = 1;
-    const isImpact = false;
-    const isRising = false;
-    const isFiller = isFillerWord(words[i].word);
     const wordLen = words[i].clean.length;
-    const score = (emp * 2) + (isImpact ? 6 : 0) + (isRising ? 4 : 0) - (isFiller ? 5 : 0) + (wordLen > 5 ? 2 : 0) + (wordLen > 8 ? 2 : 0);
+    const score = 2 - (isFillerWord(words[i].word) ? 5 : 0) + (wordLen > 5 ? 2 : 0) + (wordLen > 8 ? 2 : 0);
     if (score > maxScore) { maxScore = score; maxIdx = i; }
   }
   return maxIdx;
@@ -334,7 +326,7 @@ function mechanicalGrouping(wordMeta: WordMetaEntry[]): PhraseGroup[] {
       const isNaturalBreak = /[,\.!?;]$/.test(wm.word);
       const isMaxSize = current.length >= MAX_GROUP_SIZE;
       const isLast = i === words.length - 1;
-      const isConnector = CONNECTOR_WORDS.has(wm.word.replace(/[^a-zA-Z']/g, '').toLowerCase());
+      const isConnector = FILLER_WORDS.has(wm.word.replace(/[^a-zA-Z']/g, '').toLowerCase());
       if (isLast) flushGroup();
       else if ((isNaturalBreak || isMaxSize) && duration >= MIN_GROUP_DURATION && !isConnector) flushGroup();
     }
@@ -382,46 +374,6 @@ function snapToBeat(timeSec: number, beats: number[]): number {
 }
 
 type PresentationMode = 'horiz_center';
-
-/**
- * Layout rules: phrase structure → composition.
- * Variety comes from lyrics, not randomness.
- */
-function resolveLayout(wordCount: number): {
-  composition: 'line';
-  revealStyle: 'instant';
-  maxLines: number | undefined;
-} {
-  // All words visible immediately. No reveal. No stagger.
-  // < 4 words: single horizontal line. 4+: natural horizontal wrapping.
-  return {
-    composition: 'line',
-    revealStyle: 'instant',
-    maxLines: wordCount < 4 ? 1 : undefined,
-  };
-}
-
-function assignPresentationModes(
-  phraseGroups: PhraseGroup[],
-  _wordMeta: WordMetaEntry[],
-  _aiPhrases?: CinematicPhrase[],
-): void {
-  for (const group of phraseGroups) {
-    const wc = group.words.length;
-    const layout = resolveLayout(wc);
-    const g = group as any;
-    g.composition = 'line';
-    g.bias = 'center';
-    g.revealStyle = 'instant';
-    g.holdClass = 'medium_groove';
-    g.entryCharacter = 'drift';
-    g.exitCharacter = 'none';
-    g.vibrateOnHold = false;
-    g.elementalWash = false;
-    g.presentationMode = 'horiz_center';
-    g._resolvedMaxLines = layout.maxLines; // pass to layout computation
-  }
-}
 
 export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; letterSpacing?: number; color: string; isHeroWord?: boolean; isAdlib?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; heroScore?: number; }
 export interface CompiledPhraseGroup {
@@ -482,7 +434,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const durationSec = Math.max(0.01, payload.songEnd - payload.songStart);
   const rawChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
   const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
-  const visualMode = getVisualMode(payload);
+  const visualMode: VisualMode = 'cinematic';
   const rawWords = payload.words ?? [];
   // Fix zero-duration tokens: give them a visible duration instead of dropping them.
   // Dropping shifts all word indices and breaks AI phrase wordRange alignment.
@@ -625,8 +577,11 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       }
     }
   }
-  // Assign presentation modes at compile time (moved from edge function)
-  assignPresentationModes(cappedMainGroups, wordMeta, aiPhrases);
+  for (const group of cappedMainGroups) {
+    const g = group as any;
+    g._resolvedMaxLines = group.words.length < 4 ? 1 : undefined;
+    g.presentationMode = 'horiz_center';
+  }
   const globalPhraseDur = phraseAnimDurations(Math.max(1, cappedMainGroups[0]?.words.length ?? 1), Math.max(250, Math.round(durationSec * 250)));
   const animParams = {
     linger: globalPhraseDur.linger,
@@ -733,6 +688,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const ge = globalWordIndex.get(group.words[group.words.length - 1]) ?? -1;
       return ps <= gs && pe >= ge;
     }) as CinematicPhrase | undefined;
+    (group as any)._matchPhrase = matchPhrase;
 
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
@@ -885,12 +841,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const compiledGroups: CompiledPhraseGroup[] = allGroups.map((group) => {
     const key = `${group.lineIndex}-${group.groupIndex}`;
     const groupDur = phraseAnimDurations(group.words.length, Math.round((group.end - group.start) * 1000));
-    const matchPhrase = (aiPhrases ?? []).find((ap: any) => {
-      const [ps, pe] = ap.wordRange ?? [0, 0];
-      const gs = globalWordIndex.get(group.words[0]) ?? -1;
-      const ge = globalWordIndex.get(group.words[group.words.length - 1]) ?? -1;
-      return ps <= gs && pe >= ge;
-    }) as CinematicPhrase | undefined;
+    const matchPhrase = (group as any)._matchPhrase as CinematicPhrase | undefined;
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
     const revealStyle = (group as any).revealStyle ?? matchPhrase?.revealStyle ?? 'instant';
