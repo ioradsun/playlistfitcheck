@@ -15,6 +15,7 @@ interface ExportStudioProps {
   comments: Array<{ text: string; line_index: number | null }>;
   songTitle: string;
   artistName: string;
+  avatarUrl: string | null;
   audioUrl: string;
   durationSec: number;
   empowermentHooks?: string[];
@@ -93,6 +94,7 @@ export function ExportStudio({
   comments,
   songTitle,
   artistName,
+  avatarUrl,
   audioUrl,
   durationSec,
   empowermentHooks,
@@ -106,6 +108,7 @@ export function ExportStudio({
   const [captionPos, setCaptionPos] = useState<"top" | "bottom">("bottom");
   const [platformIdx, setPlatformIdx] = useState(0);
   const [includeAudio, setIncludeAudio] = useState(true);
+  const [includeCredit, setIncludeCredit] = useState(true);
   const [includeBeatVis, setIncludeBeatVis] = useState(false);
   const [includeWickBar, setIncludeWickBar] = useState(true);
   const [includeFireReaction, setIncludeFireReaction] = useState(true);
@@ -122,6 +125,7 @@ export function ExportStudio({
   const captionInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const prevSizeRef = useRef<{ w: number; h: number } | null>(null);
+  const avatarImgRef = useRef<HTMLImageElement | null>(null);
 
   const hooks = empowermentHooks ?? [];
 
@@ -236,6 +240,7 @@ export function ExportStudio({
     setOpenPanel(null);
     setDownloadBlob(null);
     setIncludeBeatVis(false);
+    setIncludeCredit(true);
     setIncludeWickBar(true);
     setIncludeFireReaction(true);
     setCaptionStyle("bar");
@@ -243,6 +248,22 @@ export function ExportStudio({
     setSelectedMomentIdx(1);
     setMobileTab("config");
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!avatarUrl) {
+      avatarImgRef.current = null;
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      avatarImgRef.current = img;
+    };
+    img.onerror = () => {
+      avatarImgRef.current = null;
+    };
+    img.src = avatarUrl;
+  }, [avatarUrl]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -446,6 +467,13 @@ export function ExportStudio({
             position: captionPos,
           }
           : undefined,
+        credit: includeCredit
+          ? {
+            artistName,
+            songTitle,
+            avatarImg: avatarImgRef.current,
+          }
+          : undefined,
         audioSlice: includeAudio && audioUrl
           ? {
             audioUrl,
@@ -489,6 +517,7 @@ export function ExportStudio({
       : `fmly hook #${selectedHookIdx + 1}`;
   const optionsList = [
     { label: "Audio", value: includeAudio },
+    { label: "Credit", value: includeCredit },
     { label: "Progress wick", value: includeWickBar },
     { label: "Beat bars", value: includeBeatVis },
     { label: "Fire reaction", value: includeFireReaction },
@@ -937,6 +966,7 @@ export function ExportStudio({
         >
           {([
             { label: "Audio", value: includeAudio, setter: setIncludeAudio },
+            { label: "Credit", value: includeCredit, setter: setIncludeCredit },
             { label: "Progress wick", value: includeWickBar, setter: setIncludeWickBar },
             { label: "Beat bars", value: includeBeatVis, setter: setIncludeBeatVis },
             { label: "Fire reaction", value: includeFireReaction, setter: setIncludeFireReaction },
@@ -1086,6 +1116,60 @@ export function ExportStudio({
           }}
         >
           <canvas ref={previewCanvasRef} style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }} />
+          {includeCredit && artistName && (
+            <div
+              style={{
+                position: "absolute",
+                top: platformIdx === 0 ? "8%" : "6%",
+                left: platformIdx === 0 ? "5%" : "8%",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "rgba(0,0,0,0.55)",
+                backdropFilter: "blur(4px)",
+                WebkitBackdropFilter: "blur(4px)",
+                borderRadius: 999,
+                padding: "4px 10px 4px 4px",
+                zIndex: 2,
+                pointerEvents: "none",
+              }}
+            >
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 999,
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 999,
+                    background: "rgba(255,255,255,0.15)",
+                  }}
+                />
+              )}
+              <span
+                style={{
+                  fontSize: 9,
+                  fontFamily: '"SF Mono", monospace',
+                  color: "rgba(255,255,255,0.8)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: 160,
+                }}
+              >
+                {artistName} · {songTitle}
+              </span>
+            </div>
+          )}
           {activeCaption && captionStyle !== "none" && (
             captionStyle === "pill" ? (
               <div

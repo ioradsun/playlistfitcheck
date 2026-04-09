@@ -1964,6 +1964,7 @@ export function FitTab({
             comments={dancePlayerRef.current?.getComments?.() ?? []}
             songTitle={lyricData.title || "Untitled"}
             artistName={profile?.display_name || "artist"}
+            avatarUrl={profile?.avatar_url ?? null}
             audioUrl={dancePlayerRef.current?.getAudioUrl?.() ?? audioUrl ?? ""}
             durationSec={activeWaveform?.duration ?? beatGrid?._duration ?? 0}
             empowermentHooks={empowermentPromise?.hooks}
