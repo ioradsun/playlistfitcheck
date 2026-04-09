@@ -271,6 +271,17 @@ OUTPUT JSON SCHEMA:
   "sceneTone": "dark|light|mixed",
   "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
   "description": "one-sentence world description",
+  "typographyPlan": {
+    "system": "paired|single|minimal",
+    "primary": "font name from FONT LIBRARY",
+    "accent": "font name from FONT LIBRARY (empty string for single/minimal)",
+    "case": "uppercase|sentence",
+    "baseWeight": "light|regular|bold|black",
+    "heroStyle": "accent-font|weight-shift|scale-only|none",
+    "accentDensity": "low|medium|high",
+    "sectionBehavior": { "<role>": "<behavior>" },
+    "reason": "one sentence"
+  },
   "sections": [
     {
       "sectionIndex": 0,
@@ -324,6 +335,10 @@ DOMINANT COLOR RULES:
 - Color should SHIFT across sections to reinforce the arc.
 - Good: "#4A6B8A" (steel blue), "#7B5A9E" (electric violet), "#C4962E" (rich amber)
 - Bad: "#0D0F14" (black), "#1B1026" (too dark), "#FFFFFF" (no direction)
+
+${TYPOGRAPHY_FONT_LIBRARY}
+
+${TYPOGRAPHY_TASK_GUIDANCE}
 `;
 
 interface LyricLine {
@@ -413,9 +428,8 @@ function unwrapNested(obj: Record<string, any>): Record<string, any> {
       // Check if the inner object looks like our expected structure
       if (
         inner.sceneTone ||
-        inner.storyboard ||
-        inner.wordDirectives ||
-        inner.sections
+        inner.sections ||
+        inner.typographyPlan
       ) {
         return inner;
       }
@@ -479,6 +493,8 @@ function validateScene(
 
   if (v.typographyPlan && typeof v.typographyPlan === 'object') {
     const tp = v.typographyPlan;
+    // SYNC REQUIREMENT: This list must match FONT_MANIFEST in src/lib/typographyManifest.ts.
+    // When adding/removing fonts, update BOTH locations.
     const VALID_FONTS = [
       "Bebas Neue", "Permanent Marker", "Unbounded", "Dela Gothic One", "Oswald", "Barlow Condensed",
       "Archivo", "Montserrat", "Inter", "Sora", "Rubik", "Nunito", "Plus Jakarta Sans",
@@ -510,22 +526,6 @@ function validateScene(
   }
   if (typeof v.description === "string")
     v.description = v.description.trim().slice(0, 200);
-  if (typeof v.mood === "string") v.mood = v.mood.trim().toLowerCase();
-  if (v.meaning && typeof v.meaning === "object") {
-    v.meaning = {
-      theme:
-        typeof v.meaning.theme === "string"
-          ? v.meaning.theme.trim()
-          : undefined,
-      summary:
-        typeof v.meaning.summary === "string"
-          ? v.meaning.summary.trim()
-          : undefined,
-      imagery: Array.isArray(v.meaning.imagery)
-        ? v.meaning.imagery.map(String).slice(0, 5)
-        : undefined,
-    };
-  }
 
   if (!Array.isArray(v.sections)) {
     errors.push("sections must be an array");
@@ -556,6 +556,11 @@ function validateScene(
           hopeful: "#34D058",
           raw: "#A0A4AC",
           hypnotic: "#B088F9",
+          ethereal: "#A8C4E0",
+          haunted: "#5A6B7A",
+          celestial: "#7B8EC4",
+          noir: "#4A5568",
+          rebellious: "#C44E2B",
         };
         s.dominantColor = moodColorMap[s.visualMood] || "#C9A96E";
       }
