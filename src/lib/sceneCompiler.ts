@@ -93,6 +93,7 @@ const FILLER_WORDS = new Set(['a','an','the','to','of','and','or','but','in','on
 const CONNECTOR_WORDS = new Set(['i', 'you', 'we', 'they', 'he', 'she', 'it', 'and', 'but', 'or', 'so', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'by', 'if', 'when', 'while', 'that']);
 const MIN_GROUP_DURATION = 0.5;
 const MAX_GROUP_SIZE = 5;
+const WEIGHT_STEPS = [300, 400, 700, 800];
 
 
 function isFillerWord(word: string): boolean { return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase()); }
@@ -735,8 +736,49 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
     const secIdx = getSectionForTime(group.start);
     const secTypo = sectionTypoMap[secIdx] ?? DEFAULT_SECTION_BEHAVIOR;
-    const scaleMultiplier = secTypo.scale === 'large' ? 1.12 : secTypo.scale === 'small' ? 0.82 : 1.0;
-    const targetFill = 0.88 * scaleMultiplier;
+    // ── Phrase audio metrics (all data already exists) ──
+    const phraseDuration = Math.max(0.1, group.end - group.start);
+    const wordCount = group.words.length;
+
+    // Beat energy at phrase midpoint
+    const phraseMidpoint = group.start + phraseDuration / 2;
+    const phraseEnergy = (() => {
+      const analysis = (payload.beat_grid as any)?._analysis;
+      if (analysis?.frames?.length > 0) {
+        const idx = Math.min(
+          analysis.frames.length - 1,
+          Math.max(0, Math.round(phraseMidpoint * (analysis.frameRate ?? 10)))
+        );
+        return analysis.frames[idx]?.energy ?? 0.5;
+      }
+      return (sections[secIdx] as any)?.avgEnergy ?? 0.5;
+    })();
+
+    // Section damper: verse phrases are restrained, chorus phrases are expressive
+    const sectionDamper = (() => {
+      const role = ((sections[secIdx] as any)?.role ?? '').toLowerCase();
+      if (role.includes('chorus') || role.includes('hook')) return 1.0;
+      if (role.includes('pre')) return 0.8;
+      if (role.includes('bridge')) return 0.7;
+      if (role.includes('verse')) return 0.6;
+      if (role.includes('outro') || role.includes('intro')) return 0.5;
+      // No role label: derive from energy
+      const secEnergy = (sections[secIdx] as any)?.avgEnergy ?? 0.5;
+      return 0.5 + secEnergy * 0.5; // 0.5–1.0
+    })();
+
+    // ── Scale: composite of word count + energy + duration ──
+    // Short + high energy = larger. Short + low energy = restraint.
+    // Long + many words = smaller.
+    const rawWordCountScale = wordCount <= 2 ? 1.08 : wordCount >= 5 ? 0.95 : 1.0;
+    const energyScaleBoost = 0.7 + phraseEnergy * 0.3; // 0.7–1.0
+    const durationDamp = phraseDuration > 4 ? 0.95 : phraseDuration < 1.5 ? 1.04 : 1.0;
+    const phraseScaleMult = rawWordCountScale * energyScaleBoost * durationDamp;
+    // Damped by section
+    const effectiveScaleMult = 1.0 + (phraseScaleMult - 1.0) * sectionDamper;
+
+    const sectionScaleMult = secTypo.scale === 'large' ? 1.12 : secTypo.scale === 'small' ? 0.82 : 1.0;
+    const targetFill = 0.88 * sectionScaleMult * effectiveScaleMult;
 
     const layout = fitTextToViewport(
       measureCtx as MeasureContext,
@@ -867,6 +909,68 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const secIdx = getSectionForTime(group.start);
     const secTypo = sectionTypoMap[secIdx] ?? DEFAULT_SECTION_BEHAVIOR;
     const secDensityBudget = getDensityBudget(secTypo.accentDensity);
+    // ── Phrase audio metrics (all data already exists) ──
+    const phraseDuration = Math.max(0.1, group.end - group.start);
+    const wordCount = group.words.length;
+    const wordDensity = wordCount / phraseDuration;
+
+    // Beat energy at phrase midpoint
+    const phraseMidpoint = group.start + phraseDuration / 2;
+    const phraseEnergy = (() => {
+      const localAnalysis = (payload.beat_grid as any)?._analysis;
+      if (localAnalysis?.frames?.length > 0) {
+        const idx = Math.min(
+          localAnalysis.frames.length - 1,
+          Math.max(0, Math.round(phraseMidpoint * (localAnalysis.frameRate ?? 10)))
+        );
+        return localAnalysis.frames[idx]?.energy ?? 0.5;
+      }
+      return (sections[secIdx] as any)?.avgEnergy ?? 0.5;
+    })();
+
+    // Section damper: verse phrases are restrained, chorus phrases are expressive
+    const sectionDamper = (() => {
+      const role = ((sections[secIdx] as any)?.role ?? '').toLowerCase();
+      if (role.includes('chorus') || role.includes('hook')) return 1.0;
+      if (role.includes('pre')) return 0.8;
+      if (role.includes('bridge')) return 0.7;
+      if (role.includes('verse')) return 0.6;
+      if (role.includes('outro') || role.includes('intro')) return 0.5;
+      // No role label: derive from energy
+      const secEnergy = (sections[secIdx] as any)?.avgEnergy ?? 0.5;
+      return 0.5 + secEnergy * 0.5; // 0.5–1.0
+    })();
+
+    // ── Weight: energy drives heaviness, damped by section ──
+    const sectionWeightNum = WEIGHT_MAP[secTypo.weight] ?? 700;
+    const phraseWeight = (() => {
+      // Thresholds shift with section damper:
+      // chorus (damper=1.0): lighten below 0.25, heavier above 0.65
+      // verse (damper=0.6): lighten below 0.15, heavier above 0.78
+      const lightenThreshold = 0.25 * sectionDamper;
+      const heavenThreshold = 1.0 - (0.35 * sectionDamper);
+
+      const curIdx = WEIGHT_STEPS.indexOf(
+        WEIGHT_STEPS.reduce((best, w) =>
+          Math.abs(w - sectionWeightNum) < Math.abs(best - sectionWeightNum) ? w : best,
+          WEIGHT_STEPS[0])
+      );
+
+      if (phraseEnergy < lightenThreshold && curIdx > 0) {
+        return WEIGHT_STEPS[curIdx - 1];
+      }
+      if (phraseEnergy > heavenThreshold && curIdx < WEIGHT_STEPS.length - 1) {
+        return WEIGHT_STEPS[curIdx + 1];
+      }
+      return sectionWeightNum;
+    })();
+
+    // ── Tracking: density as weak influence, ±12% max, damped by section ──
+    const sectionTracking = TRACKING_MAP[secTypo.tracking] ?? resolvedTypo.letterSpacing;
+    const densityNorm = Math.max(-1, Math.min(1, (wordDensity - 2.5) / 2.5));
+    const rawTrackingShift = densityNorm * 0.12; // ±12% max
+    const trackingMult = 1.0 - rawTrackingShift * sectionDamper;
+    const phraseTracking = sectionTracking * trackingMult;
 
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
@@ -881,8 +985,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         (computeEmphasisFromDuration(holdDuration) * 0.1);
       const isHero = heroScore >= 0.35 || isLongHold || isDirectiveHero;
 
-      const sectionWeight = WEIGHT_MAP[secTypo.weight] ?? resolvedTypo.fontWeight;
-      const wordWeight = isHero ? Math.max(sectionWeight, resolvedTypo.heroWeight) : sectionWeight;
+      const wordWeight = isHero ? Math.max(phraseWeight, resolvedTypo.heroWeight) : phraseWeight;
 
       let wordFontFamily = resolvedTypo.fontFamily.replace(/"/g, '').split(',')[0].trim();
       if (isHero && resolvedTypo.heroStyle === 'accent-font' && resolvedTypo.accentFontFamily) {
@@ -892,7 +995,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const transformedText = secTypo.transform === 'uppercase'
         ? wm.word.replace(/[\u2018\u2019]/g, "'").toUpperCase()
         : wm.word.replace(/[\u2018\u2019]/g, "'");
-      const wordTracking = TRACKING_MAP[secTypo.tracking] ?? resolvedTypo.letterSpacing;
 
       const base: CompiledWord = {
         id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
@@ -906,7 +1008,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         wordStart: snapToBeat(wm.start, beats),
         fontWeight: wordWeight,
         fontFamily: wordFontFamily,
-        letterSpacing: wordTracking,
+        letterSpacing: phraseTracking,
         isHeroWord: isHero,
         isAdlib: wm.isAdlib === true,
         isAnchor: wi === group.anchorWordIdx,
@@ -930,7 +1032,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
           .slice(secDensityBudget.maxAccentWordsPerPhrase)
           .forEach(({ word }) => {
             word.fontFamily = baseTypography.fontFamily;
-            word.fontWeight = WEIGHT_MAP[secTypo.weight] ?? resolvedTypo.fontWeight;
+            word.fontWeight = phraseWeight;
           });
       }
 
@@ -940,7 +1042,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
           wordsCompiled[k - 1].fontFamily !== baseTypography.fontFamily
         ) {
           wordsCompiled[k].fontFamily = baseTypography.fontFamily;
-          wordsCompiled[k].fontWeight = WEIGHT_MAP[secTypo.weight] ?? resolvedTypo.fontWeight;
+          wordsCompiled[k].fontWeight = phraseWeight;
         }
       }
     }
