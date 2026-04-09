@@ -6,16 +6,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { User, Mail, Waves, LayoutList, BarChart2, ExternalLink, Sparkles } from "lucide-react";
 import { useDmContext } from "@/hooks/useDmContext";
 
-export type CardMode = "listen" | "moments" | "results" | "empowerment";
+export type CardMode = "listen" | "moments" | "results" | "empowerment" | "truth";
 
 const MODE_ICONS: Record<CardMode, ReactNode> = {
   listen: <Waves size={14} />,
   moments: <LayoutList size={14} />,
   results: <BarChart2 size={14} />,
   empowerment: <Sparkles size={14} />,
+  truth: <Sparkles size={14} />,
 };
 
-const MODES: CardMode[] = ["listen", "moments", "results", "empowerment"];
+const MODES: CardMode[] = ["listen", "moments", "results", "empowerment", "truth"];
 
 function useClickOutside(
   refs: RefObject<Element | null>[],

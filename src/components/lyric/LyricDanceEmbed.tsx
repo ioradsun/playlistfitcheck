@@ -8,6 +8,7 @@ import type { CardMode } from "@/components/lyric/PlayerHeader";
 import { MomentPanel } from "@/components/lyric/MomentPanel";
 import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
+import { OneTruth } from "@/components/lyric/OneTruth";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
@@ -43,7 +44,7 @@ export interface LyricDanceEmbedHandle {
   wickBarEnabled: boolean;
 }
 
-type Comment = { id: string; text: string; line_index: number | null; submitted_at: string; user_id: string | null };
+type Comment = { id: string; text: string; line_index: number | null; submitted_at?: string; user_id: string | null };
 
 export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
   lyricDanceId,
@@ -84,6 +85,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
   const [comments, setComments] = useState<Comment[]>([]);
   const [viralClipOpen, setViralClipOpen] = useState(false);
+  const [userSessionFires, setUserSessionFires] = useState<Record<number, number>>({});
   const [profileMap, setProfileMap] = useState<Record<string, { avatarUrl: string | null; displayName: string | null }>>({});
 
   const audioState = useSyncExternalStore(audioController.subscribe, audioController.getSnapshot, audioController.getSnapshot);
@@ -469,7 +471,25 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             empowermentPromise={
               ((data ?? prefetchedData) as any)?.empowerment_promise ?? null
             }
-            onDismiss={() => setCardMode("moments")}
+            onDismiss={() => setCardMode("truth")}
+          />
+        )}
+
+        {cardMode === "truth" && (
+          <OneTruth
+            danceId={danceId}
+            moments={moments}
+            fireHeat={fireHeat}
+            comments={comments}
+            userFires={userSessionFires}
+            allLines={(((data ?? prefetchedData) as any)?.lines ?? []).map((line: any, lineIndex: number) => ({
+              text: line?.text ?? "",
+              lineIndex,
+            }))}
+            onContinue={() => setCardMode("moments")}
+            onCommentSubmitted={(comment) => {
+              setComments((prev) => [...prev, comment]);
+            }}
           />
         )}
 
@@ -549,6 +569,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               emitFire(danceId, getCurrentFireIndex(), player?.audio.currentTime ?? 0, holdMs, "feed", userId ?? null);
             }}
             onSeekTo={seekOnly}
+            onUserFire={(momentIdx, holdMs) => {
+              setUserSessionFires((prev) => ({
+                ...prev,
+                [momentIdx]: (prev[momentIdx] ?? 0) + holdMs,
+              }));
+            }}
           />
         </div>
       )}
