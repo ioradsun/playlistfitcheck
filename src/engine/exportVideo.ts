@@ -27,8 +27,9 @@ interface ExportOptions {
   height: number;
   fps: number;
   songDuration: number;
-  /** Absolute time offset in seconds. drawAtTime will be called with startOffset + frame_time.
-   *  Use this for clip export: set startOffset = clipStart, songDuration = clipEnd - clipStart. */
+  /** Absolute time offset in seconds (in the audio file's timeline).
+   *  Internally converted to song-relative time before calling drawAtTime.
+   *  Use this for clip export: set startOffset = moment.startSec, songDuration = moment.endSec - moment.startSec. */
   startOffset?: number;
   onProgress?: (percent: number) => void;
   signal?: AbortSignal;
@@ -119,6 +120,11 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
 
   // ── Resize player once ──
   player.setupExportResolution(width, height);
+  // drawAtTime(tSec) adds songStartSec internally: timeSec = songStartSec + tSec.
+  // So tSec must be RELATIVE to songStart (0 = first beat).
+  // ExportStudio passes startOffset as absolute audio time (e.g. 24.22s).
+  // Subtract songStartSec to convert absolute → relative.
+  const songStart = typeof player.exportSongStartSec === 'number' ? player.exportSongStartSec : 0;
 
   // ── MP4 muxer ──
   const muxer = new Mp4Muxer.Muxer({
@@ -180,7 +186,7 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
       if (encodeError) throw encodeError;
 
       // ── Render ──
-      player.drawAtTime((options.startOffset ?? 0) + i / fps);
+      player.drawAtTime((options.startOffset ?? 0) - songStart + i / fps);
 
       if (options.captionText && options.captionOptions?.style !== "none") {
         const ctx = canvas.getContext("2d");
@@ -277,7 +283,13 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
         frame = new VideoFrame(bitmap, { timestamp, duration: usPerFrame });
         bitmap.close();
       } else {
-        frame = new VideoFrame(canvas, { timestamp, duration: usPerFrame });
+        // HTMLCanvasElement doesn't have transferToImageBitmap.
+        // new VideoFrame(canvas) can capture stale pixels when the context
+        // uses alpha:false — the browser may defer flushing draw commands.
+        // createImageBitmap forces a synchronous pixel read.
+        const bitmap = await createImageBitmap(canvas);
+        frame = new VideoFrame(bitmap, { timestamp, duration: usPerFrame });
+        bitmap.close();
       }
 
       // ── Encode ──
