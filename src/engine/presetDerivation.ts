@@ -88,34 +88,6 @@ function getOverlay(preset: string): OverlayConfig {
 }
 
 
-// ─── Emphasis → Font Scale ───────────────────────────────────────
-
-const EMPHASIS_SCALE: Record<number, number> = {
-  1: 0.7,
-  2: 0.9,
-  3: 1.2,
-  4: 1.6,
-  5: 2.2,
-};
-
-function getFontScale(emphasisLevel: number): number {
-  return EMPHASIS_SCALE[clamp(Math.round(emphasisLevel), 1, 5)] ?? 1.0;
-}
-
-const FILLER_WORDS = new Set([
-  "the", "a", "an", "is", "am", "are", "was", "were", "be", "been",
-  "in", "on", "at", "to", "for", "of", "with", "by", "it", "its",
-  "and", "or", "but", "so", "if", "as", "do", "did", "has", "had",
-  "not", "no", "my", "your", "his", "her", "we", "they", "them",
-  "this", "that", "just", "like", "up", "out", "all", "got", "i'm",
-  "i", "me",
-]);
-
-function getDefaultEmphasis(word: string): number {
-  return FILLER_WORDS.has(word.toLowerCase()) ? 1 : 2;
-}
-
-
 // ─── Scene Tone → Per-Section Tone ───────────────────────────────
 
 type ToneValue = "dark" | "light";
@@ -199,35 +171,6 @@ function getSectionModifiers(
     textScale: clamp(isChorus ? Math.max(1.05, 0.9 + e * 0.2) : 0.9 + e * 0.2, 0.8, 1.3),
     transitionType,
   };
-}
-
-
-// ─── Word Directive Lookup ───────────────────────────────────────
-
-export type WordDirectiveMap = Map<string, {
-  emphasisLevel: number;
-  entry: string;
-  behavior: string;
-  exit: string;
-  trail?: string;
-  ghostTrail?: boolean;
-  ghostDirection?: string;
-  letterSequence?: boolean;
-  visualMetaphor?: string;
-}>;
-
-export function buildWordDirectiveMap(directives: any[]): WordDirectiveMap {
-  const map: WordDirectiveMap = new Map();
-  for (const d of directives) {
-    const key = String(d.word ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (key) map.set(key, d);
-  }
-  return map;
-}
-
-function lookupWord(map: WordDirectiveMap, word: string) {
-  const key = word.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return map.get(key) ?? null;
 }
 
 
