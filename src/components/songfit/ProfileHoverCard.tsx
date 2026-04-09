@@ -126,7 +126,9 @@ export function ProfileHoverCard({ userId, children }: Props) {
                       )}
                     </div>
                     {profile.is_verified && (
-                      <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={14} /></span>
+                      <span className="absolute -bottom-0.5 -right-0.5">
+                        <VerifiedBadge size={14} />
+                      </span>
                     )}
                   </div>
                   <div className="min-w-0">

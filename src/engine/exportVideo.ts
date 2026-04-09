@@ -262,7 +262,7 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
         numberOfFrames: audioSliceResult.samples[0]?.length ?? 0,
         numberOfChannels: audioSliceResult.numberOfChannels,
         timestamp: 0,
-        data: planar,
+        data: planar.buffer as ArrayBuffer,
       });
       audioEncoder.encode(audioData);
       audioData.close();
