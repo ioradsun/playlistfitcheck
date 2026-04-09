@@ -6,7 +6,6 @@ import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer"
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import type { CardMode } from "@/components/lyric/PlayerHeader";
 import { MomentPanel } from "@/components/lyric/MomentPanel";
-import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
 import { OneTruth } from "@/components/lyric/OneTruth";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
@@ -506,6 +505,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             profileMap={profileMap}
             fireUserMap={fireUserMap}
             fireAnonCount={fireAnonCount}
+            spotifyTrackId={spotifyTrackId ?? null}
+            lyricDanceUrl={lyricDanceUrl ?? null}
             onFireMoment={(lineIndex, timeSec, holdMs) => {
               if (!danceId) return;
               player?.fireFire(holdMs);
@@ -527,15 +528,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           />
         )}
 
-        {cardMode === "results" && (
-          <CardResultsPanel
-            moments={moments}
-            fireHeat={fireHeat}
-            spotifyTrackId={spotifyTrackId ?? null}
-            postId={postId ?? null}
-            lyricDanceUrl={lyricDanceUrl ?? null}
-          />
-        )}
       </div>
 
       {cardMode === "listen" && (
