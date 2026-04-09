@@ -41,6 +41,7 @@ import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { persistQueue } from "@/lib/persistQueue";
 import { preloadImage } from "@/lib/imagePreloadCache";
+import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
 
 const ExportStudio = lazy(() => import("./ExportStudio").then((m) => ({ default: m.ExportStudio })));
 
@@ -80,17 +81,6 @@ const fmtTime = (sec: number) => {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-};
-
-const fontMap: Record<string, string> = {
-  "bold-impact": "Oswald",
-  "clean-modern": "Montserrat",
-  "elegant-serif": "Playfair Display",
-  "raw-condensed": "Barlow Condensed",
-  "whisper-soft": "Nunito",
-  "tech-mono": "JetBrains Mono",
-  "display-heavy": "Bebas Neue",
-  "editorial-light": "Cormorant Garamond",
 };
 
 const captions: Record<number, string> = {
@@ -633,8 +623,8 @@ export function FitTab({
       return;
     }
 
-    const typography = cinematicDirection.typography || "clean-modern";
-    const fontName = fontMap[typography] || "Montserrat";
+    const resolved = resolveTypographyFromDirection(cinematicDirection);
+    const fontName = getFontNamesForPreload(resolved)[0] || "Montserrat";
     const fontsApi = document.fonts;
 
     if (fontsApi?.check(`600 48px "${fontName}"`)) {

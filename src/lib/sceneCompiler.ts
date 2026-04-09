@@ -776,6 +776,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const phraseScaleMult = rawWordCountScale * energyScaleBoost * durationDamp;
     // Damped by section
     const effectiveScaleMult = 1.0 + (phraseScaleMult - 1.0) * sectionDamper;
+    // Cache phrase metrics for the word compilation loop
+    (group as any)._phraseEnergy = phraseEnergy;
+    (group as any)._sectionDamper = sectionDamper;
+    (group as any)._phraseDuration = phraseDuration;
+    (group as any)._wordDensity = wordCount / phraseDuration;
+    (group as any)._secIdx = secIdx;
 
     const sectionScaleMult = secTypo.scale === 'large' ? 1.12 : secTypo.scale === 'small' ? 0.82 : 1.0;
     const targetFill = 0.88 * sectionScaleMult * effectiveScaleMult;
@@ -906,40 +912,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const groupLayout = groupLayouts.get(key);
     const positions = groupLayout?.positions ?? [];
     const groupFontSize = groupLayout?.fontSize ?? 56;
-    const secIdx = getSectionForTime(group.start);
+    const secIdx = (group as any)._secIdx ?? getSectionForTime(group.start);
     const secTypo = sectionTypoMap[secIdx] ?? DEFAULT_SECTION_BEHAVIOR;
     const secDensityBudget = getDensityBudget(secTypo.accentDensity);
-    // ── Phrase audio metrics (all data already exists) ──
-    const phraseDuration = Math.max(0.1, group.end - group.start);
-    const wordCount = group.words.length;
-    const wordDensity = wordCount / phraseDuration;
-
-    // Beat energy at phrase midpoint
-    const phraseMidpoint = group.start + phraseDuration / 2;
-    const phraseEnergy = (() => {
-      const localAnalysis = (payload.beat_grid as any)?._analysis;
-      if (localAnalysis?.frames?.length > 0) {
-        const idx = Math.min(
-          localAnalysis.frames.length - 1,
-          Math.max(0, Math.round(phraseMidpoint * (localAnalysis.frameRate ?? 10)))
-        );
-        return localAnalysis.frames[idx]?.energy ?? 0.5;
-      }
-      return (sections[secIdx] as any)?.avgEnergy ?? 0.5;
-    })();
-
-    // Section damper: verse phrases are restrained, chorus phrases are expressive
-    const sectionDamper = (() => {
-      const role = ((sections[secIdx] as any)?.role ?? '').toLowerCase();
-      if (role.includes('chorus') || role.includes('hook')) return 1.0;
-      if (role.includes('pre')) return 0.8;
-      if (role.includes('bridge')) return 0.7;
-      if (role.includes('verse')) return 0.6;
-      if (role.includes('outro') || role.includes('intro')) return 0.5;
-      // No role label: derive from energy
-      const secEnergy = (sections[secIdx] as any)?.avgEnergy ?? 0.5;
-      return 0.5 + secEnergy * 0.5; // 0.5–1.0
-    })();
+    const phraseEnergy: number = (group as any)._phraseEnergy ?? 0.5;
+    const sectionDamper: number = (group as any)._sectionDamper ?? 0.7;
+    const wordDensity: number = (group as any)._wordDensity ?? 2.5;
 
     // ── Weight: energy drives heaviness, damped by section ──
     const sectionWeightNum = WEIGHT_MAP[secTypo.weight] ?? 700;
@@ -987,9 +965,9 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
       const wordWeight = isHero ? Math.max(phraseWeight, resolvedTypo.heroWeight) : phraseWeight;
 
-      let wordFontFamily = resolvedTypo.fontFamily.replace(/"/g, '').split(',')[0].trim();
-      if (isHero && resolvedTypo.heroStyle === 'accent-font' && resolvedTypo.accentFontFamily) {
-        wordFontFamily = resolvedTypo.accentFontFamily.replace(/"/g, '').split(',')[0].trim();
+      let wordFontFamily = baseTypography.fontFamily;
+      if (isHero && baseTypography.heroStyle === 'accent-font' && baseTypography.accentFontFamily) {
+        wordFontFamily = baseTypography.accentFontFamily;
       }
 
       const transformedText = secTypo.transform === 'uppercase'
