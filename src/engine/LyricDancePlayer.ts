@@ -1571,6 +1571,9 @@ export class LyricDancePlayer {
   /** Public read-only accessors for current logical dimensions */
   get currentWidth(): number { return this.width; }
   get currentHeight(): number { return this.height; }
+  /** Absolute time (seconds) where the song region begins in the audio file. */
+  get exportSongStartSec(): number { return this.songStartSec; }
+  get exportSongEndSec(): number { return this.songEndSec; }
   private isExporting = false;
   private displayWidth = 0;
   private displayHeight = 0;
