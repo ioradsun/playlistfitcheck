@@ -299,10 +299,10 @@ export function ViralClipModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) closeSafe(); }}>
-      <DialogContent className="sm:max-w-[780px] p-0 border-0 [&>button]:hidden" style={{ background: "transparent" }}>
-        <div style={{ background: "#0c0c0c", borderRadius: 24, padding: 24, color: "rgba(255,255,255,0.92)", fontFamily: '"SF Pro Display", "Helvetica Neue", -apple-system, sans-serif' }}>
+      <DialogContent className="sm:max-w-[780px] p-0 border-0 [&>button]:hidden max-h-[100dvh] overflow-hidden" style={{ background: "transparent" }}>
+        <div style={{ background: "#0c0c0c", borderRadius: 24, padding: "16px 20px", color: "rgba(255,255,255,0.92)", fontFamily: '"SF Pro Display", "Helvetica Neue", -apple-system, sans-serif', maxHeight: "calc(100dvh - 32px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {stage === "rendering" && (
-            <div style={{ minHeight: 320, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+            <div style={{ minHeight: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
               <div style={{ width: 40, height: 40, borderRadius: 999, border: "3px solid rgba(255,255,255,0.16)", borderTopColor: "rgba(255,140,40,0.9)", animation: "spin 1s linear infinite" }} />
               <div style={{ fontSize: 17, fontWeight: 700 }}>Rendering... {Math.round(progress)}%</div>
               <button onClick={() => abortRef.current?.abort()} style={{ border: "1px solid rgba(255,255,255,0.16)", background: "transparent", color: "rgba(255,255,255,0.78)", borderRadius: 10, padding: "8px 14px", fontSize: 12, cursor: "pointer" }}>Cancel</button>
@@ -311,7 +311,7 @@ export function ViralClipModal({
           )}
 
           {stage === "done" && (
-            <div style={{ minHeight: 320, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+            <div style={{ minHeight: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
               <div style={{ fontSize: 22, fontWeight: 700 }}>Done</div>
               <button onClick={() => downloadBlob && triggerDownload(downloadBlob)} disabled={!downloadBlob} style={{ border: "none", background: "rgba(255,140,40,0.9)", color: "#fff", borderRadius: 12, padding: "12px 24px", fontSize: 14, fontWeight: 600, cursor: downloadBlob ? "pointer" : "not-allowed", opacity: downloadBlob ? 1 : 0.5 }}>
                 Download again
@@ -324,14 +324,14 @@ export function ViralClipModal({
 
           {(stage === "config" || stage === "error") && (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexShrink: 0 }}>
                 <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.3 }}>Share clip</div>
                 <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 999, border: "1px solid rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.74)", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", cursor: "pointer" }}>
                   <X size={14} />
                 </button>
               </div>
 
-              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: 10, flexShrink: 0 }}>
                 {sortedMoments.map((m, idx) => {
                   const selectedStyle = idx === selectedMoment;
                   const dur = Math.max(0, m.moment.endSec - m.moment.startSec);
@@ -363,7 +363,7 @@ export function ViralClipModal({
                 )}
               </div>
 
-              <div id="caption-combo-wrapper" style={{ position: "relative", marginBottom: 16 }}>
+              <div id="caption-combo-wrapper" style={{ position: "relative", marginBottom: 10, flexShrink: 0 }}>
                 <input
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
@@ -389,7 +389,7 @@ export function ViralClipModal({
                 )}
               </div>
 
-              <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", background: "#070707", width: "100%", maxWidth: 420, aspectRatio: previewAspect, margin: "0 auto 16px" }}>
+              <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", background: "#070707", width: "100%", maxWidth: 420, aspectRatio: previewAspect, margin: "0 auto 10px", flex: "1 1 0", minHeight: 0, maxHeight: "min(40vh, 340px)" }}>
                 <canvas ref={previewCanvasRef} width={previewW} height={previewH} style={{ width: "100%", height: "100%", display: "block" }} />
                 <button onClick={handlePreviewPlay} style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 48, height: 48, borderRadius: 999, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(0,0,0,0.45)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                   {previewing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
