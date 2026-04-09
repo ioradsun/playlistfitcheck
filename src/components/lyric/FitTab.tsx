@@ -1944,6 +1944,22 @@ export function FitTab({
           </>
         )}
       </div>
+
+      <ViralClipModal
+        isOpen={viralClipOpen}
+        onClose={() => {
+          setViralClipOpen(false);
+          const player = dancePlayerRef.current?.getPlayer();
+          if (player) player.setRegion(undefined, undefined);
+        }}
+        getPlayer={() => dancePlayerRef.current?.getPlayer() ?? null}
+        moments={dancePlayerRef.current?.getMoments?.() ?? []}
+        fireHeat={dancePlayerRef.current?.getFireHeat?.() ?? {}}
+        comments={dancePlayerRef.current?.getComments?.() ?? []}
+        songTitle={lyricData.title || "Untitled"}
+        artistName={profile?.display_name || "artist"}
+        audioUrl={dancePlayerRef.current?.getAudioUrl?.() ?? audioUrl ?? ""}
+      />
     </>
   );
 }
