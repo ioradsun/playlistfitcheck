@@ -27,6 +27,91 @@ const corsHeaders = {
 
 const PRIMARY_MODEL = "google/gemini-3-flash-preview";
 const FALLBACK_MODEL = "google/gemini-2.5-flash";
+const TYPOGRAPHY_FONT_LIBRARY = `FONT LIBRARY — pick from these exact names:
+
+DISPLAY:
+  Bebas Neue — Movie posters. Bold declarations. "I AM HERE." All-caps condensed impact.
+  Permanent Marker — Sharpie on a mirror. Bathroom wall poetry. Protest sign urgency.
+  Unbounded — Geometric blob display. Album cover energy. Futuristic weight.
+  Dela Gothic One — Heavy blackletter energy. Gothic weight. Dark anthems.
+
+CONDENSED:
+  Oswald — Tall and tight. News tickers. Campaign posters. Authority with edge.
+  Barlow Condensed — Industrial precision. Blueprint energy. Clean but forceful.
+  Archivo — Geometric muscle. Tech-forward power. Modern impact.
+
+SANS:
+  Montserrat — Reliable workhorse. Use only when nothing else fits.
+  Inter — Invisible design. Let the words speak.
+  Sora — Soft-edged modern. New-gen energy.
+  Rubik — Rounded corners. Friendly weight.
+  Nunito — Pillowy soft. Gentle confessions.
+  Plus Jakarta Sans — Contemporary warmth and sophistication.
+  Bricolage Grotesque — Quirky proportions. Indie character.
+  Lexend — Calm clarity. Readability-first.
+
+SERIF:
+  Playfair Display — High-contrast editorial drama.
+  EB Garamond — Classical literary warmth.
+  Cormorant Garamond — Whispered elegance.
+  DM Serif Display — Warm editorial confidence.
+  Instrument Serif — Refined poetry-forward elegance.
+  Bitter — Slab-serif storytelling warmth.
+
+MONO:
+  JetBrains Mono — Hacker/system voice.
+  Space Mono — Retro-futuristic mission-control voice.
+
+HANDWRITING:
+  Caveat — Diary confessions and handwritten intimacy.`;
+
+const TYPOGRAPHY_TASK_GUIDANCE = `TYPOGRAPHY TASK
+
+Choose a typography SYSTEM for this song. You are not picking "pretty fonts."
+You are choosing the visual voice of the lyrics.
+
+Think in terms of:
+- genre culture (hip-hop = condensed/display, R&B = serif/sans, indie = handwriting/serif)
+- vocal delivery (whispered = light weight, belted = black weight)
+- lyrical confrontation vs intimacy
+- whether the typography should narrate, declare, confess, seduce, disrupt, or command
+
+SYSTEM TYPES:
+  paired  — primary font + accent font. Accent appears on hero words.
+            Use for songs with dynamic range — quiet verses, loud choruses.
+  single  — one font only. Contrast via weight/scale/tracking changes.
+            Use for songs with consistent energy or intimate confessionals.
+  minimal — one font, one weight, minimal variation. Less is more.
+            Use for ambient, classical, or sparse vocal tracks.
+
+HERO STYLES (how emphasis words are treated):
+  accent-font    — hero words switch to the accent font. Maximum contrast.
+  weight-shift   — hero words get heavier weight of the SAME font. Subtle.
+  scale-only     — hero words are slightly larger. No font/weight change.
+  none           — no emphasis treatment. Every word equal. For minimal/ambient.
+
+ACCENT DENSITY (how often accent treatment fires):
+  low    — max 1 hero word per phrase, 20% of phrases. Restrained. Most songs.
+  medium — max 1 hero word per phrase, 40% of phrases. Active.
+  high   — max 2 hero words in choruses, 60% of chorus phrases. Energetic.
+
+SECTION BEHAVIOR — how typography expresses per section role:
+  Map each section role (verse, pre_chorus, chorus, bridge, outro, intro) to a behavior:
+
+  Verse behaviors:    restrained | narrative | raw
+  Pre-chorus:         lift | tighten | hold
+  Chorus:             explode | anthem | contrast
+  Bridge:             strip | pivot | float
+  Outro:              decay | resolve | linger
+
+  Not every section needs a mapping. Unmapped sections get energy-based defaults.
+
+RULES:
+- Prefer strong, distinctive choices. Avoid Montserrat unless nothing else fits.
+- Use contrast intentionally, not decoratively.
+- Match genre culture. A trap beat needs different typography than a folk ballad.
+- The primary font IS the song's identity. Choose one that feels inevitable for this track.
+- If system is "single" or "minimal", leave accent empty and heroStyle as "weight-shift" or "none".`;
 
 const SCENE_DIRECTION_PROMPT = `
 You are a lyric video director. Return JSON only. No markdown. No commentary.
@@ -58,12 +143,18 @@ OUTPUT SCHEMA:
 {
   "description": "one sentence, max 15 words — the visual world in a nutshell",
   "sceneTone": "dark|light|mixed",
-  "fontProfile": {
-    "force": "low|medium|high",
-    "intimacy": "low|medium|high",
-    "polish": "raw|clean|elegant",
-    "theatricality": "low|medium|high",
-    "era": "timeless|modern|futuristic"
+  "typographyPlan": {
+    "system": "paired|single|minimal",
+    "primary": "font name from FONT LIBRARY",
+    "accent": "font name from FONT LIBRARY (empty string for single/minimal)",
+    "case": "uppercase|sentence",
+    "baseWeight": "light|regular|bold|black",
+    "heroStyle": "accent-font|weight-shift|scale-only|none",
+    "accentDensity": "low|medium|high",
+    "sectionBehavior": {
+      "<role>": "<behavior>"
+    },
+    "reason": "one sentence"
   },
   "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
   "sections": [
@@ -149,6 +240,10 @@ SECTION DESCRIPTION RULES:
 SECTION COUNT:
 - If audio sections are provided: one section per audio section. Match count exactly.
 - If audio sections are NOT provided: listen to the full song and divide it into 4-8 natural sections (intro, verse, chorus, bridge, outro as appropriate).
+
+${TYPOGRAPHY_FONT_LIBRARY}
+
+${TYPOGRAPHY_TASK_GUIDANCE}
 `;
 
 const INSTRUMENTAL_SCENE_DIRECTION_PROMPT = `
@@ -382,18 +477,34 @@ function validateScene(
     }
   }
 
-  if (v.fontProfile && typeof v.fontProfile === 'object') {
-    const fp = v.fontProfile;
-    const VALID: Record<string, string[]> = {
-      force: ['low', 'medium', 'high'],
-      intimacy: ['low', 'medium', 'high'],
-      polish: ['raw', 'clean', 'elegant'],
-      theatricality: ['low', 'medium', 'high'],
-      era: ['timeless', 'modern', 'futuristic'],
-    };
-    for (const [key, allowed] of Object.entries(VALID)) {
-      if (!allowed.includes(fp[key])) {
-        fp[key] = key === 'polish' ? 'clean' : key === 'era' ? 'modern' : 'medium';
+  if (v.typographyPlan && typeof v.typographyPlan === 'object') {
+    const tp = v.typographyPlan;
+    const VALID_FONTS = [
+      "Bebas Neue", "Permanent Marker", "Unbounded", "Dela Gothic One", "Oswald", "Barlow Condensed",
+      "Archivo", "Montserrat", "Inter", "Sora", "Rubik", "Nunito", "Plus Jakarta Sans",
+      "Bricolage Grotesque", "Playfair Display", "EB Garamond", "Cormorant Garamond", "DM Serif Display",
+      "Instrument Serif", "Bitter", "JetBrains Mono", "Space Mono", "Caveat", "Lexend",
+    ];
+    if (!['paired', 'single', 'minimal'].includes(tp.system)) tp.system = 'paired';
+    if (typeof tp.primary !== 'string' || !VALID_FONTS.some((f) => f.toLowerCase() === tp.primary?.toLowerCase())) {
+      tp.primary = 'Montserrat';
+    }
+    if (tp.system !== 'paired') tp.accent = '';
+    if (typeof tp.accent === 'string' && tp.accent && !VALID_FONTS.some((f) => f.toLowerCase() === tp.accent?.toLowerCase())) {
+      tp.accent = '';
+    }
+    if (!['uppercase', 'sentence'].includes(tp.case)) tp.case = 'sentence';
+    if (!['light', 'regular', 'bold', 'black'].includes(tp.baseWeight)) tp.baseWeight = 'bold';
+    if (!['accent-font', 'weight-shift', 'scale-only', 'none'].includes(tp.heroStyle)) {
+      tp.heroStyle = tp.system === 'paired' ? 'accent-font' : 'weight-shift';
+    }
+    if (!['low', 'medium', 'high'].includes(tp.accentDensity)) tp.accentDensity = 'low';
+    if (tp.sectionBehavior && typeof tp.sectionBehavior === 'object') {
+      const VALID_BEHAVIORS = ['restrained', 'narrative', 'raw', 'lift', 'tighten', 'hold', 'explode', 'anthem', 'contrast', 'strip', 'pivot', 'float', 'decay', 'resolve', 'linger'];
+      for (const [key, val] of Object.entries(tp.sectionBehavior)) {
+        if (typeof val !== 'string' || !VALID_BEHAVIORS.includes(val)) {
+          delete tp.sectionBehavior[key];
+        }
       }
     }
   }
@@ -698,7 +809,7 @@ async function callScene(
                 {
                   role: "user",
                   content:
-                  'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "fontProfile", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
+                  'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "typographyPlan", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
               },
             ],
             max_completion_tokens: 8000,
