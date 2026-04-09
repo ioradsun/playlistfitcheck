@@ -3,8 +3,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import type { Moment } from "@/lib/buildMoments";
 import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
-import { exportVideoAsMP4 } from "@/engine/exportVideo";
-import { ChevronDown, Heart, Play, Volume2, VolumeX, X } from "lucide-react";
+import { canExportVideo, exportVideoAsMP4 } from "@/engine/exportVideo";
+import { ChevronDown, Heart, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
 
 interface ViralClipModalProps {
   isOpen: boolean;
@@ -55,7 +55,11 @@ export function ViralClipModal({
   const [stage, setStage] = useState<"config" | "rendering" | "done" | "error">("config");
   const [progress, setProgress] = useState(0);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [browserSupported, setBrowserSupported] = useState(true);
+  const [downloadBlob, setDownloadBlob] = useState<Blob | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const snapshotRef = useRef<ImageData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const sortedMoments = useMemo(() => {
@@ -66,14 +70,15 @@ export function ViralClipModal({
   }, [fireHeat, moments]);
 
   const selected = sortedMoments[selectedMoment] ?? null;
-  const previewAspect = useMemo(() => {
+  const { previewW, previewH, previewAspect } = useMemo(() => {
     const { w, h } = PLATFORMS[platform];
-    return h > w ? "9 / 14" : "16 / 10";
+    const portrait = h > w;
+    return {
+      previewW: 720,
+      previewH: portrait ? Math.round(720 * (14 / 9)) : Math.round(720 * (10 / 16)),
+      previewAspect: portrait ? "9 / 14" : "16 / 10",
+    };
   }, [platform]);
-  const previewW = 720;
-  const previewH = PLATFORMS[platform].h > PLATFORMS[platform].w
-    ? Math.round(720 * (14 / 9))
-    : Math.round(720 * (10 / 16));
 
   const commentSuggestions = useMemo(() => {
     if (!selected) return [] as Array<{ text: string; votes: number }>;
@@ -96,6 +101,9 @@ export function ViralClipModal({
     setProgress(0);
     setSelectedMoment(0);
     setDropdownOpen(false);
+    setPreviewing(false);
+    setDownloadBlob(null);
+    setBrowserSupported(canExportVideo());
   }, [isOpen]);
 
   useEffect(() => {
@@ -104,39 +112,69 @@ export function ViralClipModal({
     setCaption(next);
   }, [selectedMoment, commentSuggestions, isOpen]);
 
-  const drawPreview = useCallback(() => {
+  const drawCaptionOverlay = useCallback(() => {
+    const preview = previewCanvasRef.current;
+    const snapshot = snapshotRef.current;
+    if (!preview || !snapshot) return;
+    const ctx = preview.getContext("2d");
+    if (!ctx) return;
+
+    ctx.putImageData(snapshot, 0, 0);
+    const trimmedCaption = caption.trim();
+    if (!trimmedCaption) return;
+
+    const w = preview.width;
+    const h = preview.height;
+    const fontSize = Math.round(h * 0.05);
+    const y = Math.round(h * 0.65);
+    ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.12));
+    ctx.lineJoin = "round";
+    ctx.strokeText(trimmedCaption, w / 2, y, w - 36);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(trimmedCaption, w / 2, y, w - 36);
+  }, [caption]);
+
+  const captureSnapshot = useCallback(() => {
     if (!isOpen || !selected || stage !== "config") return;
     const player = getPlayer();
     const preview = previewCanvasRef.current;
     if (!player || !preview) return;
+    const wasPlaying = player.playing;
+    player.pause();
     player.drawAtTime(selected.moment.startSec);
     const source = player.getExportCanvas();
     const ctx = preview.getContext("2d");
     if (!ctx) return;
-
-    const w = preview.width;
-    const h = preview.height;
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(source, 0, 0, w, h);
-
-    if (caption.trim()) {
-      const fontSize = Math.round(h * 0.05);
-      const y = Math.round(h * 0.65);
-      ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.strokeStyle = "#000000";
-      ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.12));
-      ctx.lineJoin = "round";
-      ctx.strokeText(caption.trim(), w / 2, y, w - 36);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(caption.trim(), w / 2, y, w - 36);
-    }
-  }, [caption, getPlayer, isOpen, selected, stage]);
+    ctx.clearRect(0, 0, preview.width, preview.height);
+    ctx.drawImage(source, 0, 0, preview.width, preview.height);
+    snapshotRef.current = ctx.getImageData(0, 0, preview.width, preview.height);
+    if (wasPlaying) player.play(true);
+    drawCaptionOverlay();
+  }, [drawCaptionOverlay, getPlayer, isOpen, selected, stage]);
 
   useEffect(() => {
-    drawPreview();
-  }, [drawPreview]);
+    captureSnapshot();
+  }, [captureSnapshot]);
+
+  useEffect(() => {
+    drawCaptionOverlay();
+  }, [drawCaptionOverlay]);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      const wrapper = document.getElementById("caption-combo-wrapper");
+      if (wrapper && !wrapper.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dropdownOpen]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -152,13 +190,40 @@ export function ViralClipModal({
     if (!selected) return;
     const player = getPlayer();
     if (!player) return;
+    if (previewing) {
+      player.pause();
+      player.setRegion(undefined, undefined);
+      setPreviewing(false);
+      return;
+    }
     player.setRegion(selected.moment.startSec, selected.moment.endSec);
     player.seek(selected.moment.startSec);
     player.setMuted(!includeAudio);
     player.play(true);
+    setPreviewing(true);
   };
 
+  useEffect(() => {
+    const player = getPlayer();
+    setPreviewing(false);
+    if (!player) return;
+    player.pause();
+    player.setRegion(undefined, undefined);
+  }, [getPlayer, isOpen, selectedMoment]);
+
+  const triggerDownload = useCallback((blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName(artistName)}-${safeName(songTitle)}-moment${selectedMoment + 1}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }, [artistName, selectedMoment, songTitle]);
+
   const handleDownload = useCallback(async () => {
+    if (!browserSupported) return;
     const player = getPlayer();
     if (!player || !selected) return;
 
@@ -196,18 +261,10 @@ export function ViralClipModal({
         signal: abort.signal,
       });
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${safeName(artistName)}-${safeName(songTitle)}-moment${selectedMoment + 1}.mp4`;
-      a.click();
-      URL.revokeObjectURL(url);
+      setDownloadBlob(blob);
+      triggerDownload(blob);
       setProgress(100);
       setStage("done");
-      window.setTimeout(() => {
-        onClose();
-        setStage("config");
-      }, 900);
     } catch (err: any) {
       if (err?.name !== "AbortError") {
         console.error("[ViralClipModal] export failed", err);
@@ -221,7 +278,7 @@ export function ViralClipModal({
       abortRef.current = null;
       player.setRegion(undefined, undefined);
     }
-  }, [artistName, audioUrl, caption, getPlayer, includeAudio, onClose, platform, quality, selected, selectedMoment, songTitle]);
+  }, [audioUrl, browserSupported, caption, getPlayer, includeAudio, platform, quality, selected, triggerDownload]);
 
   const selectionDuration = selected ? Math.max(0, selected.moment.endSec - selected.moment.startSec) : 0;
   const scaledResolution = useMemo(() => {
@@ -249,8 +306,14 @@ export function ViralClipModal({
           )}
 
           {stage === "done" && (
-            <div style={{ minHeight: 320, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700 }}>
-              Done ✓
+            <div style={{ minHeight: 320, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+              <div style={{ fontSize: 22, fontWeight: 700 }}>Done</div>
+              <button onClick={() => downloadBlob && triggerDownload(downloadBlob)} disabled={!downloadBlob} style={{ border: "none", background: "rgba(255,140,40,0.9)", color: "#fff", borderRadius: 12, padding: "12px 24px", fontSize: 14, fontWeight: 600, cursor: downloadBlob ? "pointer" : "not-allowed", opacity: downloadBlob ? 1 : 0.5 }}>
+                Download again
+              </button>
+              <button onClick={onClose} style={{ border: "1px solid rgba(255,255,255,0.18)", background: "transparent", color: "rgba(255,255,255,0.88)", borderRadius: 12, padding: "10px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                Close
+              </button>
             </div>
           )}
 
@@ -277,7 +340,7 @@ export function ViralClipModal({
                         background: selectedStyle ? "rgba(255,140,40,0.13)" : "rgba(255,255,255,0.02)",
                         color: "inherit",
                         minWidth: 94,
-                        padding: "10px 10px",
+                        padding: 10,
                         textAlign: "left",
                         cursor: "pointer",
                       }}
@@ -288,9 +351,14 @@ export function ViralClipModal({
                     </button>
                   );
                 })}
+                {sortedMoments.length === 0 && (
+                  <div style={{ fontSize: 12, opacity: 0.4, textAlign: "center", padding: "16px 0", width: "100%" }}>
+                    No moments available for this track.
+                  </div>
+                )}
               </div>
 
-              <div style={{ position: "relative", marginBottom: 16 }}>
+              <div id="caption-combo-wrapper" style={{ position: "relative", marginBottom: 16 }}>
                 <input
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
@@ -319,7 +387,7 @@ export function ViralClipModal({
               <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", background: "#070707", width: "100%", maxWidth: 420, aspectRatio: previewAspect, margin: "0 auto 16px" }}>
                 <canvas ref={previewCanvasRef} width={previewW} height={previewH} style={{ width: "100%", height: "100%", display: "block" }} />
                 <button onClick={handlePreviewPlay} style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 48, height: 48, borderRadius: 999, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(0,0,0,0.45)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                  <Play size={18} fill="currentColor" />
+                  {previewing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
                 </button>
                 <div style={{ position: "absolute", top: 10, right: 10, fontSize: 11, borderRadius: 999, background: "rgba(0,0,0,0.55)", padding: "4px 8px" }}>{Math.round(selectionDuration)}s</div>
               </div>
@@ -330,8 +398,14 @@ export function ViralClipModal({
                 </div>
               )}
 
+              {!browserSupported && (
+                <div style={{ marginBottom: 10, fontSize: 12, color: "rgba(255,255,255,0.62)" }}>
+                  Video export requires Chrome or Edge.
+                </div>
+              )}
+
               <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 8 }}>
-                <button onClick={handleDownload} disabled={!selected} style={{ flex: 1, height: 48, border: "none", background: "rgba(255,140,40,0.9)", color: "#ffffff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+                <button onClick={handleDownload} disabled={!selected || !browserSupported} style={{ flex: 1, height: 48, border: "none", background: "rgba(255,140,40,0.9)", color: "#ffffff", fontSize: 15, fontWeight: 700, cursor: !selected || !browserSupported ? "not-allowed" : "pointer", opacity: !selected || !browserSupported ? 0.6 : 1 }}>
                   Download for {PLATFORMS[platform].label}
                 </button>
                 <button onClick={cyclePlatform} style={{ width: 48, height: 48, border: "none", borderLeft: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,140,40,0.75)", color: "rgba(255,255,255,0.9)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
