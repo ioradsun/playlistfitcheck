@@ -431,7 +431,7 @@ export function ViralClipModal({
 
                 {/* Right column — preview */}
                 <div style={{ width: 220, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#070707", width: "100%", maxHeight: "calc(100dvh - 140px)", aspectRatio: previewAspect }}>
+                  <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#070707", width: "100%", height: 320, aspectRatio: previewAspect }}>
                     <canvas ref={previewCanvasRef} width={previewW} height={previewH} style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }} />
                     <button onClick={handlePreviewPlay} style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 40, height: 40, borderRadius: 999, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(0,0,0,0.45)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                       {previewing ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
