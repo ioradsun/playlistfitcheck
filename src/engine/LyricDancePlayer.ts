@@ -2501,6 +2501,19 @@ export class LyricDancePlayer {
     this._bgSnapshotSection = -999;
     this._bgSnapshotMomentIdx = -1;
     this._bgLastBakeMs = 0;
+    // Force-compile scene if resize didn't trigger it (e.g. fullMode not yet enabled)
+    if (!this.compiledScene && this.payload) {
+      this.compiledScene = compileScene(this.payload, { viewportWidth: width, viewportHeight: height });
+      this._buildChunkCacheFromScene(this.compiledScene);
+      this._markCompiledViewport(width, height);
+    }
+    if (!this.fullModeEnabled && this.payload) {
+      this.enableFullVisualMode();
+    }
+
+    // Reset phrase cursor so export starts clean
+    this._activeGroupCursor = 0;
+
     this.seek(this.songStartSec);
   }
 
