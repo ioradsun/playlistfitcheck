@@ -18,6 +18,7 @@ interface FmlyBarProps {
   onSeekTo: (sec: number) => void;
   closingActive?: boolean;
   danceId?: string;
+  onUserFire?: (momentIdx: number, holdMs: number) => void;
 }
 
 export function FmlyBar({
@@ -31,6 +32,7 @@ export function FmlyBar({
   onSeekTo,
   closingActive = false,
   danceId,
+  onUserFire,
 }: FmlyBarProps) {
   const [pressing, setPressing] = useState(false);
   const [renderTick, setRenderTick] = useState(0);
@@ -290,6 +292,7 @@ export function FmlyBar({
     if (idx < 0) return;
     userFiresRef.current[idx] = (userFiresRef.current[idx] ?? 0) + holdMs;
     setRenderTick((t) => t + 1);
+    onUserFire?.(idx, holdMs);
   };
 
   const handleFireTap = () => {
