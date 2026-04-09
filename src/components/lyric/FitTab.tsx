@@ -24,14 +24,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
-import { ViralClipModal } from "./ViralClipModal";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type {
-  LyricLine,
   LyricData,
-  LyricHook,
 } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
 // FrameRenderState import removed — V3 derives from cinematicDirection
@@ -311,7 +308,6 @@ export function FitTab({
     return null;
   }, [initialLyric, danceId, lyricData?.title, user?.id]);
   const [lightboxScene, setLightboxScene] = useState<{ imageUrl: string; description: string; timestamp: string; visualMood?: string; index: number } | null>(null);
-  const [viralClipOpen, setViralClipOpen] = useState(false);
   const [exportStudioOpen, setExportStudioOpen] = useState(false);
   const dancePlayerRef =
     useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(
@@ -1524,7 +1520,7 @@ export function FitTab({
                     </button>
                     <button
                       onClick={() => {
-                        setViralClipOpen(true);
+                        setExportStudioOpen(true);
                       }}
                       className="flex-1 py-2 text-[9px] font-mono uppercase tracking-wider rounded-lg border border-primary/30 text-primary/70 hover:text-primary hover:bg-primary/5 transition-colors"
                     >
@@ -1952,22 +1948,6 @@ export function FitTab({
           </>
         )}
       </div>
-
-      <ViralClipModal
-        isOpen={viralClipOpen}
-        onClose={() => {
-          setViralClipOpen(false);
-          const player = dancePlayerRef.current?.getPlayer();
-          if (player) player.setRegion(undefined, undefined);
-        }}
-        getPlayer={getViralClipPlayer}
-        moments={dancePlayerRef.current?.getMoments?.() ?? []}
-        fireHeat={dancePlayerRef.current?.getFireHeat?.() ?? {}}
-        comments={dancePlayerRef.current?.getComments?.() ?? []}
-        songTitle={lyricData.title || "Untitled"}
-        artistName={profile?.display_name || "artist"}
-        audioUrl={dancePlayerRef.current?.getAudioUrl?.() ?? audioUrl ?? ""}
-      />
 
       {exportStudioOpen && (
         <Suspense fallback={null}>

@@ -22,14 +22,20 @@ interface ExportStudioProps {
 }
 
 const PLATFORMS = [
-  { label: "TikTok / Reels / Shorts", ratio: "9:16 portrait", w: 1080, h: 1920, canvasW: 220, canvasH: 390 },
-  { label: "Instagram square", ratio: "1:1 square", w: 1080, h: 1080, canvasW: 300, canvasH: 300 },
-  { label: "YouTube / Twitter", ratio: "16:9 landscape", w: 1920, h: 1080, canvasW: 380, canvasH: 214 },
+  { label: "TikTok / Reels / Shorts", ratio: "9:16 portrait", w: 1080, h: 1920 },
+  { label: "Instagram square", ratio: "1:1 square", w: 1080, h: 1080 },
+  { label: "YouTube / Twitter", ratio: "16:9 landscape", w: 1920, h: 1080 },
 ] as const;
 
 function safeName(input: string): string {
   return (input || "").replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "clip";
 }
+
+const PREVIEW_BUFFERS = [
+  { w: 360, h: 640 }, // 9:16
+  { w: 400, h: 400 }, // 1:1
+  { w: 640, h: 360 }, // 16:9
+] as const;
 
 export function ExportStudio({
   isOpen,
@@ -146,12 +152,14 @@ export function ExportStudio({
     }
   }, [openPanel]);
 
+  // Preview canvas buffer — match export aspect ratio at preview resolution.
   useEffect(() => {
     const canvas = previewCanvasRef.current;
     if (!canvas) return;
-    const { canvasW, canvasH } = PLATFORMS[platformIdx];
-    canvas.width = canvasW;
-    canvas.height = canvasH;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const buf = PREVIEW_BUFFERS[platformIdx];
+    canvas.width = Math.round(buf.w * dpr);
+    canvas.height = Math.round(buf.h * dpr);
   }, [platformIdx]);
 
   useEffect(() => {
@@ -160,20 +168,33 @@ export function ExportStudio({
     const canvas = previewCanvasRef.current;
     if (!player || !canvas) return;
 
+    let stopped = false;
     let rafId = 0;
     const draw = () => {
+      if (stopped) return;
       const source = player.getExportCanvas();
       const ctx = canvas.getContext("2d");
-      if (ctx && source) {
+      if (ctx && source && source.width > 0 && source.height > 0) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
       }
       rafId = requestAnimationFrame(draw);
     };
     rafId = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(rafId);
+    };
   }, [isOpen, exportStage, getPlayer]);
 
+  // Save player dimensions on open so we can restore on close.
+  // Do NOT resize the player to export resolution for the preview —
+  // that triggers an expensive scene recompile (compileScene + buildBgCache +
+  // particle reset) at 1080×1920 just to display a 220×390 preview canvas.
+  // The RAF loop below blits the player's live canvas at whatever its current
+  // viewport size is — drawImage handles the downscale.
+  // The export pipeline (handleDownload) calls player.resize() only when the
+  // user actually clicks Download.
   useEffect(() => {
     if (!isOpen) return;
     const player = getPlayer();
@@ -181,9 +202,7 @@ export function ExportStudio({
     if (!prevSizeRef.current) {
       prevSizeRef.current = { w: player.width, h: player.height };
     }
-    const { w, h } = PLATFORMS[platformIdx];
-    player.resize(w, h);
-  }, [platformIdx, getPlayer, isOpen]);
+  }, [getPlayer, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -281,7 +300,8 @@ export function ExportStudio({
 
   if (!isOpen || typeof document === "undefined") return null;
 
-  const panelWidth = platformIdx === 2 ? 360 : 320;
+  const aspectRatios = ["9 / 16", "1 / 1", "16 / 9"] as const;
+  const maxPreviewHeights = ["min(480px, 70vh)", "min(360px, 50vh)", "min(280px, 40vh)"] as const;
   const momentTag = selectedMomentIdx === 0 ? "full" : `#${selectedMomentIdx} hottest`;
   const captionTag = captionMode === "custom"
     ? "custom"
@@ -291,6 +311,7 @@ export function ExportStudio({
 
   return createPortal(
     <div
+      className="export-studio-root"
       ref={rootRef}
       style={{
         position: "fixed",
@@ -300,8 +321,17 @@ export function ExportStudio({
         fontFamily: '"SF Pro Display", -apple-system, sans-serif',
         color: "rgba(255,255,255,0.9)",
         display: "flex",
+        flexDirection: "row",
       }}
     >
+      <style>{`
+        @media (max-width: 680px) {
+          .export-studio-root { flex-direction: column-reverse !important; }
+          .export-studio-panel { width: 100% !important; max-width: none !important; border-right: none !important; border-top: 0.5px solid rgba(255,255,255,0.06) !important; max-height: 55vh !important; }
+          .export-studio-preview { min-height: 200px !important; max-height: 45vh !important; }
+          .export-studio-canvas { max-height: 38vh !important; }
+        }
+      `}</style>
       <button
         type="button"
         onClick={onClose}
@@ -325,8 +355,11 @@ export function ExportStudio({
       </button>
 
       <div
+        className="export-studio-panel"
         style={{
-          width: panelWidth,
+          width: 320,
+          maxWidth: "45vw",
+          flexShrink: 0,
           borderRight: "0.5px solid rgba(255,255,255,0.06)",
           overflowY: "auto",
           display: "flex",
@@ -338,7 +371,7 @@ export function ExportStudio({
         <SelectorCard
           label="Moment"
           tag={momentTag}
-          mainText={selectedMomentIdx === 0 ? "Full video" : `Moment #${selectedMomentIdx}`}
+          mainText={selectedMomentIdx === 0 ? "Full video" : (activeSelection?.moment?.lines?.[0]?.text ?? `Moment #${selectedMomentIdx}`)}
           subTexts={[
             `${Math.round(((activeSelection?.moment.endSec ?? 0) - (activeSelection?.moment.startSec ?? 0)) || durationSec)}s`,
             `${Math.round(activeSelection?.fires ?? 0)} fire`,
@@ -374,7 +407,7 @@ export function ExportStudio({
                   <div style={{ width: 6, height: 6, borderRadius: 999, background: isActive ? "#44d27e" : "rgba(255,255,255,0.2)", boxShadow: isActive ? "0 0 8px rgba(68,210,126,0.7)" : "none" }} />
                   <div style={{ minWidth: 0, textAlign: "left" }}>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.83)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {idx === 0 ? "Full video" : `Moment #${idx}`}
+                      {idx === 0 ? "Full video" : (entry.moment?.lines?.[0]?.text ?? `Moment #${idx}`)}
                     </div>
                     <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: '"SF Mono", monospace' }}>
                       {duration.toFixed(1)}s · {entry.moment.lines?.length ?? 0} lines
@@ -626,11 +659,15 @@ export function ExportStudio({
         </div>
       </div>
 
-      <div style={{ flex: 1, background: "#060608", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="export-studio-preview" style={{ flex: 1, background: "#060608", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, minWidth: 0 }}>
         <div
+          className="export-studio-canvas"
           style={{
-            width: PLATFORMS[platformIdx].canvasW,
-            height: PLATFORMS[platformIdx].canvasH,
+            aspectRatio: aspectRatios[platformIdx],
+            maxHeight: maxPreviewHeights[platformIdx],
+            width: "auto",
+            height: "100%",
+            maxWidth: "100%",
             borderRadius: 12,
             overflow: "hidden",
             position: "relative",
@@ -638,7 +675,7 @@ export function ExportStudio({
             background: "#000",
           }}
         >
-          <canvas ref={previewCanvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
+          <canvas ref={previewCanvasRef} style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }} />
           {activeCaption && <div style={captionStyle}>{activeCaption}</div>}
         </div>
       </div>
