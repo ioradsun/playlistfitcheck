@@ -103,7 +103,7 @@ function AvatarWithBadges({
       )}
 
       {serial && (
-        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/80 border border-white/10 rounded-full px-1 text-[6px] font-mono leading-none text-white/70 whitespace-nowrap pointer-events-none">
+        <span className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-black/80 border border-white/10 rounded-full px-1 text-[6px] font-mono leading-none text-white/70 whitespace-nowrap pointer-events-none">
           {serial}
         </span>
       )}
