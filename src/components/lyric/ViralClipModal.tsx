@@ -307,8 +307,8 @@ export function ViralClipModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) closeSafe(); }}>
-      <DialogContent className="sm:max-w-[860px] p-0 border-0 [&>button]:hidden max-h-[100dvh] overflow-hidden" style={{ background: "transparent" }}>
-        <div style={{ background: "#0c0c0c", borderRadius: 24, padding: "16px 20px", color: "rgba(255,255,255,0.92)", fontFamily: '"SF Pro Display", "Helvetica Neue", -apple-system, sans-serif', maxHeight: "calc(100dvh - 32px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <DialogContent className="sm:max-w-[780px] p-0 border-0 [&>button]:hidden" style={{ background: "transparent", maxHeight: "calc(100dvh - 32px)" }}>
+        <div style={{ background: "#0c0c0c", borderRadius: 20, padding: "14px 16px", color: "rgba(255,255,255,0.92)", fontFamily: '"SF Pro Display", "Helvetica Neue", -apple-system, sans-serif', display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "calc(100dvh - 32px)" }}>
           {stage === "rendering" && (
             <div style={{ minHeight: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
               <div style={{ width: 40, height: 40, borderRadius: 999, border: "3px solid rgba(255,255,255,0.16)", borderTopColor: "rgba(68,210,126,0.9)", animation: "spin 1s linear infinite" }} />
@@ -332,116 +332,111 @@ export function ViralClipModal({
 
           {(stage === "config" || stage === "error") && (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexShrink: 0 }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexShrink: 0 }}>
                 <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.3 }}>Share clip</div>
                 <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 999, border: "1px solid rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.74)", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", cursor: "pointer" }}>
                   <X size={14} />
                 </button>
               </div>
 
-              <div style={{ display: "flex", gap: 16, flex: "1 1 0", minHeight: 0 }}>
-                {/* Left: config */}
-                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, flexShrink: 0 }}>
+              {/* Two-column: left config, right preview */}
+              <div style={{ display: "flex", gap: 14, flex: "1 1 0", minHeight: 0, overflow: "hidden" }}>
+
+                {/* Left column — config */}
+                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 8 }}>
+                  {/* Moments row */}
+                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
                     {sortedMoments.map((m, idx) => {
-                      const selectedStyle = idx === selectedMoment;
+                      const isSel = idx === selectedMoment;
                       const dur = Math.max(0, m.moment.endSec - m.moment.startSec);
                       return (
                         <button
                           key={`${m.moment.index}-${idx}`}
                           onClick={() => setSelectedMoment(idx)}
                           style={{
-                            borderRadius: 12,
-                            border: selectedStyle ? "1px solid rgba(68,210,126,0.9)" : "1px solid rgba(255,255,255,0.12)",
-                            background: selectedStyle ? "rgba(68,210,126,0.13)" : "rgba(255,255,255,0.02)",
+                            borderRadius: 10,
+                            border: isSel ? "1px solid rgba(68,210,126,0.9)" : "1px solid rgba(255,255,255,0.12)",
+                            background: isSel ? "rgba(68,210,126,0.13)" : "rgba(255,255,255,0.02)",
                             color: "inherit",
-                            minWidth: 94,
-                            padding: 10,
+                            minWidth: 80,
+                            padding: "6px 8px",
                             textAlign: "left",
                             cursor: "pointer",
                           }}
                         >
-                          {idx === 0 && <div style={{ color: "#44d27e", fontSize: 11, fontWeight: 700, marginBottom: 2 }}>top</div>}
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>Moment {m.moment.index + 1}</div>
-                          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{Math.round(m.fires)} · {Math.round(dur)}s</div>
+                          {idx === 0 && <div style={{ color: "#44d27e", fontSize: 9, fontWeight: 700, marginBottom: 1 }}>top</div>}
+                          <div style={{ fontSize: 11, fontWeight: 700 }}>Moment {m.moment.index + 1}</div>
+                          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 1 }}>{Math.round(m.fires)} · {Math.round(dur)}s</div>
                         </button>
                       );
                     })}
                     {sortedMoments.length === 0 && (
-                      <div style={{ fontSize: 12, opacity: 0.4, textAlign: "center", padding: "16px 0", width: "100%" }}>
-                        No moments available for this track.
+                      <div style={{ fontSize: 12, opacity: 0.4, textAlign: "center", padding: "12px 0", width: "100%" }}>
+                        No moments available.
                       </div>
                     )}
                   </div>
 
+                  {/* Caption */}
                   <div id="caption-combo-wrapper" style={{ position: "relative", flexShrink: 0 }}>
                     <input
                       value={caption}
                       onChange={(e) => setCaption(e.target.value)}
                       placeholder="Add a caption..."
-                      style={{ width: "100%", height: 42, borderRadius: 12, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.03)", color: "white", padding: "0 42px 0 12px", fontSize: 14, outline: "none" }}
+                      style={{ width: "100%", height: 36, borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.03)", color: "white", padding: "0 36px 0 10px", fontSize: 13, outline: "none" }}
                     />
-                    <button onClick={() => setDropdownOpen((v) => !v)} style={{ position: "absolute", right: 8, top: 7, width: 28, height: 28, border: "none", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>
-                      <ChevronDown size={16} />
+                    <button onClick={() => setDropdownOpen((v) => !v)} style={{ position: "absolute", right: 6, top: 4, width: 28, height: 28, border: "none", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>
+                      <ChevronDown size={14} />
                     </button>
-
                     {dropdownOpen && (
-                      <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, background: "#161616", zIndex: 10, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: 8 }}>
+                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#161616", zIndex: 10, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: 6 }}>
                         {commentSuggestions.length === 0 && (
-                          <div style={{ fontSize: 11, opacity: 0.5, padding: "6px 4px" }}>No community caption suggestions yet.</div>
+                          <div style={{ fontSize: 11, opacity: 0.5, padding: "4px" }}>No suggestions yet.</div>
                         )}
                         {commentSuggestions.map((s) => (
-                          <button key={s.text} onClick={() => { setCaption(s.text); setDropdownOpen(false); }} style={{ width: "100%", border: "none", background: "transparent", color: "inherit", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 8px", fontSize: 12, cursor: "pointer" }}>
+                          <button key={s.text} onClick={() => { setCaption(s.text); setDropdownOpen(false); }} style={{ width: "100%", border: "none", background: "transparent", color: "inherit", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 6px", fontSize: 11, cursor: "pointer" }}>
                             <span style={{ textAlign: "left", opacity: 0.9 }}>{s.text}</span>
-                            <span style={{ opacity: 0.7, fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }}><Heart size={11} /> {s.votes}</span>
+                            <span style={{ opacity: 0.7, fontSize: 10, display: "inline-flex", alignItems: "center", gap: 3 }}><Heart size={10} /> {s.votes}</span>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  {stage === "error" && (
-                    <div style={{ fontSize: 12, color: "#ff9f9f" }}>
-                      Export failed. Please retry.
-                    </div>
-                  )}
+                  {stage === "error" && <div style={{ fontSize: 11, color: "#ff9f9f", flexShrink: 0 }}>Export failed. Please retry.</div>}
+                  {!browserSupported && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.62)", flexShrink: 0 }}>Video export requires Chrome or Edge.</div>}
 
-                  {!browserSupported && (
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)" }}>
-                      Video export requires Chrome or Edge.
-                    </div>
-                  )}
-
+                  {/* Download button + settings */}
                   <div style={{ marginTop: "auto", flexShrink: 0 }}>
-                    <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 8 }}>
-                      <button onClick={handleDownload} disabled={!selected || !browserSupported} style={{ flex: 1, height: 44, border: "none", background: "rgba(68,210,126,0.9)", color: "#ffffff", fontSize: 14, fontWeight: 700, cursor: selected && browserSupported ? "pointer" : "not-allowed", opacity: selected && browserSupported ? 1 : 0.35 }}>
+                    <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", marginBottom: 6 }}>
+                      <button onClick={handleDownload} disabled={!selected || !browserSupported} style={{ flex: 1, height: 40, border: "none", background: "rgba(68,210,126,0.9)", color: "#ffffff", fontSize: 13, fontWeight: 700, cursor: selected && browserSupported ? "pointer" : "not-allowed", opacity: selected && browserSupported ? 1 : 0.35 }}>
                         Download for {PLATFORMS[platform].label}
                       </button>
-                      <button onClick={cyclePlatform} style={{ width: 44, height: 44, border: "none", borderLeft: "1px solid rgba(255,255,255,0.15)", background: "rgba(68,210,126,0.75)", color: "rgba(255,255,255,0.9)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <ChevronDown size={16} />
+                      <button onClick={cyclePlatform} style={{ width: 40, height: 40, border: "none", borderLeft: "1px solid rgba(255,255,255,0.15)", background: "rgba(68,210,126,0.75)", color: "rgba(255,255,255,0.9)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <ChevronDown size={14} />
                       </button>
                     </div>
-
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, opacity: 0.86 }}>
-                      <button onClick={cycleQuality} style={{ border: "none", background: "transparent", color: "inherit", display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                        {quality} <ChevronDown size={13} />
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, opacity: 0.86 }}>
+                      <button onClick={cycleQuality} style={{ border: "none", background: "transparent", color: "inherit", display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                        {quality} <ChevronDown size={12} />
                       </button>
                       <div>{scaledResolution.w} × {scaledResolution.h}</div>
-                      <button onClick={() => setIncludeAudio((v) => !v)} style={{ border: "none", background: "transparent", color: "inherit", display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                        {includeAudio ? <Volume2 size={14} /> : <VolumeX size={14} />} {includeAudio ? "On" : "Off"}
+                      <button onClick={() => setIncludeAudio((v) => !v)} style={{ border: "none", background: "transparent", color: "inherit", display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                        {includeAudio ? <Volume2 size={13} /> : <VolumeX size={13} />} {includeAudio ? "On" : "Off"}
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Right: preview */}
-                <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", background: "#070707", width: "100%", aspectRatio: previewAspect }}>
-                    <canvas ref={previewCanvasRef} width={previewW} height={previewH} style={{ width: "100%", height: "100%", display: "block" }} />
-                    <button onClick={handlePreviewPlay} style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 48, height: 48, borderRadius: 999, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(0,0,0,0.45)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                      {previewing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+                {/* Right column — preview */}
+                <div style={{ width: 220, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#070707", width: "100%", maxHeight: "calc(100dvh - 140px)", aspectRatio: previewAspect }}>
+                    <canvas ref={previewCanvasRef} width={previewW} height={previewH} style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }} />
+                    <button onClick={handlePreviewPlay} style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: 40, height: 40, borderRadius: 999, border: "1px solid rgba(255,255,255,0.3)", background: "rgba(0,0,0,0.45)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                      {previewing ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
                     </button>
-                    <div style={{ position: "absolute", top: 10, right: 10, fontSize: 11, borderRadius: 999, background: "rgba(0,0,0,0.55)", padding: "4px 8px" }}>{Math.round(selectionDuration)}s</div>
+                    <div style={{ position: "absolute", top: 8, right: 8, fontSize: 10, borderRadius: 999, background: "rgba(0,0,0,0.55)", padding: "3px 6px" }}>{Math.round(selectionDuration)}s</div>
                   </div>
                 </div>
               </div>
