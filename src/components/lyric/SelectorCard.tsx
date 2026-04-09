@@ -94,15 +94,11 @@ export function SelectorCard({
       {isOpen && (
         <div
           style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "calc(100% + 8px)",
-            zIndex: 20,
             background: "#111113",
             border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: 12,
-            maxHeight: 280,
+            maxHeight: "min(280px, 50vh)",
+            marginTop: 8,
             overflowY: "auto",
           }}
         >
