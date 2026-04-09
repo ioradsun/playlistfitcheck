@@ -526,7 +526,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             player={player}
             currentTimeSec={currentTimeSec}
             danceId={danceId}
-            comments={comments}
             onFireTap={() => {
               if (holdFireIntervalRef.current) {
                 clearInterval(holdFireIntervalRef.current);
@@ -550,16 +549,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               emitFire(danceId, getCurrentFireIndex(), player?.audio.currentTime ?? 0, holdMs, "feed", userId ?? null);
             }}
             onSeekTo={seekOnly}
-            onToastTap={(momentIdx) => {
-              const m = moments[momentIdx];
-              if (m && player) {
-                player.audio.currentTime = Math.max(0, m.startSec - 0.01);
-                player.setRegion(m.startSec, m.endSec);
-                player.setMuted(false);
-                player.play();
-              }
-              setCardMode("moments");
-            }}
           />
         </div>
       )}
