@@ -13,10 +13,10 @@ const MODE_ICONS: Record<CardMode, ReactNode> = {
   moments: <LayoutList size={14} />,
   results: <BarChart2 size={14} />,
   empowerment: <Sparkles size={14} />,
-  truth: <Sparkles size={14} />,
+  truth: <BarChart2 size={14} />,
 };
 
-const MODES: CardMode[] = ["listen", "moments", "results", "empowerment", "truth"];
+const MODES: CardMode[] = ["listen", "moments", "truth"];
 
 function useClickOutside(
   refs: RefObject<Element | null>[],
