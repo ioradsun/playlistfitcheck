@@ -1009,7 +1009,7 @@ export function FitTab({
   }, [danceId]);
 
   useEffect(() => {
-    if (subView !== "data" || !danceId || fireData.resultsLoaded) return;
+    if (!danceId || fireData.resultsLoaded) return;
     Promise.all([
       fetchFireStrength(danceId),
       fetchFireData(danceId),
@@ -1031,6 +1031,15 @@ export function FitTab({
         .select("session_id", { count: "exact" })
         .eq("project_id", danceId),
     ]).then(([strength, fires, dist, free, count, exposures]) => {
+      const player = dancePlayerRef.current?.getPlayer();
+      const duration =
+        player?.audio?.duration ||
+        activeWaveform?.duration ||
+        beatGrid?._duration ||
+        0;
+      if (player && Number.isFinite(duration) && duration > 0) {
+        player.setFireBaseline?.(fires, duration);
+      }
       // TODO: if project_exposures is not already session-deduplicated, switch this
       // to a distinct-session count query and keep the Set fallback below.
       setFireData({
@@ -1048,7 +1057,19 @@ export function FitTab({
     }).catch(() => {
       setFireData((prev) => ({ ...prev, resultsLoaded: true }));
     });
-  }, [subView, danceId, fireData.resultsLoaded]);
+  }, [danceId, fireData.resultsLoaded, activeWaveform?.duration, beatGrid?._duration]);
+
+  useEffect(() => {
+    const player = dancePlayerRef.current?.getPlayer();
+    if (!player || fireData.rawFires.length === 0) return;
+    const duration =
+      player.audio?.duration ||
+      activeWaveform?.duration ||
+      beatGrid?._duration ||
+      0;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    player.setFireBaseline?.(fireData.rawFires, duration);
+  }, [playerReady, fireData.rawFires, activeWaveform?.duration, beatGrid?._duration]);
 
   const handleRetryImages = useCallback(() => {
     void pipeline.retryImages();

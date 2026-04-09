@@ -137,7 +137,7 @@ export function FmlyBar({
 
   useEffect(() => {
     fireHoldControllerRef.current = createFireHold({
-      onCanvasTrigger: () => player?.fireMoment?.(),
+      onCanvasTrigger: (elapsedMs) => player?.fireMoment?.(elapsedMs),
     });
     return () => {
       fireHoldControllerRef.current?.destroy();
@@ -338,7 +338,7 @@ export function FmlyBar({
     setPressing(true);
     pendingFireSpawnsRef.current.push({ count: 5, intensity: 0.6 });
     pendingPlayheadSpawnsRef.current.push({ count: 3, intensity: 0.5 });
-    player?.fireMoment?.();
+    player?.fireMoment?.(0);
     onFireHoldStart();
     fireHoldControllerRef.current?.start();
   };
