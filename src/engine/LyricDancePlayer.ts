@@ -1567,6 +1567,10 @@ export class LyricDancePlayer {
   }
   private width = 0; // logical px
   private height = 0; // logical px
+
+  /** Public read-only accessors for current logical dimensions */
+  get currentWidth(): number { return this.width; }
+  get currentHeight(): number { return this.height; }
   private isExporting = false;
   private displayWidth = 0;
   private displayHeight = 0;

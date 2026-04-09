@@ -224,7 +224,7 @@ export function ExportStudio({
     const player = getPlayer();
     if (!player) return;
     if (!prevSizeRef.current) {
-      prevSizeRef.current = { w: player.width, h: player.height };
+      prevSizeRef.current = { w: player.currentWidth, h: player.currentHeight };
     }
   }, [getPlayer, isOpen]);
 
