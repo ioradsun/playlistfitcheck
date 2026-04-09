@@ -579,6 +579,7 @@ class BeatVisSim {
   private barSeeds: Float32Array;
   private palette: [number, number, number];
   private lastBeatIndex = -1;
+  private baselineWaveform: Float32Array | null = null;
 
   constructor(accent: string) {
     this.visCanvas = document.createElement('canvas');
@@ -596,6 +597,16 @@ class BeatVisSim {
 
   setAccent(hex: string): void { this.palette = hexToRgb(hex); }
 
+  /** Pre-computed energy waveform for export — provides visible bars without runtime audio. */
+  setWaveformBaseline(waveform: number[] | Float32Array): void {
+    const w = VIS_W;
+    this.baselineWaveform = new Float32Array(w);
+    for (let i = 0; i < w; i++) {
+      const srcIdx = Math.floor((i / w) * waveform.length);
+      this.baselineWaveform[i] = Math.max(0, Math.min(1, waveform[srcIdx] ?? 0.15));
+    }
+  }
+
   update(energy: number, pulse: number, hitStrength: number, _beatPhase: number, beatIndex: number): void {
     const W = VIS_W;
     const H = VIS_H;
@@ -608,12 +619,19 @@ class BeatVisSim {
 
     const [pr, pg, pb] = this.palette;
     const drive = energy * 0.55 + (pulse * energy) * 0.35 + hitStrength * 0.10;
+    const hasBaseline = this.baselineWaveform !== null;
 
     for (let x = 0; x < W; x++) {
       const nx = x / W;
       const centerBias = 0.5 + 0.5 * (1.0 - Math.abs(nx - 0.5) * 2.0);
       const variation = 0.7 + this.barSeeds[x] * 0.6;
-      const target = drive * centerBias * variation;
+
+      // Blend live energy with pre-computed waveform baseline.
+      // When live energy is strong, it dominates. When weak, baseline provides shape.
+      const baseLevel = hasBaseline ? (this.baselineWaveform![x] * 0.6) : 0;
+      const liveLevel = drive * centerBias * variation;
+      const target = Math.max(baseLevel * centerBias, liveLevel);
+
       this.bars[x] += ((target > this.bars[x]) ? 0.75 : 0.12) * (target - this.bars[x]);
     }
 
@@ -4051,8 +4069,8 @@ export class LyricDancePlayer {
             this.ctx.globalAlpha = 1;
           }
         } else {
-          // Original BeatVisSim: unchanged
-          const visAlpha = Math.min(0.85, 0.30 + bsEnergy * 0.40 + bsPulse * 0.15);
+          const baseAlpha = this.isExporting ? 0.45 : 0.30;
+          const visAlpha = Math.min(0.85, baseAlpha + bsEnergy * 0.40 + bsPulse * 0.15);
           if (visAlpha > 0.01) {
             const visH = this.height * 0.28;
             const visTop = this.height - visH;
@@ -5367,6 +5385,17 @@ export class LyricDancePlayer {
       // ═══ Always-on beat visualizer — present throughout entire song ═══
       if (!this._globalBeatVis) {
         this._globalBeatVis = new BeatVisSim(accentColor);
+      }
+      // Give beat vis a baseline waveform for export rendering.
+      {
+        const analysisRef = (this.conductor as any)?._analysis as import('@/engine/audioAnalyzer').AudioAnalysis | null;
+        if (analysisRef?.beatEnergies) {
+          this._globalBeatVis.setWaveformBaseline(analysisRef.beatEnergies);
+        } else {
+          const beatGridBeats = this.data.beat_grid?.beats ?? [];
+          const derived = DynamiteWickBar.deriveWaveformFromBeats(beatGridBeats, VIS_W);
+          this._globalBeatVis.setWaveformBaseline(derived);
+        }
       }
       if (!this._globalWickBar) {
         this._globalWickBar = new DynamiteWickBar(accentColor, this._effectiveDpr);
