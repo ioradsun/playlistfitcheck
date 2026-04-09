@@ -143,18 +143,23 @@ export function ViralClipModal({
     const player = getPlayer();
     const preview = previewCanvasRef.current;
     if (!player || !preview) return;
-    const wasPlaying = player.playing;
-    player.pause();
-    player.drawAtTime(selected.moment.startSec);
-    const source = player.getExportCanvas();
-    const ctx = preview.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, preview.width, preview.height);
-    ctx.drawImage(source, 0, 0, preview.width, preview.height);
-    snapshotRef.current = ctx.getImageData(0, 0, preview.width, preview.height);
-    if (wasPlaying) player.play(true);
-    drawCaptionOverlay();
-  }, [drawCaptionOverlay, getPlayer, isOpen, selected, stage]);
+    player.seek(selected.moment.startSec);
+
+    requestAnimationFrame(() => {
+      const source = player.getExportCanvas();
+      const ctx = preview.getContext("2d");
+      if (!ctx || !source) return;
+      ctx.clearRect(0, 0, preview.width, preview.height);
+      try {
+        ctx.drawImage(source, 0, 0, preview.width, preview.height);
+        snapshotRef.current = ctx.getImageData(0, 0, preview.width, preview.height);
+      } catch (err) {
+        console.warn("[ViralClipModal] snapshot failed:", err);
+      }
+      drawCaptionOverlay();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawCaptionOverlay, isOpen, selected, stage]);
 
   useEffect(() => {
     captureSnapshot();
@@ -206,10 +211,12 @@ export function ViralClipModal({
   useEffect(() => {
     const player = getPlayer();
     setPreviewing(false);
-    if (!player) return;
-    player.pause();
-    player.setRegion(undefined, undefined);
-  }, [getPlayer, isOpen, selectedMoment]);
+    if (!isOpen && player) {
+      player.pause();
+      player.setRegion(undefined, undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, selectedMoment]);
 
   const triggerDownload = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);
@@ -283,7 +290,8 @@ export function ViralClipModal({
       abortRef.current = null;
       player.setRegion(undefined, undefined);
     }
-  }, [audioUrl, browserSupported, caption, getPlayer, includeAudio, platform, quality, selected, triggerDownload]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioUrl, browserSupported, caption, includeAudio, platform, quality, selected, triggerDownload]);
 
   const selectionDuration = selected ? Math.max(0, selected.moment.endSec - selected.moment.startSec) : 0;
   const scaledResolution = useMemo(() => {
