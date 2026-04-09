@@ -106,6 +106,8 @@ export function ExportStudio({
   const [captionPos, setCaptionPos] = useState<"top" | "bottom">("bottom");
   const [platformIdx, setPlatformIdx] = useState(0);
   const [includeAudio, setIncludeAudio] = useState(true);
+  const [includeBeatVis, setIncludeBeatVis] = useState(false);
+  const [includeWickBar, setIncludeWickBar] = useState(true);
   const [exportStage, setExportStage] = useState<"ready" | "rendering" | "done" | "error">("ready");
   const [exportProgress, setExportProgress] = useState(0);
   const [openPanel, setOpenPanel] = useState<"moment" | "caption" | "platform" | null>(null);
@@ -232,6 +234,8 @@ export function ExportStudio({
     setExportProgress(0);
     setOpenPanel(null);
     setDownloadBlob(null);
+    setIncludeBeatVis(false);
+    setIncludeWickBar(true);
     setCaptionStyle("bar");
     setCaptionPos("bottom");
     setSelectedMomentIdx(1);
@@ -350,7 +354,7 @@ export function ExportStudio({
   }, [platformIdx, getPlayer, isOpen]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || exportStage === "rendering") return;
     const player = getPlayer();
     if (!player || !activeSelection) return;
     if (activeSelection?.isFull) {
@@ -362,7 +366,15 @@ export function ExportStudio({
     }
     player.setMuted(!includeAudio);
     player.play(true);
-  }, [selectedMomentIdx, includeAudio, getPlayer, isOpen, activeSelection]);
+  }, [selectedMomentIdx, includeAudio, getPlayer, isOpen, activeSelection, exportStage]);
+
+  // Sync visual flags with player during preview.
+  useEffect(() => {
+    const player = getPlayer();
+    if (!player || !isOpen) return;
+    player.wickBarEnabled = includeWickBar;
+    player.beatVisEnabled = includeBeatVis;
+  }, [includeWickBar, includeBeatVis, getPlayer, isOpen]);
 
   useEffect(() => {
     if (isOpen) return;
@@ -371,6 +383,8 @@ export function ExportStudio({
     if (player) {
       player.pause();
       player.setRegion(undefined, undefined);
+      player.wickBarEnabled = false;
+      player.beatVisEnabled = false;
       const prev = prevSizeRef.current;
       if (prev) {
         player.resize(prev.w, prev.h);
@@ -410,6 +424,9 @@ export function ExportStudio({
     setExportStage("rendering");
 
     try {
+      // Set export visual flags.
+      player.wickBarEnabled = includeWickBar;
+      player.beatVisEnabled = includeBeatVis;
       const blob = await exportVideoAsMP4({
         player,
         width: w,
@@ -446,6 +463,9 @@ export function ExportStudio({
       }
     } finally {
       abortRef.current = null;
+      // Restore preview visual flags.
+      player.wickBarEnabled = false;
+      player.beatVisEnabled = false;
     }
   };
 
@@ -888,42 +908,88 @@ export function ExportStudio({
           })}
         </SelectorCard>
 
-        <div style={{ marginTop: "auto", padding: "0 16px", display: isMobile ? "none" : "flex", flexDirection: "column", gap: 10 }}>
-          <button
-            type="button"
-            onClick={() => setIncludeAudio((v) => !v)}
+        {/* ── Options ── */}
+        <div style={{ padding: "0 16px" }}>
+          <div
             style={{
-              width: "100%",
-              height: 34,
-              borderRadius: 10,
-              border: includeAudio ? "1px solid rgba(68,210,126,0.25)" : "1px solid rgba(255,255,255,0.1)",
-              background: includeAudio ? "rgba(68,210,126,0.06)" : "rgba(255,255,255,0.03)",
-              color: includeAudio ? "#44d27e" : "rgba(255,255,255,0.4)",
-              fontSize: 11,
-              letterSpacing: "0.08em",
+              fontSize: 9,
+              letterSpacing: "0.14em",
               textTransform: "uppercase",
+              color: "rgba(255,255,255,0.2)",
               fontFamily: '"SF Mono", monospace',
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              transition: "all 0.15s",
+              marginBottom: 6,
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M11 5L6 9H2v6h4l5 4V5z" />
-              {includeAudio && <path d="M15.54 8.46a5 5 0 010 7.07" />}
-              {!includeAudio && (
-                <>
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </>
-              )}
-            </svg>
-            {includeAudio ? "Audio on" : "Audio off"}
-          </button>
+            Options
+          </div>
+          <div
+            style={{
+              borderRadius: 10,
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.02)",
+              overflow: "hidden",
+            }}
+          >
+            {([
+              { label: "Audio", value: includeAudio, setter: setIncludeAudio },
+              { label: "Wick bar", value: includeWickBar, setter: setIncludeWickBar },
+              { label: "Beat vis", value: includeBeatVis, setter: setIncludeBeatVis },
+            ] as const).map(({ label, value, setter }, i) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => (setter as (update: (v: boolean) => boolean) => void)((v: boolean) => !v)}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "9px 12px",
+                  border: "none",
+                  borderBottom: i < 2 ? "0.5px solid rgba(255,255,255,0.04)" : "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  color: "inherit",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: value ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
+                    transition: "color 0.15s",
+                  }}
+                >
+                  {label}
+                </span>
+                <div
+                  style={{
+                    width: 32,
+                    height: 18,
+                    borderRadius: 9,
+                    background: value ? "#44d27e" : "rgba(255,255,255,0.08)",
+                    transition: "background 0.2s",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 7,
+                      background: value ? "#fff" : "rgba(255,255,255,0.3)",
+                      position: "absolute",
+                      top: 2,
+                      left: value ? 16 : 2,
+                      transition: "left 0.2s, background 0.2s",
+                    }}
+                  />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
 
+        <div style={{ marginTop: "auto", padding: "0 16px", display: isMobile ? "none" : "flex", flexDirection: "column", gap: 10 }}>
           {exportStage === "ready" && (
             <button
               type="button"
@@ -1057,34 +1123,6 @@ export function ExportStudio({
             alignItems: "stretch",
           }}
         >
-          <button
-            type="button"
-            onClick={() => setIncludeAudio((v) => !v)}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: includeAudio ? "rgba(68,210,126,0.08)" : "rgba(255,255,255,0.03)",
-              color: includeAudio ? "#44d27e" : "rgba(255,255,255,0.4)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M11 5L6 9H2v6h4l5 4V5z" />
-              {includeAudio && <path d="M15.54 8.46a5 5 0 010 7.07" />}
-              {!includeAudio && (
-                <>
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </>
-              )}
-            </svg>
-          </button>
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             <button
               type="button"
