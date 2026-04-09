@@ -38,6 +38,10 @@ interface ExportOptions {
   bitrate?: number;
   /** Optional caption text rendered in stroked MrBeast-style text above lyrics. */
   captionText?: string;
+  captionOptions?: {
+    style: "stroke" | "bar" | "pill" | "none";
+    position: "top" | "bottom";
+  };
   /** Optional audio to mux alongside video. When provided, output is an A/V MP4. */
   audioSlice?: {
     audioUrl: string;
@@ -178,34 +182,87 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
       // ── Render ──
       player.drawAtTime((options.startOffset ?? 0) + i / fps);
 
-      if (options.captionText) {
+      if (options.captionText && options.captionOptions?.style !== "none") {
         const ctx = canvas.getContext("2d");
         if (ctx) {
-          const fontSize = Math.round(height * 0.032);
+          const style = options.captionOptions?.style ?? "stroke";
+          const pos = options.captionOptions?.position ?? "bottom";
           const isPortrait = height > width;
           const isSquare = Math.abs(width - height) < 100;
-          const captionY = isPortrait
-            ? Math.round(height * 0.76)
-            : isSquare
-              ? Math.round(height * 0.80)
-              : Math.round(height * 0.80);
-          ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
-          ctx.textBaseline = "middle";
-          ctx.strokeStyle = "#000000";
-          ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.12));
-          ctx.lineJoin = "round";
-          ctx.fillStyle = "#ffffff";
+          const fontSize = Math.round(height * 0.032);
 
-          if (isPortrait) {
-            ctx.textAlign = "left";
-            const leftPad = Math.round(width * 0.08);
-            const maxW = Math.round(width * 0.77);
-            ctx.strokeText(options.captionText, leftPad, captionY, maxW);
-            ctx.fillText(options.captionText, leftPad, captionY, maxW);
-          } else {
-            ctx.textAlign = "center";
-            ctx.strokeText(options.captionText, width / 2, captionY, width - 80);
-            ctx.fillText(options.captionText, width / 2, captionY, width - 80);
+          const captionY = pos === "top"
+            ? Math.round(height * (isPortrait ? 0.12 : 0.10))
+            : isPortrait
+              ? Math.round(height * 0.76)
+              : isSquare
+                ? Math.round(height * 0.80)
+                : Math.round(height * 0.80);
+          ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
+          ctx.textBaseline = pos === "top" ? "top" : "middle";
+          ctx.lineJoin = "round";
+
+          const leftAligned = pos === "bottom" && isPortrait;
+          const leftPad = leftAligned ? Math.round(width * 0.06) : 0;
+          const maxW = leftAligned
+            ? Math.round(width * 0.76)
+            : Math.round(width * 0.80);
+          const textX = leftAligned ? leftPad : width / 2;
+          ctx.textAlign = leftAligned ? "left" : "center";
+
+          switch (style) {
+            case "bar": {
+              const metrics = ctx.measureText(options.captionText);
+              const textW = Math.min(metrics.width, maxW);
+              const padX = Math.round(fontSize * 0.5);
+              const padY = Math.round(fontSize * 0.35);
+              const rectX = leftAligned
+                ? textX - padX
+                : textX - textW / 2 - padX;
+              const rectY = captionY - fontSize / 2 - padY;
+              const rectW = textW + padX * 2;
+              const rectH = fontSize + padY * 2;
+
+              ctx.fillStyle = "rgba(0,0,0,0.7)";
+              const r = Math.round(fontSize * 0.2);
+              ctx.beginPath();
+              ctx.roundRect(rectX, rectY, rectW, rectH, r);
+              ctx.fill();
+
+              ctx.fillStyle = "#ffffff";
+              ctx.fillText(options.captionText, textX, captionY, maxW);
+              break;
+            }
+            case "pill": {
+              const metrics = ctx.measureText(options.captionText);
+              const textW = Math.min(metrics.width, maxW);
+              const padX = Math.round(fontSize * 0.6);
+              const padY = Math.round(fontSize * 0.3);
+              const rectX = leftAligned
+                ? textX - padX
+                : textX - textW / 2 - padX;
+              const rectY = captionY - fontSize / 2 - padY;
+              const rectW = textW + padX * 2;
+              const rectH = fontSize + padY * 2;
+
+              ctx.fillStyle = "#000000";
+              ctx.beginPath();
+              ctx.roundRect(rectX, rectY, rectW, rectH, rectH / 2);
+              ctx.fill();
+
+              ctx.fillStyle = "#ffffff";
+              ctx.fillText(options.captionText, textX, captionY, maxW);
+              break;
+            }
+            case "stroke":
+            default: {
+              ctx.strokeStyle = "#000000";
+              ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.12));
+              ctx.strokeText(options.captionText, textX, captionY, maxW);
+              ctx.fillStyle = "#ffffff";
+              ctx.fillText(options.captionText, textX, captionY, maxW);
+              break;
+            }
           }
         }
       }

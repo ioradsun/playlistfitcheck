@@ -102,6 +102,8 @@ export function ExportStudio({
   const [captionMode, setCaptionMode] = useState<"hook" | "custom">("hook");
   const [selectedHookIdx, setSelectedHookIdx] = useState(0);
   const [customCaption, setCustomCaption] = useState("");
+  const [captionStyle, setCaptionStyle] = useState<"stroke" | "bar" | "pill" | "none">("bar");
+  const [captionPos, setCaptionPos] = useState<"top" | "bottom">("bottom");
   const [platformIdx, setPlatformIdx] = useState(0);
   const [includeAudio, setIncludeAudio] = useState(true);
   const [exportStage, setExportStage] = useState<"ready" | "rendering" | "done" | "error">("ready");
@@ -141,26 +143,87 @@ export function ExportStudio({
 
   const totalVotes = (hookVoteCounts ?? []).reduce((sum, n) => sum + n, 0);
 
-  const captionStyle = useMemo<CSSProperties>(() => {
-    const positions = [
-      { bottom: "22%", left: "8%", right: "20%", textAlign: "left" as const },
-      { bottom: "18%", left: "8%", right: "8%", textAlign: "center" as const },
-      { bottom: "18%", left: "10%", right: "10%", textAlign: "center" as const },
-    ];
-    return {
+  const captionCss = useMemo<CSSProperties>(() => {
+    if (captionStyle === "none" || !activeCaption) return { display: "none" };
+
+    const isPortrait = platformIdx === 0;
+    const isLandscape = platformIdx === 2;
+
+    const posStyles: CSSProperties = captionPos === "top"
+      ? {
+        top: isPortrait ? "12%" : "8%",
+        bottom: "auto",
+        left: isPortrait ? "6%" : "8%",
+        right: isPortrait ? "6%" : "8%",
+      }
+      : {
+        top: "auto",
+        bottom: isPortrait ? "22%" : "16%",
+        left: isPortrait ? "6%" : "10%",
+        right: isPortrait ? "18%" : "10%",
+      };
+
+    const base: CSSProperties = {
       position: "absolute",
-      ...positions[platformIdx],
-      fontSize: platformIdx === 2 ? 11 : 13,
+      ...posStyles,
+      fontSize: isLandscape ? 10 : 12,
       fontWeight: 800,
-      color: "#ffffff",
-      textShadow: "0 1px 4px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.4)",
       fontFamily: '"SF Pro Display", -apple-system, sans-serif',
       zIndex: 2,
-      lineHeight: 1.3,
+      lineHeight: 1.4,
       wordBreak: "break-word",
       pointerEvents: "none",
+      textAlign: "center",
+      maxWidth: isPortrait ? "88%" : "70%",
+      marginLeft: "auto",
+      marginRight: "auto",
+      left: 0,
+      right: 0,
     };
-  }, [platformIdx]);
+
+    if (captionPos === "bottom" && isPortrait) {
+      base.textAlign = "left";
+      base.left = "6%";
+      base.right = "18%";
+      base.maxWidth = "none";
+      base.marginLeft = undefined;
+      base.marginRight = undefined;
+    }
+
+    switch (captionStyle) {
+      case "stroke":
+        return {
+          ...base,
+          color: "#ffffff",
+          WebkitTextStroke: "0.5px rgba(0,0,0,0.8)",
+          textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5)",
+          paintOrder: "stroke fill",
+        };
+      case "bar":
+        return {
+          ...base,
+          color: "#ffffff",
+          background: "rgba(0,0,0,0.7)",
+          borderRadius: 6,
+          padding: "6px 12px",
+          textShadow: "none",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
+        };
+      case "pill":
+        return {
+          ...base,
+          color: "#ffffff",
+          background: "#000000",
+          borderRadius: 999,
+          padding: "5px 14px",
+          textShadow: "none",
+          display: "inline-block",
+        };
+      default:
+        return { display: "none" };
+    }
+  }, [captionStyle, captionPos, activeCaption, platformIdx]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -169,6 +232,8 @@ export function ExportStudio({
     setExportProgress(0);
     setOpenPanel(null);
     setDownloadBlob(null);
+    setCaptionStyle("bar");
+    setCaptionPos("bottom");
     setSelectedMomentIdx(1);
     setMobileTab("config");
   }, [isOpen]);
@@ -264,22 +329,25 @@ export function ExportStudio({
     };
   }, [isOpen, exportStage, getPlayer, isMobile, mobileTab]);
 
-  // Save player dimensions on open so we can restore on close.
-  // Do NOT resize the player to export resolution for the preview —
-  // that triggers an expensive scene recompile (compileScene + buildBgCache +
-  // particle reset) at 1080×1920 just to display a 220×390 preview canvas.
-  // The RAF loop below blits the player's live canvas at whatever its current
-  // viewport size is — drawImage handles the downscale.
-  // The export pipeline (handleDownload) calls player.resize() only when the
-  // user actually clicks Download.
+  // Resize player to PREVIEW buffer dimensions — NOT export resolution.
+  // compileScene() uses this.width/this.height for all text layout (font sizes,
+  // line positions, word wrapping). Without resize, the player stays at its
+  // FitTab embed size (~360×480, 3:4 ratio) but the preview shows 9:16.
+  // Text is compiled for the wrong aspect ratio → oversized, overlapping lyrics.
+  //
+  // PREVIEW_BUFFERS (360×640 for 9:16) gives the correct aspect ratio for text
+  // layout while being 9× cheaper than full export resolution (1080×1920).
+  // The export pipeline handles full-res resize via setupExportResolution().
   useEffect(() => {
     if (!isOpen) return;
     const player = getPlayer();
     if (!player) return;
     if (!prevSizeRef.current) {
-      prevSizeRef.current = { w: player.currentWidth, h: player.currentHeight };
+      prevSizeRef.current = { w: player.width, h: player.height };
     }
-  }, [getPlayer, isOpen]);
+    const buf = PREVIEW_BUFFERS[platformIdx];
+    player.resize(buf.w, buf.h);
+  }, [platformIdx, getPlayer, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -350,6 +418,12 @@ export function ExportStudio({
         songDuration: Math.max(0, endSec - startSec),
         startOffset: startSec,
         captionText: activeCaption.trim() || undefined,
+        captionOptions: activeCaption.trim()
+          ? {
+            style: captionStyle,
+            position: captionPos,
+          }
+          : undefined,
         audioSlice: includeAudio && audioUrl
           ? {
             audioUrl,
@@ -586,6 +660,87 @@ export function ExportStudio({
             </div>
           )}
         </SelectorCard>
+
+        {(activeCaption && captionMode !== "hook") || (captionMode === "hook" && selectedHookIdx < hooks.length) ? (
+          <div style={{ padding: "0 16px" }}>
+            <div
+              style={{
+                fontSize: 9,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.2)",
+                fontFamily: '"SF Mono", monospace',
+                marginBottom: 6,
+              }}
+            >
+              Style
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["stroke", "bar", "pill", "none"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setCaptionStyle(s)}
+                  style={{
+                    flex: 1,
+                    height: 32,
+                    borderRadius: 8,
+                    border: captionStyle === s
+                      ? "1px solid rgba(68,210,126,0.5)"
+                      : "1px solid rgba(255,255,255,0.08)",
+                    background: captionStyle === s
+                      ? "rgba(68,210,126,0.08)"
+                      : "transparent",
+                    color: captionStyle === s
+                      ? "#44d27e"
+                      : "rgba(255,255,255,0.4)",
+                    fontFamily: '"SF Mono", monospace',
+                    fontSize: 9,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {captionStyle !== "none" && (
+              <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                {(["top", "bottom"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setCaptionPos(p)}
+                    style={{
+                      flex: 1,
+                      height: 28,
+                      borderRadius: 6,
+                      border: captionPos === p
+                        ? "1px solid rgba(68,210,126,0.4)"
+                        : "1px solid rgba(255,255,255,0.06)",
+                      background: captionPos === p
+                        ? "rgba(68,210,126,0.06)"
+                        : "transparent",
+                      color: captionPos === p
+                        ? "#44d27e"
+                        : "rgba(255,255,255,0.3)",
+                      fontFamily: '"SF Mono", monospace',
+                      fontSize: 9,
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
 
         <SelectorCard
           label="Caption"
@@ -856,7 +1011,38 @@ export function ExportStudio({
           }}
         >
           <canvas ref={previewCanvasRef} style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }} />
-          {activeCaption && <div style={captionStyle}>{activeCaption}</div>}
+          {activeCaption && captionStyle !== "none" && (
+            captionStyle === "pill" ? (
+              <div
+                style={{
+                  position: "absolute",
+                  ...(captionCss.top !== undefined ? { top: captionCss.top } : {}),
+                  ...(captionCss.bottom !== undefined ? { bottom: captionCss.bottom } : {}),
+                  left: captionCss.left ?? 0,
+                  right: captionCss.right ?? 0,
+                  display: "flex",
+                  justifyContent: captionCss.textAlign === "left" ? "flex-start" : "center",
+                  pointerEvents: "none",
+                  zIndex: 2,
+                }}
+              >
+                <span
+                  style={{
+                    ...captionCss,
+                    position: "relative",
+                    top: "auto",
+                    bottom: "auto",
+                    left: "auto",
+                    right: "auto",
+                  }}
+                >
+                  {activeCaption}
+                </span>
+              </div>
+            ) : (
+              <div style={captionCss}>{activeCaption}</div>
+            )
+          )}
         </div>
       </div>
       {isMobile && exportStage === "ready" && (
