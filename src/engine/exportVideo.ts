@@ -2,7 +2,7 @@
  * exportVideo.ts — WebCodecs + mp4-muxer based video export.
  *
  * Renders frames faster than real-time and outputs native MP4 (H.264).
- * Video-only for V1 — users add audio in TikTok/Instagram/YouTube.
+ * Supports video-only or video+audio (AAC) export via WebCodecs.
  *
  * Optimizations over V1:
  * ───────────────────────
