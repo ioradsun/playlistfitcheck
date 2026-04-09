@@ -688,7 +688,8 @@ class DynamiteWickBar {
   private frame = 0;
   private lastBeatIndex = -1;
   // Physics: per-pixel velocity for ember glow pulsing
-  private emberHeat: Float32Array;
+  private burstHeat: Float32Array;
+  private baselineHeat: Float32Array;
   // Waveform
   private waveform: Float32Array;
   private waveformSmooth: Float32Array;
@@ -709,7 +710,8 @@ class DynamiteWickBar {
     this.dwbCanvas.height = DWB_H * this._dpr;
     this.dwbCtx = this.dwbCanvas.getContext('2d')!;
     this.dwbCtx.scale(this._dpr, this._dpr);
-    this.emberHeat = new Float32Array(DWB_W).fill(0);
+    this.burstHeat = new Float32Array(DWB_W).fill(0);
+    this.baselineHeat = new Float32Array(DWB_W).fill(0);
     this.waveform = new Float32Array(DWB_W).fill(0.15);
     this.waveformSmooth = new Float32Array(DWB_W).fill(0.15);
     this.setAccent(accentHex);
@@ -866,10 +868,45 @@ class DynamiteWickBar {
     }
   }
 
-  receiveFire(): void {
+  setBaselineFromFires(
+    fires: Array<{ time_sec: number; hold_ms: number }>,
+    durationSec: number,
+  ): void {
+    this.baselineHeat.fill(0);
+    if (!fires.length || durationSec <= 0) return;
+
+    for (const fire of fires) {
+      const px = Math.min(
+        this._W - 1,
+        Math.max(0, Math.floor((fire.time_sec / durationSec) * this._W)),
+      );
+      const weight = fire.hold_ms < 300 ? 1 : fire.hold_ms < 1000 ? 2 : fire.hold_ms < 3000 ? 4 : 8;
+      const radius = 6;
+      for (let i = Math.max(0, px - radius); i <= Math.min(this._W - 1, px + radius); i++) {
+        const dist = Math.abs(i - px);
+        const falloff = 1 - dist / (radius + 1);
+        this.baselineHeat[i] += weight * falloff;
+      }
+    }
+
+    let maxVal = 0;
+    for (let i = 0; i < this._W; i++) {
+      if (this.baselineHeat[i] > maxVal) maxVal = this.baselineHeat[i];
+    }
+    if (maxVal > 0) {
+      for (let i = 0; i < this._W; i++) {
+        this.baselineHeat[i] /= maxVal;
+      }
+    }
+  }
+
+  receiveFire(holdRadius: number = 15): void {
     const px = Math.floor(this._lastProgress * this._W);
-    for (let i = Math.max(0, px - 15); i <= Math.min(this._W - 1, px + 15); i++) {
-      this.emberHeat[i] = Math.min(1, this.emberHeat[i] + 0.5);
+    const radius = Math.min(60, holdRadius);
+    for (let i = Math.max(0, px - radius); i <= Math.min(this._W - 1, px + radius); i++) {
+      const dist = Math.abs(i - px);
+      const falloff = 1 - dist / (radius + 1);
+      this.burstHeat[i] = Math.min(1, this.burstHeat[i] + 0.5 * falloff);
     }
     this._manualHeatDecayTicks = 30;
 
@@ -926,8 +963,10 @@ class DynamiteWickBar {
     this.flamePhase += 0.2 + energy * 0.3;
 
     if (this._manualHeatDecayTicks > 0) {
+      const decayRate = this._manualHeatDecayTicks > 20 ? 0.92 : 0.97;
       for (let i = 0; i < this._W; i++) {
-        this.emberHeat[i] *= 0.94;
+        this.burstHeat[i] *= decayRate;
+        if (this.burstHeat[i] < 0.005) this.burstHeat[i] = 0;
       }
       this._manualHeatDecayTicks -= 1;
     }
@@ -940,6 +979,14 @@ class DynamiteWickBar {
       this._renderContinuousFuse(ctx, W, H, baseY, maxPeakH, progress, energy, pulse, hitStrength, beatPhase, beatIndex, hitType, brightness, isDownbeat, isNewBeat);
     }
     this.lastBeatIndex = beatIndex;
+  }
+
+  private _composeHeatAt(x: number): { base: number; burst: number; heat: number; burstRatio: number } {
+    const base = this.baselineHeat[x] || 0;
+    const burst = this.burstHeat[x] || 0;
+    const heat = Math.min(1, base + burst);
+    const burstRatio = burst / Math.max(0.01, heat);
+    return { base, burst, heat, burstRatio };
   }
 
   private _renderContinuousFuse(
@@ -961,8 +1008,7 @@ class DynamiteWickBar {
   ): void {
     const px = Math.max(0, Math.min(W - 1, Math.floor(progress * W)));
     const wf = this.waveformSmooth;
-    const heat = this.emberHeat;
-    const accentBoost = 0.75 + brightness * 0.35 + beatPhase * 0.1;
+    const heat = this.burstHeat;
 
     if (pulse > 0.3) {
       for (let i = Math.max(0, px - 20); i <= px; i++) {
@@ -971,10 +1017,6 @@ class DynamiteWickBar {
     }
     for (let i = 0; i < W; i++) {
       heat[i] *= 0.975;
-      const dist = Math.abs(i - px);
-      if (i <= px && dist < 80) {
-        heat[i] = Math.max(heat[i], Math.max(0, 1 - dist / 80) * 0.5);
-      }
     }
     if (hitType === 'bass' && hitStrength > 0.3) {
       for (let i = 0; i <= px; i++) {
@@ -1031,16 +1073,24 @@ class DynamiteWickBar {
       ctx.fill();
 
       for (let x = 0; x <= px; x++) {
-        const h = heat[x] || 0;
+        const { heat: h, burst, burstRatio } = this._composeHeatAt(x);
         if (h < 0.02) continue;
         const peakH = getPeakH(x);
         if (peakH < 1) continue;
-        const temp = h;
         const [ar, ag, ab] = this.accent;
-        const r = Math.min(255, Math.floor(Math.min(1, temp * 2) * 255 * 0.7 + ar * 0.3));
-        const g = Math.min(255, Math.floor((80 + 140 * Math.max(0, temp - 0.3)) * 0.65 + ag * 0.35 * accentBoost));
-        const b = Math.min(255, Math.floor((20 * Math.max(0, temp - 0.6)) * 0.4 + ab * 0.18));
-        const a = h * 0.7;
+        const r = Math.min(255, Math.floor(
+          (1 - burstRatio) * (Math.min(1, h * 1.5) * 200 + ar * 0.3) +
+          burstRatio * 255
+        ));
+        const g = Math.min(255, Math.floor(
+          (1 - burstRatio) * (40 + h * 60 + ag * 0.2) +
+          burstRatio * (180 + burst * 75)
+        ));
+        const b = Math.min(255, Math.floor(
+          (1 - burstRatio) * (10 + ab * 0.1) +
+          burstRatio * (80 + burst * 40)
+        ));
+        const a = Math.min(0.95, h * 0.8);
         const glowGrad = ctx.createLinearGradient(x, baseY - peakH, x, baseY);
         glowGrad.addColorStop(0, `rgba(${r},${g},${b},${a * 0.9})`);
         glowGrad.addColorStop(0.6, `rgba(${r},${Math.floor(g * 0.6)},${b},${a * 0.5})`);
@@ -1090,7 +1140,6 @@ class DynamiteWickBar {
     const GAP = 3;
     const segments = this._momentSegments;
     const wf = this.waveformSmooth;
-    const maxFire = Math.max(1, ...segments.map((s) => s.fireCount));
     let activePx = Math.max(0, Math.min(W - 1, Math.floor(progress * W)));
 
     for (let i = 0; i < segments.length; i++) {
@@ -1102,11 +1151,23 @@ class DynamiteWickBar {
 
       const isPast = seg.endRatio < progress;
       const isActive = seg.startRatio <= progress && progress < seg.endRatio;
+      let segBaseHeat = 0;
+      let segBurstHeat = 0;
+      let segHeat = 0;
+      let sampleCount = 0;
+      for (let x = x0; x <= x1; x++) {
+        const composite = this._composeHeatAt(x);
+        segBaseHeat += composite.base;
+        segBurstHeat += composite.burst;
+        segHeat += composite.heat;
+        sampleCount += 1;
+      }
+      const avgBaseHeat = sampleCount > 0 ? segBaseHeat / sampleCount : 0;
+      const avgBurstHeat = sampleCount > 0 ? segBurstHeat / sampleCount : 0;
+      const avgHeat = sampleCount > 0 ? segHeat / sampleCount : 0;
+      const normalizedHeat = Math.min(1, avgHeat);
 
       if (isPast) {
-        const normalizedHeat = maxFire > 0 ? seg.fireCount / maxFire : 0;
-
-        // ── TIER 1: Zero fires — dark ash ──
         if (normalizedHeat === 0) {
           ctx.save();
           ctx.globalAlpha = 0.08;
@@ -1121,9 +1182,7 @@ class DynamiteWickBar {
           ctx.fillStyle = `rgba(80,75,70,0.3)`;
           ctx.fill();
           ctx.restore();
-        }
-        // ── TIER 2: Low fires (< 0.25 normalized) — faint warm core ──
-        else if (normalizedHeat < 0.25) {
+        } else if (normalizedHeat < 0.25) {
           const peakScale = 0.40 + normalizedHeat * 0.2;
           ctx.save();
           ctx.globalAlpha = 0.15 + normalizedHeat * 0.2;
@@ -1138,9 +1197,7 @@ class DynamiteWickBar {
           ctx.fillStyle = `rgba(${r},${Math.floor(g * 0.5)},${Math.floor(b * 0.2)},0.3)`;
           ctx.fill();
           ctx.restore();
-        }
-        // ── TIER 3: Medium fires (0.25 - 0.65) — visible amber glow ──
-        else if (normalizedHeat < 0.65) {
+        } else if (normalizedHeat < 0.65) {
           const peakScale = 0.50 + normalizedHeat * 0.3;
           ctx.save();
           ctx.globalAlpha = 0.3 + normalizedHeat * 0.3;
@@ -1165,9 +1222,7 @@ class DynamiteWickBar {
           ctx.fillStyle = `rgba(255,200,60,0.4)`;
           ctx.fill();
           ctx.restore();
-        }
-        // ── TIER 4: High fires (0.65 - 0.95) — radiating amber ──
-        else if (normalizedHeat < 0.95) {
+        } else if (normalizedHeat < 0.95) {
           const peakScale = 0.65 + normalizedHeat * 0.25;
           ctx.save();
           ctx.globalAlpha = 0.5 + normalizedHeat * 0.3;
@@ -1192,9 +1247,7 @@ class DynamiteWickBar {
           ctx.fillStyle = `rgba(255,220,80,0.5)`;
           ctx.fill();
           ctx.restore();
-        }
-        // ── TIER 5: Peak moment (highest fire count, > 0.95) — white-warm core ──
-        else {
+        } else {
           const breathPhase = Math.sin(this.frame * 0.05) * 0.05;
           const peakScale = 0.75 + breathPhase;
           ctx.save();
@@ -1224,9 +1277,11 @@ class DynamiteWickBar {
         const localProgress = (progress - seg.startRatio) / Math.max(0.001, seg.endRatio - seg.startRatio);
         const px = x0 + Math.floor(localProgress * segW);
         activePx = px;
+        const burstRatio = avgBurstHeat / Math.max(0.01, avgHeat);
+        const activeAlpha = Math.min(0.8, 0.35 + normalizedHeat * 0.4);
 
         ctx.save();
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.2 + avgBaseHeat * 0.4;
         ctx.beginPath();
         ctx.moveTo(Math.max(px, x0), baseY);
         for (let x = Math.max(px, x0); x <= x1; x++) {
@@ -1235,12 +1290,12 @@ class DynamiteWickBar {
         }
         ctx.lineTo(x1, baseY);
         ctx.closePath();
-        ctx.fillStyle = `rgba(${this.accent[0]},${this.accent[1]},${this.accent[2]},0.15)`;
+        ctx.fillStyle = `rgba(${this.accent[0]},${Math.floor(this.accent[1] * 0.6)},${Math.floor(this.accent[2] * 0.2)},0.2)`;
         ctx.fill();
         ctx.restore();
 
         ctx.save();
-        ctx.globalAlpha = 0.6;
+        ctx.globalAlpha = activeAlpha;
         ctx.beginPath();
         ctx.moveTo(x0, baseY);
         for (let x = x0; x <= px; x++) {
@@ -1249,7 +1304,10 @@ class DynamiteWickBar {
         }
         ctx.lineTo(px, baseY);
         ctx.closePath();
-        const [r, g, b] = this.accent;
+        const [ar, ag, ab] = this.accent;
+        const r = Math.min(255, Math.floor((1 - burstRatio) * (Math.min(1, avgHeat * 1.5) * 200 + ar * 0.3) + burstRatio * 255));
+        const g = Math.min(255, Math.floor((1 - burstRatio) * (40 + avgHeat * 60 + ag * 0.2) + burstRatio * (180 + avgBurstHeat * 75)));
+        const b = Math.min(255, Math.floor((1 - burstRatio) * (10 + ab * 0.1) + burstRatio * (80 + avgBurstHeat * 40)));
         ctx.fillStyle = `rgba(${r},${Math.floor(g * 0.7)},${Math.floor(b * 0.4)},0.5)`;
         ctx.fill();
         ctx.restore();
@@ -4453,9 +4511,16 @@ export class LyricDancePlayer {
     }
   }
 
-  public fireMoment(): void {
+  public fireMoment(elapsedMs: number = 0): void {
     if (!this._globalWickBar) return;
-    this._globalWickBar.receiveFire();
+    this._globalWickBar.receiveFire(Math.min(60, 15 + elapsedMs / 50));
+  }
+
+  public setFireBaseline(
+    fires: Array<{ time_sec: number; hold_ms: number }>,
+    durationSec: number,
+  ): void {
+    this._globalWickBar?.setBaselineFromFires(fires, durationSec);
   }
 
   public startContinuousFire(): void {
