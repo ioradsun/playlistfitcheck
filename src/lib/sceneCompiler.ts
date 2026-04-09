@@ -11,7 +11,18 @@ import {
   type SongMotionIdentity,
 } from "@/engine/MotionIdentity";
 import { getEffectTier } from "@/engine/timeTiers";
-import { resolveTypographyFromDirection } from "@/lib/fontResolver";
+import {
+  resolveTypographyFromDirection,
+  getFontNamesForPreload,
+  deriveSectionTypography,
+  getDensityBudget,
+  WEIGHT_MAP,
+  TRACKING_MAP,
+  DEFAULT_SECTION_BEHAVIOR,
+  type ResolvedTypography,
+  type SectionBehavior,
+  type HeroStyle,
+} from "@/lib/fontResolver";
 
 
 export type LineBeatMap = {
@@ -67,6 +78,8 @@ interface TypographyProfile {
   textTransform: 'none' | 'uppercase';
   letterSpacing: number;
   heroWeight: number;
+  accentFontFamily: string | null;
+  heroStyle: HeroStyle;
 }
 
 export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
@@ -409,7 +422,7 @@ function assignPresentationModes(
   }
 }
 
-export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; color: string; isHeroWord?: boolean; isAdlib?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; }
+export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; letterSpacing?: number; color: string; isHeroWord?: boolean; isAdlib?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; heroScore?: number; }
 export interface CompiledPhraseGroup {
   lineIndex: number;
   groupIndex: number;
@@ -633,14 +646,32 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
   const beats = payload.beat_grid?.beats ?? [];
 
-  const resolvedTypo = resolveTypographyFromDirection(payload.cinematic_direction);
+  const resolvedTypo: ResolvedTypography = resolveTypographyFromDirection(payload.cinematic_direction);
   const baseTypography: TypographyProfile = {
     fontFamily: resolvedTypo.fontFamily.replace(/"/g, '').split(',')[0].trim(),
     fontWeight: resolvedTypo.fontWeight,
     textTransform: resolvedTypo.textTransform,
     letterSpacing: resolvedTypo.letterSpacing,
     heroWeight: resolvedTypo.heroWeight,
+    accentFontFamily: resolvedTypo.accentFontFamily ? resolvedTypo.accentFontFamily.replace(/"/g, '').split(',')[0].trim() : null,
+    heroStyle: resolvedTypo.heroStyle,
   };
+
+  const cd = payload.cinematic_direction as any;
+  const sections = cd?.sections ?? [];
+  const sectionTypoMap: SectionBehavior[] = sections.map((section: any) =>
+    deriveSectionTypography(section?.role, section?.avgEnergy ?? 0.5, resolvedTypo),
+  );
+
+  console.info('[sceneCompiler] typography:', {
+    source: resolvedTypo._meta.source,
+    primary: resolvedTypo._meta.primaryFont,
+    accent: resolvedTypo._meta.accentFont,
+    heroStyle: resolvedTypo.heroStyle,
+    system: resolvedTypo.system,
+    repaired: resolvedTypo._meta.repaired,
+    preloadFonts: getFontNamesForPreload(resolvedTypo),
+  });
 
   // Create measurement context
   let measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -702,7 +733,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     // maxLines resolved by resolveLayout: <4 words = 1 line, 4+ = auto wrap
     const maxLines: number | undefined = (group as any)._resolvedMaxLines;
 
-    const targetFill = 0.88;
+    const secIdx = getSectionForTime(group.start);
+    const secTypo = sectionTypoMap[secIdx] ?? DEFAULT_SECTION_BEHAVIOR;
+    const scaleMultiplier = secTypo.scale === 'large' ? 1.12 : secTypo.scale === 'small' ? 0.82 : 1.0;
+    const targetFill = 0.88 * scaleMultiplier;
 
     const layout = fitTextToViewport(
       measureCtx as MeasureContext,
@@ -830,15 +864,39 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const groupLayout = groupLayouts.get(key);
     const positions = groupLayout?.positions ?? [];
     const groupFontSize = groupLayout?.fontSize ?? 56;
+    const secIdx = getSectionForTime(group.start);
+    const secTypo = sectionTypoMap[secIdx] ?? DEFAULT_SECTION_BEHAVIOR;
+    const secDensityBudget = getDensityBudget(secTypo.accentDensity);
+
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
-      const elClass = (wm.directive as any)?.elementalClass
-        ?? null;
+      const holdDuration = Math.max(0, wm.end - wm.start);
+      const isLongHold = holdDuration >= 0.5;
+      const isDirectiveHero = wm.isHeroWord === true || (wm.directive as any)?.isolation === true;
+      const isHookWord = Boolean(matchPhrase?.isChorus);
+      const heroScore =
+        (isDirectiveHero ? 0.4 : 0) +
+        (Math.min(1, holdDuration / 0.8) * 0.3) +
+        (isHookWord ? 0.2 : 0) +
+        (computeEmphasisFromDuration(holdDuration) * 0.1);
+      const isHero = heroScore >= 0.35 || isLongHold || isDirectiveHero;
+
+      const sectionWeight = WEIGHT_MAP[secTypo.weight] ?? resolvedTypo.fontWeight;
+      const wordWeight = isHero ? Math.max(sectionWeight, resolvedTypo.heroWeight) : sectionWeight;
+
+      let wordFontFamily = resolvedTypo.fontFamily.replace(/"/g, '').split(',')[0].trim();
+      if (isHero && resolvedTypo.heroStyle === 'accent-font' && resolvedTypo.accentFontFamily) {
+        wordFontFamily = resolvedTypo.accentFontFamily.replace(/"/g, '').split(',')[0].trim();
+      }
+
+      const transformedText = secTypo.transform === 'uppercase'
+        ? wm.word.replace(/[\u2018\u2019]/g, "'").toUpperCase()
+        : wm.word.replace(/[\u2018\u2019]/g, "'");
+      const wordTracking = TRACKING_MAP[secTypo.tracking] ?? resolvedTypo.letterSpacing;
+
       const base: CompiledWord = {
         id: `${group.lineIndex}-${group.groupIndex}-${wi}`,
-        text: baseTypography.textTransform === 'uppercase'
-          ? wm.word.replace(/[\u2018\u2019]/g, "'").toUpperCase()
-          : wm.word.replace(/[\u2018\u2019]/g, "'"),
+        text: transformedText,
         clean: wm.clean || wm.word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(),
         wordIndex: wi,
         layoutX: pos.x,
@@ -846,20 +904,46 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         baseFontSize: groupFontSize,
         layoutWidth: pos.width,
         wordStart: snapToBeat(wm.start, beats),
-        fontWeight: (wm.isHeroWord || (Math.max(0, wm.end - wm.start) >= 0.5)) ? baseTypography.heroWeight : baseTypography.fontWeight,
-        fontFamily: baseTypography.fontFamily,
-        isHeroWord: wm.isHeroWord === true
-          || (wm.directive as any)?.isolation === true
-          || (Math.max(0, wm.end - wm.start) >= 0.5),
+        fontWeight: wordWeight,
+        fontFamily: wordFontFamily,
+        letterSpacing: wordTracking,
+        isHeroWord: isHero,
         isAdlib: wm.isAdlib === true,
         isAnchor: wi === group.anchorWordIdx,
         color: '#ffffff',
         isFiller: isFillerWord(wm.word),
-        emphasisLevel: computeEmphasisFromDuration(wm.end - wm.start),
-        wordDuration: Math.max(0, wm.end - wm.start),
+        emphasisLevel: computeEmphasisFromDuration(holdDuration),
+        wordDuration: holdDuration,
+        heroScore,
       };
       return [base];
     });
+
+    if (resolvedTypo.accentFontFamily && resolvedTypo.heroStyle === 'accent-font') {
+      const accentWords = wordsCompiled
+        .map((word, idx) => ({ word, idx }))
+        .filter(({ word }) => word.fontFamily !== baseTypography.fontFamily);
+
+      if (accentWords.length > secDensityBudget.maxAccentWordsPerPhrase) {
+        accentWords
+          .sort((a, b) => (b.word.heroScore ?? 0) - (a.word.heroScore ?? 0))
+          .slice(secDensityBudget.maxAccentWordsPerPhrase)
+          .forEach(({ word }) => {
+            word.fontFamily = baseTypography.fontFamily;
+            word.fontWeight = WEIGHT_MAP[secTypo.weight] ?? resolvedTypo.fontWeight;
+          });
+      }
+
+      for (let k = 1; k < wordsCompiled.length; k += 1) {
+        if (
+          wordsCompiled[k].fontFamily !== baseTypography.fontFamily &&
+          wordsCompiled[k - 1].fontFamily !== baseTypography.fontFamily
+        ) {
+          wordsCompiled[k].fontFamily = baseTypography.fontFamily;
+          wordsCompiled[k].fontWeight = WEIGHT_MAP[secTypo.weight] ?? resolvedTypo.fontWeight;
+        }
+      }
+    }
     return {
       lineIndex: group.lineIndex,
       groupIndex: group.groupIndex,
