@@ -199,7 +199,7 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
                 ? Math.round(height * 0.80)
                 : Math.round(height * 0.80);
           ctx.font = `800 ${fontSize}px "SF Pro Display", "Helvetica Neue", -apple-system, sans-serif`;
-          ctx.textBaseline = pos === "top" ? "top" : "middle";
+          ctx.textBaseline = "middle";
           ctx.lineJoin = "round";
 
           const leftAligned = pos === "bottom" && isPortrait;

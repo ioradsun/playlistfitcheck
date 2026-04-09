@@ -1837,6 +1837,7 @@ export class LyricDancePlayer {
   /** Audio is waiting for scene compilation to finish before playing */
   private _audioDeferredUntilReady = false;
   private _playPromise: Promise<void> | null = null;
+  private _exportFrameCount?: number;
   private options?: {
     bootMode?: "minimal" | "full";
     preloadedImages?: HTMLImageElement[];
@@ -2475,6 +2476,7 @@ export class LyricDancePlayer {
     this.displayWidth = this.width;
     this.displayHeight = this.height;
     this.isExporting = true;
+    this._exportFrameCount = undefined;
 
     // Export resolution IS the target pixel resolution — DPR must be 1.0
     // Otherwise a 2× display creates a 2160×3840 backing store for a 1080×1920 export
@@ -2490,6 +2492,13 @@ export class LyricDancePlayer {
     // word wrapping, row stacking, and layout positions are correct for the
     // export resolution, not the live viewport.
     this.resize(width, height);
+
+    // Force synchronous bg cache build — resize() debounces it and export starts immediately.
+    if (this._bgCacheDebounce) {
+      clearTimeout(this._bgCacheDebounce);
+      this._bgCacheDebounce = null;
+    }
+    this.buildBgCache();
     // Re-acquire context with willReadFrequently for fast pixel readback
     this.ctx = this.canvas.getContext('2d', {
       willReadFrequently: true,
@@ -2511,17 +2520,56 @@ export class LyricDancePlayer {
       this._buildChunkCacheFromScene(this.compiledScene);
       this._markCompiledViewport(width, height);
     }
-    if (!this.compiledScene) {
-      console.warn('[LyricDancePlayer] setupExportResolution: no compiledScene after resize — export may have blank frames');
+    // Last resort: if payload doesn't exist but raw data does, rebuild from source data.
+    if (!this.payload && this.data) {
+      console.warn('[LyricDancePlayer] EXPORT: building payload from raw data');
+      this.payload = this.buildScenePayload();
+      if (this.payload && !this.compiledScene) {
+        this.compiledScene = compileScene(this.payload, { viewportWidth: width, viewportHeight: height });
+        this._buildChunkCacheFromScene(this.compiledScene);
+        this._markCompiledViewport(width, height);
+      }
+      if (!this.fullModeEnabled && this.payload) {
+        this.enableFullVisualMode();
+      }
     }
     if (!this.fullModeEnabled && this.payload) {
       this.enableFullVisualMode();
     }
+    this.emojiStreamEnabled = true;
 
     // Reset phrase cursor so export starts clean
     this._activeGroupCursor = 0;
 
     this.seek(this.songStartSec);
+
+    // ── Export readiness diagnostic ──
+    if (!this.compiledScene) {
+      console.error('[LyricDancePlayer] EXPORT: compiledScene is NULL — lyrics will not render.', {
+        payload: !!this.payload,
+        fullMode: this.fullModeEnabled,
+        width,
+        height,
+      });
+    }
+    if (!this.payload) {
+      console.error('[LyricDancePlayer] EXPORT: payload is NULL — nothing to render.', {
+        compiledScene: !!this.compiledScene,
+        data: !!this.data,
+      });
+    }
+    console.info('[LyricDancePlayer] EXPORT: ready', {
+      width: this.width,
+      height: this.height,
+      dpr: this.dpr,
+      effectiveDpr: this._effectiveDpr,
+      compiledScene: !!this.compiledScene,
+      payload: !!this.payload,
+      fullMode: this.fullModeEnabled,
+      chunks: this.compiledScene?.chunks?.length ?? 0,
+      songStart: this.songStartSec,
+      songEnd: this.songEndSec,
+    });
   }
 
   drawAtTime(tSec: number): void {
@@ -2571,6 +2619,23 @@ export class LyricDancePlayer {
     }
 
     const frame = this.evaluateFrame(clamped);
+    if (this.isExporting && this._exportFrameCount === undefined) {
+      this._exportFrameCount = 0;
+    }
+    if (this.isExporting) {
+      this._exportFrameCount += 1;
+      if (this._exportFrameCount === 1) {
+        console.info('[LyricDancePlayer] EXPORT first frame:', {
+          tSec,
+          timeSec,
+          clamped,
+          frame: !!frame,
+          chunksVisible: frame?.chunks?.filter((chunk) => chunk.visible)?.length ?? 0,
+          compiledScene: !!this.compiledScene,
+          payload: !!this.payload,
+        });
+      }
+    }
 
     // Camera rig — must feed section + energy BEFORE update, same as tick()
     {
@@ -2621,6 +2686,7 @@ export class LyricDancePlayer {
 
   teardownExportResolution(): void {
     this.isExporting = false;
+    this._exportFrameCount = undefined;
     this.dpr = this._exportSavedDpr; // restore display DPR
     this._textVerticalBias = this._exportSavedVerticalBias; // restore live overlay bias
     this.resize(this.displayWidth, this.displayHeight); // recompile scene for live viewport
@@ -2666,7 +2732,7 @@ export class LyricDancePlayer {
 
     // ═══ RESPONSIVE: always recompile on resize ═══
     // Layout is in viewport pixels — any size change needs recompile.
-    if (this.payload && this.compiledScene) {
+    if (this.payload) {
       const sizeChanged = w !== prevCompiledW || h !== prevCompiledH;
       if (sizeChanged) {
         if (
@@ -4386,9 +4452,9 @@ export class LyricDancePlayer {
   }
 
   private drawWatermark(): void {
-    const margin = Math.round(this.width * 0.022);
-    const padX = Math.round(this.width * 0.014);
-    const padY = Math.round(this.width * 0.008);
+    const margin = Math.max(10, Math.round(this.width * 0.022));
+    const padX = Math.max(6, Math.round(this.width * 0.014));
+    const padY = Math.max(4, Math.round(this.width * 0.008));
     const text = "♥ tools.FMLY";
     const fontSize = Math.max(12, Math.round(this.width * 0.022));
     const font = `400 ${fontSize}px "Space Mono", "Geist Mono", monospace`;
