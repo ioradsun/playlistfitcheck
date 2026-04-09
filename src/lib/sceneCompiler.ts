@@ -663,6 +663,15 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const sectionTypoMap: SectionBehavior[] = sections.map((section: any) =>
     deriveSectionTypography(section?.role, section?.avgEnergy ?? 0.5, resolvedTypo),
   );
+  /** Map a timestamp to its section index. Sections come from cinematic direction. */
+  function getSectionForTime(timeSec: number): number {
+    for (let i = sections.length - 1; i >= 0; i -= 1) {
+      const s = sections[i];
+      const start = s.startSec ?? s.start ?? 0;
+      if (timeSec >= start - 0.3) return i;
+    }
+    return 0;
+  }
 
   console.info('[sceneCompiler] typography:', {
     source: resolvedTypo._meta.source,
@@ -712,8 +721,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   // Layout main groups at center (normal behavior)
   for (const group of cappedMainGroups) {
     const key = `${group.lineIndex}-${group.groupIndex}`;
+    const secIdx = getSectionForTime(group.start);
+    const secTypo = sectionTypoMap[secIdx] ?? DEFAULT_SECTION_BEHAVIOR;
     const groupWords = group.words.map(wm =>
-      baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word
+      secTypo.transform === 'uppercase' ? wm.word.toUpperCase() : wm.word
     );
     // Find matching AI phrase for this group
     const matchPhrase = (aiPhrases ?? []).find((ap: any) => {
@@ -734,8 +745,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     // maxLines resolved by resolveLayout: <4 words = 1 line, 4+ = auto wrap
     const maxLines: number | undefined = (group as any)._resolvedMaxLines;
 
-    const secIdx = getSectionForTime(group.start);
-    const secTypo = sectionTypoMap[secIdx] ?? DEFAULT_SECTION_BEHAVIOR;
     // ── Phrase audio metrics (all data already exists) ──
     const phraseDuration = Math.max(0.1, group.end - group.start);
     const wordCount = group.words.length;
@@ -814,8 +823,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   // Layout adlib groups — smaller font, positioned at bottom 20% of viewport
   for (const group of adlibGroups) {
     const key = `${group.lineIndex}-${group.groupIndex}`;
+    const adlibSecIdx = getSectionForTime(group.start);
+    const adlibSecTypo = sectionTypoMap[adlibSecIdx] ?? DEFAULT_SECTION_BEHAVIOR;
     const groupWords = group.words.map(wm =>
-      baseTypography.textTransform === 'uppercase' ? wm.word.toUpperCase() : wm.word
+      adlibSecTypo.transform === 'uppercase' ? wm.word.toUpperCase() : wm.word
     );
     // Adlibs: 55% of normal fill ratio, placed in bottom zone
     const adlibSlot: Slot = {
@@ -1053,6 +1064,38 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       isAdlib: group.words.some(w => w.isAdlib),
     };
   }).sort((a, b) => a.start - b.start);
+
+  // ── Enforce accent phrase ratio across entire song ──
+  if (resolvedTypo.accentFontFamily && resolvedTypo.heroStyle === 'accent-font') {
+    const budget = getDensityBudget(resolvedTypo.accentDensity);
+    const phrasesWithAccent: Array<{ groupIdx: number; maxHeroScore: number }> = [];
+
+    for (let gi = 0; gi < compiledGroups.length; gi += 1) {
+      const group = compiledGroups[gi];
+      const hasAccent = group.words.some(w => w.fontFamily !== baseTypography.fontFamily);
+      if (hasAccent) {
+        const maxScore = Math.max(...group.words.map(w => w.heroScore ?? 0));
+        phrasesWithAccent.push({ groupIdx: gi, maxHeroScore: maxScore });
+      }
+    }
+
+    const maxAccented = Math.max(1, Math.floor(compiledGroups.length * budget.maxAccentedPhraseRatio));
+    if (phrasesWithAccent.length > maxAccented) {
+      phrasesWithAccent.sort((a, b) => b.maxHeroScore - a.maxHeroScore);
+      const toRevert = phrasesWithAccent.slice(maxAccented);
+      for (const { groupIdx } of toRevert) {
+        const group = compiledGroups[groupIdx];
+        const section = sectionTypoMap[getSectionForTime(group.start)] ?? DEFAULT_SECTION_BEHAVIOR;
+        const phraseWeight = WEIGHT_MAP[section.weight] ?? resolvedTypo.fontWeight;
+        for (const word of group.words) {
+          if (word.fontFamily !== baseTypography.fontFamily) {
+            word.fontFamily = baseTypography.fontFamily;
+            word.fontWeight = phraseWeight;
+          }
+        }
+      }
+    }
+  }
 
   const beatEvents: BeatEvent[] = beats.map((time) => ({ time, springVelocity: 0.4, glowMax: 0.3 }));
 
