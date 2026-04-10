@@ -41,7 +41,7 @@ export interface ResolvedTypography {
   letterSpacing: number;
   sectionStrategies: Record<string, string>;
   _meta: {
-    source: 'plan' | 'plan-repaired' | 'profile' | 'legacy' | 'fallback';
+    source: 'character' | 'plan' | 'plan-repaired' | 'profile' | 'legacy' | 'fallback';
     primaryFont: string;
     accentFont: string | null;
     repaired: boolean;
@@ -51,6 +51,51 @@ export interface ResolvedTypography {
 export const WEIGHT_MAP: Record<string, number> = { light: 300, regular: 400, bold: 700, black: 800 };
 export const TRACKING_MAP: Record<string, number> = { tight: 0.35, normal: 0.2, wide: 0.5 };
 
+// ── Character-based font selection (v2) ──────────────────────
+// Maps song character tags from cinematic direction v2 to genreFit search terms.
+// The AI classifies the song personality; code picks the font.
+const CHARACTER_TO_GENRES: Record<string, string[]> = {
+  'hard-rap': ['hip-hop', 'trap', 'drill', 'grime'],
+  'hype-anthem': ['anthem', 'sport', 'hip-hop'],
+  'punk-energy': ['punk', 'rock', 'indie'],
+  'electronic-drive': ['electronic', 'techno', 'hyperpop'],
+  'melodic-rap': ['hip-hop', 'r-and-b', 'pop'],
+  'pop-hook': ['pop', 'general', 'k-pop'],
+  'indie-float': ['indie', 'ambient', 'minimal'],
+  'afro-groove': ['afrobeat', 'funk', 'pop'],
+  'slow-romantic-rnb': ['r-and-b', 'neo-soul', 'contemporary'],
+  'acoustic-bare': ['acoustic', 'gentle', 'folk'],
+  'dark-mood': ['dark-trap', 'gothic', 'industrial'],
+  'ambient-drift': ['ambient', 'minimal', 'experimental'],
+  'spoken-word': ['spoken-word', 'editorial'],
+  'gospel-soul': ['gospel', 'soul', 'anthem'],
+  'lo-fi-chill': ['lo-fi', 'indie', 'ambient'],
+};
+
+// Typography energy defaults per character
+const CHARACTER_DEFAULTS: Record<string, {
+  system: TypographySystem;
+  weight: string;
+  textCase: 'uppercase' | 'none';
+  accentDensity: AccentDensity;
+}> = {
+  'hard-rap': { system: 'single', weight: 'black', textCase: 'uppercase', accentDensity: 'low' },
+  'hype-anthem': { system: 'paired', weight: 'bold', textCase: 'uppercase', accentDensity: 'high' },
+  'punk-energy': { system: 'single', weight: 'bold', textCase: 'uppercase', accentDensity: 'low' },
+  'electronic-drive': { system: 'single', weight: 'bold', textCase: 'uppercase', accentDensity: 'low' },
+  'melodic-rap': { system: 'paired', weight: 'bold', textCase: 'none', accentDensity: 'medium' },
+  'pop-hook': { system: 'paired', weight: 'bold', textCase: 'none', accentDensity: 'medium' },
+  'indie-float': { system: 'single', weight: 'regular', textCase: 'none', accentDensity: 'low' },
+  'afro-groove': { system: 'paired', weight: 'bold', textCase: 'none', accentDensity: 'medium' },
+  'slow-romantic-rnb': { system: 'paired', weight: 'regular', textCase: 'none', accentDensity: 'medium' },
+  'acoustic-bare': { system: 'single', weight: 'regular', textCase: 'none', accentDensity: 'low' },
+  'dark-mood': { system: 'single', weight: 'bold', textCase: 'none', accentDensity: 'low' },
+  'ambient-drift': { system: 'minimal', weight: 'light', textCase: 'none', accentDensity: 'low' },
+  'spoken-word': { system: 'single', weight: 'regular', textCase: 'none', accentDensity: 'low' },
+  'gospel-soul': { system: 'paired', weight: 'bold', textCase: 'none', accentDensity: 'high' },
+  'lo-fi-chill': { system: 'minimal', weight: 'regular', textCase: 'none', accentDensity: 'low' },
+};
+
 function pickWeight(font: FontDef, target: string): number {
   const t = WEIGHT_MAP[target] ?? 700;
   return font.weights.reduce((best, w) => (Math.abs(w - t) < Math.abs(best - t) ? w : best), font.weights[0]);
@@ -59,6 +104,68 @@ function pickWeight(font: FontDef, target: string): number {
 function pickHeroWeight(font: FontDef, baseWeight: number): number {
   const heavier = font.weights.filter(w => w > baseWeight).sort((a, b) => a - b);
   return heavier[0] ?? font.weights[font.weights.length - 1];
+}
+
+function resolveFromCharacter(cd: any): ResolvedTypography | null {
+  const character = typeof cd?.character === 'string' ? cd.character.toLowerCase().trim() : '';
+  const targetGenres = CHARACTER_TO_GENRES[character];
+  if (!targetGenres) return null;
+
+  const defaults = CHARACTER_DEFAULTS[character] ?? {
+    system: 'paired',
+    weight: 'bold',
+    textCase: 'none',
+    accentDensity: 'medium',
+  };
+
+  const scored = FONT_MANIFEST
+    .filter(f => f.roles.includes('primary'))
+    .map(f => ({
+      font: f,
+      score: f.genreFit.filter(g => targetGenres.includes(g)).length,
+    }))
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) return null;
+
+  const pool = scored.slice(0, Math.min(3, scored.length));
+  const worldStr = typeof cd?.world === 'string' ? cd.world : '';
+  let hash = 0;
+  for (let i = 0; i < worldStr.length; i++) {
+    hash = ((hash << 5) - hash + worldStr.charCodeAt(i)) | 0;
+  }
+  for (let i = 0; i < character.length; i++) {
+    hash = ((hash << 5) - hash + character.charCodeAt(i)) | 0;
+  }
+  const pickIndex = Math.abs(hash) % pool.length;
+  const primary = pool[pickIndex].font;
+
+  const system = defaults.system;
+  const accent = system === 'paired' ? findBestAccent(primary) : null;
+  const baseWeight = pickWeight(primary, defaults.weight);
+  const heroW = pickHeroWeight(primary, baseWeight);
+  const heroStyle: HeroStyle = system === 'paired' && accent ? 'accent-font' : 'weight-shift';
+
+  return {
+    system,
+    fontFamily: primary.cssFamily,
+    fontWeight: baseWeight,
+    heroWeight: heroW,
+    accentFontFamily: accent?.cssFamily ?? null,
+    accentFontWeight: accent ? pickWeight(accent, 'bold') : null,
+    heroStyle,
+    accentDensity: defaults.accentDensity,
+    textTransform: defaults.textCase,
+    letterSpacing: primary.width === 'condensed' ? 0.35 : 0.2,
+    sectionStrategies: {},
+    _meta: {
+      source: 'character',
+      primaryFont: primary.name,
+      accentFont: accent?.name ?? null,
+      repaired: false,
+    },
+  };
 }
 
 function resolveFromPlan(cd: any): ResolvedTypography | null {
@@ -192,6 +299,12 @@ function resolveFromLegacy(cd: any): ResolvedTypography {
 }
 
 export function resolveTypographyFromDirection(cd: any): ResolvedTypography {
+  const fromCharacter = resolveFromCharacter(cd);
+  if (fromCharacter) {
+    console.info('[typography] resolved from character:', fromCharacter._meta);
+    return fromCharacter;
+  }
+
   const fromPlan = resolveFromPlan(cd);
   if (fromPlan) {
     console.info('[typography] resolved from plan:', fromPlan._meta);
