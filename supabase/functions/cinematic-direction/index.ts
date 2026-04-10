@@ -130,7 +130,7 @@ RULES FOR "heroWords":
 RULES FOR "transcribedLyrics":
 - Write what you ACTUALLY HEAR in the audio at this timestamp.
 - Do not invent lyrics. If you can't hear clearly, say so: "unclear vocals over heavy bass".
-- This is your anchor. Your "action" and "heroWords" must come from these words.``;
+- This is your anchor. Your "action" and "heroWords" must come from these words.`;
 
 // ── Types ────────────────────────────────────────────────────
 
