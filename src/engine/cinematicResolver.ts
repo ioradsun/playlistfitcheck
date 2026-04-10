@@ -24,16 +24,12 @@ export function normalizeCinematicDirection(
     const sections: CinematicSection[] = cd.chapters.map((ch: any, i: number) => ({
       sectionIndex: i,
       description: ch.backgroundDirective ?? ch.title ?? `Section ${i}`,
-      mood: ch.emotionalArc ?? ch.mood ?? undefined,
-      visualMood: ch.visualMood ?? undefined,
-      motion: ch.motion ?? undefined,
+      visualMood: ch.visualMood ?? ch.atmosphere ?? ch.mood ?? ch.emotionalArc ?? undefined,
       texture: ch.texture ?? undefined,
-      atmosphere: ch.atmosphere ?? undefined,
       startSec: ch.startSec ?? undefined,
       endSec: ch.endSec ?? undefined,
       startRatio: ch.startRatio ?? undefined,
       endRatio: ch.endRatio ?? undefined,
-      atmosphereState: ch.atmosphereState ?? undefined,
       dominantColor: ch.dominantColor ?? undefined,
     }));
     return { ...cd, sections };

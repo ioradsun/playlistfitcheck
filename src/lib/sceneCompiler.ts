@@ -405,7 +405,7 @@ export interface CompiledPhraseGroup {
   isAdlib?: boolean;
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
-export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
+export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; visualMood: string; }
 export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
@@ -827,7 +827,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     targetZoom: distanceToZoom['Medium'] ?? 1.0,
     emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
     typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
-    atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
+    visualMood: chapter.visualMood ?? chapter.atmosphere ?? 'cinematic',
   }));
 
   const analysis = (payload.beat_grid as any)?._analysis ?? null;
