@@ -101,9 +101,10 @@ export function EmpowermentModePanel({ danceId, empowermentPromise, onDismiss }:
       style={{ background: "#0a0a0a", fontFamily: "monospace", color: "rgba(255,255,255,0.88)" }}
     >
       {!empowermentPromise ? (
-        <div className="text-center">
+        <div className="text-center cursor-pointer" onClick={onDismiss}>
           <p className="text-sm text-white/80">empowerment mode</p>
           <p className="mt-2 text-xs text-white/45">coming soon</p>
+          <p className="mt-4 text-[10px] text-white/30">tap to continue</p>
         </div>
       ) : (
         <div className="w-full max-w-xl text-center">
