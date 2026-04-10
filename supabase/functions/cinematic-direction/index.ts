@@ -1,12 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // ═══════════════════════════════════════════════════════════════
-// Cinematic Direction v2
+// Cinematic Direction v3
 //
-// AI classifies. Code selects. Audio modulates.
+// AI directs. Code renders. Audio grounds.
 //
 // AI receives: audio file + section timestamps + optional artist direction
-// AI returns: world + particle + font + per-moment visuals
+// AI returns: world + protagonist + particle + font + narrative moments
+// AI listens to audio and transcribes before designing (chain-of-thought)
 // AI does NOT: pick colors, moods, textures, or any render enum
 // ═══════════════════════════════════════════════════════════════
 
@@ -26,41 +27,49 @@ const VALID_PARTICLES = [
 ] as const;
 
 // ── The prompt (~300 tokens) ─────────────────────────────────
-const SYSTEM_PROMPT = `You are a visual set designer for a music lyric video.
+const SYSTEM_PROMPT = `You are a music video director. Your job is to create a literal, narrative short film from this song.
 
-Your job is not to describe the music — it is to build the world the lyrics will dance inside.
-Think of yourself as the person who designs the stage before the performance begins.
-The lyrics are the performance. Your sets are what the audience sees behind them.
+You are NOT a set designer. Do not build empty rooms. Do not describe atmospheres.
+You ARE a director. There is a protagonist. Things happen. The story moves forward.
 
 STEP 1 — LISTEN AND TRANSCRIBE
-Before designing anything, listen to the full song. Follow the lyrics closely.
-Understand the story being told: who is speaking, what happened, what they feel, where it ends.
-The lyrics are your script. The moments you design must serve that story.
+You are receiving the actual audio file. Listen to it closely.
+For each timestamp moment, your FIRST task is to write down the lyrics you hear in "transcribedLyrics".
+If vocals are distorted, layered, or it is an instrumental section, describe what the music sounds like
+(e.g., "heavy distorted guitar riff" or "muffled vocals over a trap beat, can't make out words").
+Your scene design MUST be based on what you transcribe. Do not guess. Do not use generic moods.
 
-STEP 2 — DESIGN THE WORLD
-Choose one world — a single visual universe this whole song lives inside.
-It should feel like it was always there, waiting for these lyrics.
-Be specific. Be surprising. Avoid the obvious.
+STEP 2 — CAST AND LOCATE
+Define one protagonist and one world based on the full story of the lyrics.
+The protagonist is whoever the lyrics come from. Give them a situation, not a label.
+The world is the specific physical place this story happens — not a genre, not a vibe.
+  Good protagonist: "A senior on his last night before everyone scatters"
+  Good world: "A high school auditorium after the ceremony, half the chairs already folded"
+  Bad: "emotional journey through loss"
+  Bad: "cinematic dark world"
 
-STEP 3 — SET EACH STAGE
-For each timestamp moment provided, design the specific set — what is physically present right now.
-Each moment should grow from the one before it, like scenes in a short film.
-The world does not restart between moments. It deepens, shifts, reveals.
-Let the energy level guide the scale: quiet moments are intimate and close, high-energy moments open up.
-Let the lyrics guide the imagery: what the singer is saying at that moment should be visible in the set.
+STEP 3 — DIRECT EACH MOMENT
+For each timestamp, direct a scene from the short film.
+The protagonist is DOING something — not standing in a mood.
+The camera is LOOKING at something specific — not floating in atmosphere.
+The moments form a continuous story. If the protagonist is at a podium in Moment 3,
+they cannot be in a car in Moment 4 unless they walked out and got in.
 
-Return only valid JSON in this exact shape:
+Return ONLY valid JSON in this exact shape:
 
 {
-  "world": "the visual universe in 12 words or fewer — be specific, not generic",
-  "particle": "the default ambient element from the PARTICLE LIST",
-  "font": "one Google Font family name that matches the song's energy and mood",
+  "world": "the specific place this story happens — 15 words max",
+  "protagonist": "who the main character is and their situation — 12 words max",
+  "particle": "default ambient element from the PARTICLE LIST",
+  "font": "one Google Font family name that fits the story's tone",
   "moments": [
     {
-      "see": "one sentence: what is physically on stage right now — what the camera sees",
-      "nouns": ["2-4 concrete objects visible in this scene, pulled from the lyrics"],
-      "heroWords": ["2-5 words — the emotionally charged or lyrically significant words in this moment, all caps"],
-      "particle": "override from PARTICLE LIST if this moment's atmosphere demands it, otherwise omit"
+      "transcribedLyrics": "Write the exact lyrics you hear at this timestamp. If unclear, describe the sound.",
+      "action": "One sentence: what is the protagonist physically doing RIGHT NOW? Not feeling — doing.",
+      "see": "One sentence: what the camera sees — the shot composition, not the mood.",
+      "nouns": ["2-4 concrete objects visible in this shot"],
+      "heroWords": ["2-5 emotionally charged words from your transcribedLyrics, ALL CAPS"],
+      "particle": "override from PARTICLE LIST if this moment demands it, otherwise omit"
     }
   ]
 }
@@ -69,50 +78,59 @@ PARTICLE LIST:
 dust, embers, smoke, rain, snow, stars, fireflies, petals, ash,
 crystals, confetti, lightning, moths, glare, glitch, fire
 
+RULES FOR "action":
+- Must be a physical verb. The protagonist IS DOING something.
+  Good: "He pulls the cap off his head and holds it against his chest, staring at the empty seats"
+  Good: "She slides her phone across the table toward him, screen lit with a goodbye text"
+  Good: "He raises a red cup toward the circle of friends, none of them making eye contact"
+  Bad: "The atmosphere feels heavy with emotion"
+  Bad: "A sense of loss permeates the space"
+  Bad: "Intimate emotional energy fills the room"
+
 RULES FOR "see":
-- One sentence. What the camera physically sees. No mood words. No adjectives like "moody" or "cinematic."
-- It must be something that could actually be built on a stage or filmed on a set.
-- It should feel like it belongs to the lyrics playing at that moment.
-- It should feel different from the moment before — the set evolved, the light shifted, something changed.
-  Good: "A pay phone off the hook, receiver swinging, fluorescent light flickering overhead"
-  Good: "Rooftop at golden hour, city sprawl below, one lawn chair facing nowhere"
-  Good: "Bathtub full of black water, single candle on the ledge, moths circling the flame"
-  Bad: "emotional intimate atmosphere"
-  Bad: "dark moody urban environment"
+- What the camera physically sees. A shot description, not a feeling.
+  Good: "Close-up on his hands gripping the folded diploma, knuckles white"
+  Good: "Wide shot of the parking lot emptying out, one car left with its headlights on"
+  Good: "Over-the-shoulder shot as she walks away down the corridor, not looking back"
+  Bad: "moody cinematic atmosphere"
+  Bad: "emotional intimate environment"
 
 RULES FOR "world":
-- One place. Specific enough to paint. Not a genre, not a vibe.
-  Good: "Late-night laundromat on the edge of a city that forgot you"
-  Good: "Abandoned carnival frozen in the last week of summer"
+- One specific place. Paintable. Filmable. Not a concept.
+  Good: "A high school auditorium after graduation, half the chairs already folded up"
+  Good: "The parking lot behind a community college at 11 PM, one streetlight buzzing"
   Bad: "urban emotional landscape"
-  Bad: "cinematic dark world"
+  Bad: "minimalist black stage with geometric lights"
 
 RULES FOR "font":
-- A real Google Font family name. Look at your world description and ask:
-  what typeface belongs on the poster for this film?
-  Elegant/intimate worlds → Cormorant Garamond, Playfair Display, DM Serif Display
-  Raw/urban worlds → Space Grotesk, Bebas Neue, Oswald, Anton
-  Warm/nostalgic worlds → Libre Baskerville, Lora, DM Serif Text
-  Ethereal/drifting worlds → Cormorant, Raleway, Cinzel
-  High-energy/kinetic worlds → Archivo Black, Anton, Big Shoulders Display
-  Playful/warm worlds → Fredoka, Comfortaa, Baloo 2
-  These are examples, not limits. Pick any real Google Font that fits the world.
+- A real Google Font family name. What typeface belongs on this film's poster?
+  Elegant/intimate → Cormorant Garamond, Playfair Display, DM Serif Display
+  Raw/urban → Space Grotesk, Bebas Neue, Oswald, Anton
+  Warm/nostalgic → Libre Baskerville, Lora, DM Serif Text
+  Ethereal → Cormorant, Raleway, Cinzel
+  High-energy → Archivo Black, Anton, Big Shoulders Display
+  Playful/warm → Fredoka, Comfortaa, Baloo 2
+  These are examples, not limits. Pick any real Google Font that fits.
 
-RULES FOR MOMENTS:
-- One moment per timestamp provided. Match the count exactly.
-- Each moment is its own scene. Do NOT chain or build from the previous moment.
-  The world sets the tone. The lyrics set the image.
-- For each moment, listen to what the lyrics are literally saying at that timestamp
-  and let those words drive the visual. If the lyric says "Nissan spinning" — show a car.
-  If the lyric says "flying to our private island" — show open sky and water.
-  The set should feel like a direct visual response to the words, not a continuation of the previous shot.
-- Read the energy hint — [low], [mid], [high], [rising], [falling] — and let it shape the scale.
-  Low energy: tight, close, intimate. One object. One light source.
-  High energy: wide, open, overwhelming. Scale up.
-  Rising: tension building — the set has anticipation in it.
-  Falling: release — the set is opening up or settling.
-- "heroWords" are pulled from the lyrics at that timestamp.
-  They should correspond to the most concrete, imageable words in the lyric — not abstractions.`;
+RULES FOR STORY CONTINUITY:
+- The moments form ONE continuous story. Not separate scenes.
+- If the protagonist is at a graduation podium in Moment 3, they walk off the stage in Moment 4 — they don't teleport to a beach.
+- Each moment advances the story. Something changes: position, action, who they're looking at, what they're holding.
+- The energy hint — [low], [mid], [high], [rising], [falling] — shapes the intensity, not the location.
+  Low energy: quiet, close, still — but the protagonist is still THERE doing something.
+  High energy: big gesture, fast motion, crowd, volume.
+  Rising: tension building in the body — leaning forward, gripping tighter, walking faster.
+  Falling: release — shoulders dropping, sitting down, letting go.
+
+RULES FOR "heroWords":
+- Pulled directly from your transcribedLyrics for that moment.
+- The most concrete, imageable words — nouns and strong verbs, not pronouns or filler.
+- ALL CAPS. 2-5 words per moment.
+
+RULES FOR "transcribedLyrics":
+- Write what you ACTUALLY HEAR in the audio at this timestamp.
+- Do not invent lyrics. If you can't hear clearly, say so: "unclear vocals over heavy bass".
+- This is your anchor. Your "action" and "heroWords" must come from these words.``;
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -136,9 +154,12 @@ interface RequestBody {
 
 interface AIResponse {
   world: string;
+  protagonist: string;
   particle: string;
   font: string;
   moments: Array<{
+    transcribedLyrics: string;
+    action: string;
     see: string;
     nouns: string[];
     heroWords?: string[];
@@ -202,13 +223,18 @@ function validate(
   // World
   const world =
     typeof raw.world === "string" && raw.world.trim()
-      ? raw.world.trim().slice(0, 100)
+      ? raw.world.trim().slice(0, 120)
       : "cinematic scene";
+
+  // Protagonist
+  const protagonist =
+    typeof raw.protagonist === "string" && raw.protagonist.trim()
+      ? raw.protagonist.trim().slice(0, 100)
+      : "the singer";
 
   // Particle
   let particle = String(raw.particle ?? "").toLowerCase().trim();
   if (!VALID_PARTICLES.includes(particle as any)) {
-    // Infer from world keywords
     const wl = world.toLowerCase();
     if (/rain|storm|drizzle|wet|puddle/.test(wl)) particle = "rain";
     else if (/fire|flame|burn|ember/.test(wl)) particle = "embers";
@@ -230,10 +256,22 @@ function validate(
   let moments: AIResponse["moments"] = [];
   if (Array.isArray(raw.moments)) {
     moments = raw.moments.map((m: any) => ({
+      transcribedLyrics:
+        typeof m?.transcribedLyrics === "string" && m.transcribedLyrics.trim()
+          ? m.transcribedLyrics.trim().slice(0, 300)
+          : "instrumental / unclear",
+      action:
+        typeof m?.action === "string" && m.action.trim()
+          ? m.action.trim().slice(0, 250)
+          : typeof m?.see === "string" && m.see.trim()
+            ? m.see.trim().slice(0, 250)
+            : "cinematic scene",
       see:
         typeof m?.see === "string" && m.see.trim()
           ? m.see.trim().slice(0, 200)
-          : "cinematic scene",
+          : typeof m?.action === "string" && m.action.trim()
+            ? m.action.trim().slice(0, 200)
+            : "cinematic scene",
       nouns: Array.isArray(m?.nouns)
         ? m.nouns.filter((n: any) => typeof n === "string").slice(0, 6)
         : [],
@@ -253,6 +291,8 @@ function validate(
   if (sectionCount > 0) {
     while (moments.length < sectionCount) {
       moments.push({
+        transcribedLyrics: "instrumental / unclear",
+        action: `Scene ${moments.length + 1} continues`,
         see: `Scene ${moments.length + 1} of ${world}`,
         nouns: moments[0]?.nouns?.slice(0, 2) ?? [],
       });
@@ -262,7 +302,7 @@ function validate(
     }
   }
 
-  return { world, particle, font, moments };
+  return { world, protagonist, particle, font, moments };
 }
 
 // ── Transform to client contract ─────────────────────────────
@@ -271,6 +311,7 @@ function validate(
 function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
   return {
     world: result.world,
+    protagonist: result.protagonist,
     particle: result.particle,
     font: result.font,
 
@@ -282,12 +323,14 @@ function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
 
       return {
         sectionIndex: i,
-        description: moment.see,
+        description: moment.action,
+        see: moment.see,
+        transcribedLyrics: moment.transcribedLyrics,
         nouns: moment.nouns,
         heroWords: moment.heroWords?.length ? moment.heroWords : null,
         startSec: sections[i]?.startSec ?? i * 10,
         endSec: sections[i]?.endSec ?? (i + 1) * 10,
-        // Placeholders — client derives from energy analysis in v2
+        // Placeholders — client derives from energy analysis
         visualMood: "intimate",
         dominantColor: "#C9A96E",
         texture,
@@ -468,7 +511,7 @@ serve(async (req) => {
     const cinematicDirection = toClientShape(validated, sections);
 
     console.log(
-      `[cinematic-direction] v2 complete: particle=${validated.particle}, world="${validated.world}", moments=${validated.moments.length}`,
+      `[cinematic-direction] v3 complete: particle=${validated.particle}, world="${validated.world}", protagonist="${validated.protagonist}", moments=${validated.moments.length}`,
     );
 
     return new Response(
