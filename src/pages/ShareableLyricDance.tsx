@@ -145,8 +145,8 @@ export default function ShareableLyricDance() {
     empowermentGenStarted.current = true;
     invokeWithTimeout("empowerment-promise", {
       songTitle: data.title || "Untitled", linesText,
-      emotionalArc: cd?.emotionalArc ?? null, sceneTone: null,
-      chorusText: cd?.chorusText ?? null, meaning: null,
+      emotionalArc: cd?.emotionalArc ?? null,
+      meaning: null,
     }, 30_000).then(async ({ data: gen, error }) => {
       if (error || !gen) return;
       setLocalEmpowerment(gen);

@@ -780,8 +780,6 @@ export function FitTab({
         songTitle: lyricData.title || "Untitled",
         lyricsText,
         emotionalArc: cinematicDirection?.emotionalArc ?? null,
-        sceneTone: cinematicDirection?.sceneTone ?? null,
-        chorusText: cinematicDirection?.chorusText ?? null,
         meaning: renderData?.meaning ?? null,
       },
       30_000,
@@ -1575,17 +1573,6 @@ export function FitTab({
                   {renderData.mood}
                 </span>
               )}
-            </div>
-          )}
-
-          {cinematicDirection?.chorusText && (
-            <div className="glass-card rounded-xl p-4 space-y-1.5">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-primary/70">
-                Chorus
-              </span>
-              <p className="text-sm text-foreground/80 italic leading-relaxed">
-                {cinematicDirection.chorusText}
-              </p>
             </div>
           )}
 
