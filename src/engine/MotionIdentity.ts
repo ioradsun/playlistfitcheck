@@ -194,7 +194,7 @@ export function deriveSectionMotionMod(
 
 export function deriveAllSectionMods(
   analysis: AudioAnalysis | null,
-  chapters: Array<{ startRatio: number; endRatio: number }>,
+  sections: Array<{ startRatio: number; endRatio: number }>,
   songDuration: number,
 ): SectionMotionMod[] {
   let songAvgEnergy = 0.5;
@@ -204,10 +204,10 @@ export function deriveAllSectionMods(
     songAvgEnergy = sum / analysis.frames.length;
   }
 
-  return chapters.map((chapter) => deriveSectionMotionMod(
+  return sections.map((section) => deriveSectionMotionMod(
     analysis,
-    chapter.startRatio * songDuration,
-    chapter.endRatio * songDuration,
+    section.startRatio * songDuration,
+    section.endRatio * songDuration,
     songAvgEnergy,
   ));
 }
