@@ -165,7 +165,6 @@ PROCESS — follow these steps in order:
 OUTPUT SCHEMA:
 {
   "description": "one sentence, max 15 words — the visual world in a nutshell",
-  "sceneTone": "dark|light|mixed",
   "typographyPlan": {
     "system": "paired|single|minimal",
     "primary": "font name from FONT LIBRARY",
@@ -291,7 +290,6 @@ PROCESS — follow these steps in order:
 
 OUTPUT JSON SCHEMA:
 {
-  "sceneTone": "dark|light|mixed",
   "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
   "description": "one-sentence world description",
   "typographyPlan": {
