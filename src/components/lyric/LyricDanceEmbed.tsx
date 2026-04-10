@@ -315,10 +315,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   useEffect(() => {
     if (!durationSec || !player) return;
     if (currentTimeSec > durationSec + 2.2 && cardMode === "listen") {
-      setCardMode("empowerment");
+      const empData = ((data ?? prefetchedData) as any)?.empowerment_promise;
+      setCardMode(empData?.hooks?.length ? "empowerment" : "truth");
       player.audio.loop = false;
     }
-  }, [currentTimeSec, durationSec, cardMode, player]);
+  }, [currentTimeSec, durationSec, cardMode, player, data, prefetchedData]);
 
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
