@@ -187,6 +187,8 @@ export interface LiveDebugState {
   songProgress: number;
 
   dirThesis: string;
+  
+  
   dirIntensity: number;
   dirBgDirective: string;
   dirLightBehavior: string;
@@ -214,6 +216,7 @@ export interface LiveDebugState {
   imgActiveIdx: number;
   imgNextIdx: number;
   imgCrossfade: number;
+  
   imgLocalProgress: number;
   imgOpacity: number;
   imgOverlap: boolean;
@@ -314,6 +317,8 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   songProgress: 0,
 
   dirThesis: "—",
+  
+  
   dirIntensity: 0,
   dirBgDirective: "—",
   dirLightBehavior: "—",
@@ -340,6 +345,7 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   imgActiveIdx: -1,
   imgNextIdx: -1,
   imgCrossfade: 0,
+  
   imgLocalProgress: 0,
   imgOpacity: 0,
   imgOverlap: false,
@@ -3593,19 +3599,19 @@ export class LyricDancePlayer {
       return autoPalettes[0];
     }
 
-    const chIdx = secIdx >= 0 ? secIdx : 0;
+    const sectionIdx = secIdx >= 0 ? secIdx : 0;
     const bakedPalettes = (this.data as any)?.resolvedPalettes;
-    if (bakedPalettes && Array.isArray(bakedPalettes) && chIdx >= 0 && bakedPalettes[chIdx]) {
-      return bakedPalettes[chIdx];
+    if (bakedPalettes && Array.isArray(bakedPalettes) && sectionIdx >= 0 && bakedPalettes[sectionIdx]) {
+      return bakedPalettes[sectionIdx];
     }
-    if (chIdx >= 0) {
-      const sectionPalette = sections[chIdx]?.palette as string | undefined;
+    if (sectionIdx >= 0) {
+      const sectionPalette = sections[sectionIdx]?.palette as string | undefined;
       if (sectionPalette && LyricDancePlayer.PALETTE_COLORS[sectionPalette]) {
         return LyricDancePlayer.PALETTE_COLORS[sectionPalette];
       }
     }
-    if (chIdx >= 0) {
-      const dominantColor = sections[chIdx]?.dominantColor as string | undefined;
+    if (sectionIdx >= 0) {
+      const dominantColor = sections[sectionIdx]?.dominantColor as string | undefined;
       if (dominantColor && /^#[0-9a-fA-F]{6}$/.test(dominantColor)) {
         const r = parseInt(dominantColor.slice(1, 3), 16);
         const g = parseInt(dominantColor.slice(3, 5), 16);
@@ -5748,7 +5754,7 @@ export class LyricDancePlayer {
       this._evalFrame = {
         timeMs: 0, beatIndex: 0, sectionIndex: 0,
         cameraX: 0, cameraY: 0, cameraZoom: 1, bgBlend: 0,
-        particleColor: '#ffffff', atmosphere: (section as any)?.atmosphere ?? 'cinematic' as any,
+        particleColor: '#ffffff', atmosphere: section?.atmosphere ?? 'cinematic' as any,
         chunks: [], particles: [],
       } as unknown as ScaledKeyframe;
     }
@@ -5762,7 +5768,7 @@ export class LyricDancePlayer {
     frame.cameraZoom = effectiveZoom;
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
-    frame.atmosphere = ((section as any)?.atmosphere ?? 'cinematic') as any;
+    frame.atmosphere = (section?.atmosphere ?? 'cinematic') as any;
     frame.chunks = chunks;
     frame.particles = [];
     return frame;
