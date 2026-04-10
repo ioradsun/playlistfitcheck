@@ -269,11 +269,14 @@ const WORLD_HUE_KEYWORDS: Array<{ keywords: string[]; hue: number }> = [
 ];
 
 function deriveWorldHue(world: string, nouns: string[]): number {
-  const searchText = `${world} ${nouns.join(' ')}`.toLowerCase();
+  const worldLower = (world ?? '').toLowerCase();
+  const nounsLower = nouns.join(' ').toLowerCase();
   let bestScore = 0;
   let bestHue = 220;
   for (const entry of WORLD_HUE_KEYWORDS) {
-    const score = entry.keywords.filter(kw => searchText.includes(kw)).length;
+    const worldHits = entry.keywords.filter(kw => worldLower.includes(kw)).length * 3;
+    const nounHits = entry.keywords.filter(kw => nounsLower.includes(kw)).length;
+    const score = worldHits + nounHits;
     if (score > bestScore) {
       bestScore = score;
       bestHue = entry.hue;

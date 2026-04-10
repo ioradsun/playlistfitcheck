@@ -3785,7 +3785,7 @@ export class LyricDancePlayer {
         density: this.resolvedState.particleConfig.density ?? 0.8,
         speed: this.resolvedState.particleConfig.speed ?? 0.5,
         opacity: Math.min(0.7, LEGIBILITY.maxForegroundAlphaOverText / 0.12 * 0.7),
-        beatReactive: mapped !== 'glare',
+        beatReactive: true,
       });
     }
 
@@ -4890,7 +4890,7 @@ export class LyricDancePlayer {
         density: this.resolvedState.particleConfig.density ?? 0.8,
         speed: this.resolvedState.particleConfig.speed ?? 0.5,
         opacity: 0.7,
-        beatReactive: mapped !== 'glare',
+        beatReactive: true,
       });
       this.ambientParticleEngine.setDensityMultiplier(Math.max(0.5, this.resolvedState.particleConfig.density));
       this.ambientParticleEngine.setSpeedMultiplier(Math.max(0.2, this.resolvedState.particleConfig.speed));
