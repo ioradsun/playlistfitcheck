@@ -9,6 +9,7 @@ interface Comment {
   id: string;
   text: string;
   line_index: number | null;
+  submitted_at: string;
   user_id: string | null;
 }
 
