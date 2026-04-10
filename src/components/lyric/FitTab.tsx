@@ -780,7 +780,7 @@ export function FitTab({
         songTitle: lyricData.title || "Untitled",
         lyricsText,
         emotionalArc: cinematicDirection?.emotionalArc ?? null,
-        sceneTone: cinematicDirection?.sceneTone ?? null,
+        sceneTone: null,
         chorusText: cinematicDirection?.chorusText ?? null,
         meaning: renderData?.meaning ?? null,
       },

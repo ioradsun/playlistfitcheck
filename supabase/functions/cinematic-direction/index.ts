@@ -217,22 +217,14 @@ function validate(
   return { character, world, particle, moments };
 }
 
-// ── Transform to legacy client contract ──────────────────────
-// Client reads: sections[], description, sceneTone, emotionalArc, etc.
+// ── Transform to client contract ─────────────────────────────
 // In v2, mood/color/texture/typography are code-derived on the client.
-// We provide placeholder values so nothing crashes during migration.
 
 function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
   return {
-    // ── New v2 fields ──
     character: result.character,
     world: result.world,
     particle: result.particle,
-
-    // ── Legacy compat ──
-    description: result.world,
-    sceneTone: "dark",
-    emotionalArc: "slow-burn",
 
     sections: result.moments.map((moment, i) => ({
       sectionIndex: i,

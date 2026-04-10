@@ -172,7 +172,6 @@ export class CameraRig {
     this._amplitudeScale = Math.max(0, Math.min(1, scale));
   }
 
-  setSectionFromMood(_m: string): void {}
   setEnergy(_e: number): void {}
   setBPM(_bpm: number): void {}
   setSection(_s: string): void {}

@@ -1,6 +1,6 @@
 /**
  * CinematicDirection — unified type supporting both:
- * - NEW format (sceneTone, sections, wordDirectives as array, storyboard)
+ * - NEW format (character/world/particle + sections/phrases)
  * - OLD format fields (kept as optional for backward compat during migration)
  *
  * Contains active and legacy fields for DB compatibility.
@@ -24,12 +24,6 @@ export interface CinematicDirection {
   world?: string;
   /** Ambient particle type for the entire song */
   particle?: string;
-  /** World description (same as world, for backward compat) */
-  description?: string;
-  /** Scene tone — derived from energy */
-  sceneTone?: string;
-  /** Song-level emotional arc — derived from section energy in sceneCompiler */
-  emotionalArc?: string;
 
   sections?: CinematicSection[];
 
@@ -50,10 +44,8 @@ export interface CinematicDirection {
   motion?: string;
   /** @deprecated v1 */
   palette?: string;
-  /** @deprecated v1 — word emphasis from old prompt */
-  wordDirectives?: WordDirective[] | Record<string, WordDirective>;
   /** @deprecated v1 */
-  storyboard?: StoryboardEntry[] | Record<string, any>[];
+  storyboard?: Record<string, any>[];
   /** @deprecated v1 */
   chorusText?: string;
   /** @deprecated v0 */
@@ -157,33 +149,6 @@ export interface CinematicPhrase {
   elementalWash?: boolean;
 }
 
-export interface StoryboardEntry {
-  lineIndex: number;
-  text?: string;
-  heroWord?: string;
-  entryStyle?: string;
-  exitStyle?: string;
-  emotionalIntent?: string;
-  visualTreatment?: string;
-  particleBehavior?: string;
-  beatAlignment?: string;
-  transitionToNext?: string;
-}
-
-// ── Word directive (supports both v1 and v2 fields) ──────────
-
-export interface WordDirective {
-  word: string;
-  emphasisLevel: number;
-  elementalClass?:
-    | 'FIRE' | 'WATER' | 'FROST' | 'SMOKE' | 'ELECTRIC'
-    | 'ICE' | 'RAIN' | 'NEON' | null; // ICE/RAIN/NEON kept for legacy compat
-  /** Word appears alone on screen — requires word duration ≥ 700ms */
-  isolation?: boolean;
-  specialEffect?: string | null;
-  evolutionRule?: string | null;
-}
-
 // (SymbolSystem, CameraLanguage, ShotType, SilenceDirective removed — dead V2 fields)
 
 export interface Chapter {
@@ -212,4 +177,3 @@ export interface Chapter {
 }
 
 // (SilenceDirective removed — dead V2 field)
-
