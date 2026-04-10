@@ -8,7 +8,6 @@ export interface PhraseBlock {
   end: number;
   durationMs: number;
   heroWord: string;
-  heroWords?: string[];
   exitEffect: string;
 }
 
@@ -17,12 +16,6 @@ export interface PhraseEngineResult {
   hookPhrase: string;
   adlibIndices: Set<number>;
 }
-
-type HeroWordsWindow = {
-  startSec: number;
-  endSec: number;
-  heroWords: string[];
-};
 
 type WordMeta = RawWord & {
   index: number;
@@ -286,10 +279,7 @@ export function inferHookPhrase(
   return bestText;
 }
 
-export function buildPhrases(
-  words: RawWord[],
-  heroWordsByTimestamp?: HeroWordsWindow[],
-): PhraseEngineResult {
+export function buildPhrases(words: RawWord[]): PhraseEngineResult {
   if (!words.length) return { hookPhrase: "", phrases: [], adlibIndices: new Set<number>() };
 
   const { mainWords, adlibIndices } = detectCollapsedRuns(words);
@@ -322,29 +312,7 @@ export function buildPhrases(
   for (let i = 0; i < finalBlocks.length; i++) {
     const block = finalBlocks[i];
     const next = i < finalBlocks.length - 1 ? finalBlocks[i + 1] : null;
-    const { heroWord: fallbackHeroWord } = selectHeroWord(block);
-    let heroWord = fallbackHeroWord;
-    let heroWords: string[] | undefined;
-
-    const blockCenterSec = (block.startTime + block.endTime) / 2;
-    const match = heroWordsByTimestamp?.find(
-      (window) => blockCenterSec >= window.startSec && blockCenterSec < window.endSec,
-    );
-
-    if (match?.heroWords?.length) {
-      const matchSet = new Set(
-        match.heroWords.map((w) => w.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-      );
-      const foundInPhrase = block.words
-        .map((w) => w.clean.toUpperCase().replace(/[^A-Z0-9]/g, ""))
-        .filter((clean) => clean.length > 1 && matchSet.has(clean));
-
-      if (foundInPhrase.length) {
-        heroWords = Array.from(new Set(foundInPhrase));
-        heroWord = heroWords[0];
-      }
-    }
-
+    const { heroWord } = selectHeroWord(block);
     const exitEffect = calcExitEffect(block, next, prevEffect);
     prevEffect = exitEffect;
     const startIndex = block.words[0].index;
@@ -352,7 +320,6 @@ export function buildPhrases(
     phrases.push({
       wordRange: [startIndex, endIndex],
       heroWord,
-      heroWords,
       exitEffect,
       text: block.text,
       wordCount: block.wordCount,

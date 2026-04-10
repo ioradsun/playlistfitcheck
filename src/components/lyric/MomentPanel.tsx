@@ -29,8 +29,6 @@ interface MomentPanelProps {
   profileMap: Record<string, { avatarUrl: string | null; displayName: string | null }>;
   fireUserMap: Record<number, string[]>;
   fireAnonCount: Record<number, number>;
-  spotifyTrackId?: string | null;
-  lyricDanceUrl?: string | null;
 }
 
 export function MomentPanel({
@@ -47,8 +45,6 @@ export function MomentPanel({
   profileMap,
   fireUserMap,
   fireAnonCount,
-  spotifyTrackId,
-  lyricDanceUrl,
 }: MomentPanelProps) {
   const { user } = useAuth();
   const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
@@ -260,66 +256,6 @@ export function MomentPanel({
             </div>
           );
         })}
-
-        {/* ── Share + Listen footer ── */}
-        <div style={{
-          display: "flex",
-          gap: 8,
-          paddingTop: 16,
-          marginTop: 8,
-          borderTop: "1px solid rgba(255,255,255,0.04)",
-        }}>
-          {lyricDanceUrl && (
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(lyricDanceUrl);
-              }}
-              style={{
-                flex: 1,
-                minHeight: 36,
-                borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.03)",
-                color: "rgba(255,255,255,0.35)",
-                fontSize: 10,
-                fontFamily: "monospace",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-              }}
-            >
-              🔗 share
-            </button>
-          )}
-          {spotifyTrackId && (
-            <a
-              href={`https://open.spotify.com/track/${spotifyTrackId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                flex: 1,
-                minHeight: 36,
-                borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.03)",
-                color: "rgba(255,255,255,0.35)",
-                fontSize: 10,
-                fontFamily: "monospace",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                textDecoration: "none",
-              }}
-            >
-              🎵 spotify
-            </a>
-          )}
-        </div>
       </div>
     </div>
   );

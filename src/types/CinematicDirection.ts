@@ -1,6 +1,6 @@
 /**
  * CinematicDirection — unified type supporting both:
- * - NEW format (character/world/particle + sections/phrases)
+ * - NEW format (sceneTone, sections, wordDirectives as array, storyboard)
  * - OLD format fields (kept as optional for backward compat during migration)
  *
  * Contains active and legacy fields for DB compatibility.
@@ -17,52 +17,43 @@ export interface FontProfile {
 }
 
 export interface CinematicDirection {
-  // ── v2.1 fields ──
-  /** AI-picked Google Font family name */
-  font?: string;
-
-  // ── v2 fields (current) ──
-  /** Song personality classification — maps to font genreFit */
-  character?: string;
-  /** Visual universe — one sentence, shared across all sections */
-  world?: string;
-  /** Ambient particle type for the entire song */
-  particle?: string;
-
+  // New backend fields (v2 prompt)
+  sceneTone?: string;
+  atmosphere?: string;
+  motion?: string;
+  typography?: string;
+  fontProfile?: FontProfile;
+  texture?: string;
+  emotionalArc?: string;
+  palette?: string;
   sections?: CinematicSection[];
 
-  /** AI-grouped phrases: which words appear on screen together */
+  // WordDirectives: new format = array, old format = Record
+  // Legacy field — word emphasis data from old AI prompt format
+  wordDirectives?: WordDirective[] | Record<string, WordDirective>;
+
+  // Storyboard: new format = StoryboardEntry[], old legacy objects
+  storyboard?: StoryboardEntry[] | Record<string, any>[];
+
+  /** AI-grouped phrases: which words appear on screen together.
+   *  Each phrase is one "reading beat" — a complete thought the viewer reads and absorbs. */
   phrases?: CinematicPhrase[];
   hookPhrase?: string;
-
-  // ── Legacy fields (kept for cached DB data only) ──
-  /** @deprecated v1 — use character + fontResolver */
-  typography?: string;
-  /** @deprecated v1 — use character + fontResolver */
-  fontProfile?: FontProfile;
-  /** @deprecated v1 — particle is now song-level */
-  texture?: string;
-  /** @deprecated v1 */
-  atmosphere?: string;
-  /** @deprecated v1 */
-  motion?: string;
-  /** @deprecated v1 */
-  palette?: string;
-  /** @deprecated v1 */
-  storyboard?: Record<string, any>[];
-  /** @deprecated v1 */
+  /** Detected chorus lyric text (repeated lines) */
   chorusText?: string;
-  /** @deprecated v0 */
+
+  // ── Legacy fields (deprecated — use resolvers instead) ─────
+  /** @deprecated Use emotionalArc + resolvers */
   thesis?: string;
-  /** @deprecated v0 */
+  /** @deprecated Legacy visual world from V1 prompt */
   visualWorld?: Record<string, any>;
-  /** @deprecated v0 — use sections + enrichSections() */
+  /** @deprecated Use sections + enrichSections() */
   chapters?: Chapter[];
-  /** @deprecated v0 */
+  /** @deprecated Legacy tension curve from V1 prompt */
   tensionCurve?: any[];
-  /** @deprecated v0 */
+  /** @deprecated Legacy climax directive from V1 prompt */
   climax?: Record<string, any>;
-  /** @deprecated v0 */
+  /** @deprecated Legacy ending directive from V1 prompt */
   ending?: Record<string, any>;
 }
 
@@ -71,51 +62,31 @@ export interface CinematicDirection {
 export interface CinematicSection {
   sectionIndex: number;
   description: string;
-  /** Visual mood — energy-derived in v2 */
-  visualMood?: string;
-  /** Dominant color hex — energy-derived in v2 */
-  dominantColor?: string;
-  /** Particle texture — same as song-level particle in v2 */
-  texture?: string;
-  /** Concrete visual nouns from AI (v2) */
-  nouns?: string[];
-  /** Emotionally weighted lyric words for this section */
-  heroWords?: string[] | null;
-
-  // ── Energy features (v2 — set by enrichSectionsWithEnergy) ──
-  avgEnergy?: number;
-  peakEnergy?: number;
-  avgBrightness?: number;
-  slope?: number;
-  deltaFromPrev?: number;
-
-  // ── Time boundaries ──
-  startSec?: number;
-  endSec?: number;
-  /** Computed by enrichSections() */
-  startRatio?: number;
-  /** Computed by enrichSections() */
-  endRatio?: number;
-
-  // ── Legacy fields (kept for cached data) ──
-  /** @deprecated v1 */
   mood?: string;
-  /** @deprecated v1 */
+  /** Visual mood keyword from fixed vocabulary — drives cinematic grading */
+  visualMood?: string;
   motion?: string;
-  /** @deprecated v1 */
-  atmosphere?: string;
-  /** @deprecated v1 */
+  texture?: string;
   typography?: string;
-  /** @deprecated v1 */
   fontProfile?: FontProfile;
-  /** @deprecated v1 */
+  atmosphere?: string;
+  /** Time boundary in seconds (from audioSections) */
+  startSec?: number;
+  /** Time boundary in seconds (from audioSections) */
+  endSec?: number;
+  /** Computed by enrichSections() — ratio 0–1 */
+  startRatio?: number;
+  /** Computed by enrichSections() — ratio 0–1 */
+  endRatio?: number;
   structuralLabel?: string;
-  /** @deprecated v1 */
+  /** AI boundary suggestion — only present for low-confidence sections */
   suggestedStartSec?: number;
-  /** @deprecated v1 */
+  /** AI boundary suggestion — only present for low-confidence sections */
   suggestedEndSec?: number;
-  /** @deprecated v1 */
+  /** How particles behave in this section */
   atmosphereState?: 'still' | 'drifting' | 'falling' | 'swirling';
+  /** Section's dominant color — drives palette */
+  dominantColor?: string;
 }
 
 export interface CinematicPhrase {
@@ -155,6 +126,33 @@ export interface CinematicPhrase {
   elementalWash?: boolean;
 }
 
+export interface StoryboardEntry {
+  lineIndex: number;
+  text?: string;
+  heroWord?: string;
+  entryStyle?: string;
+  exitStyle?: string;
+  emotionalIntent?: string;
+  visualTreatment?: string;
+  particleBehavior?: string;
+  beatAlignment?: string;
+  transitionToNext?: string;
+}
+
+// ── Word directive (supports both v1 and v2 fields) ──────────
+
+export interface WordDirective {
+  word: string;
+  emphasisLevel: number;
+  elementalClass?:
+    | 'FIRE' | 'WATER' | 'FROST' | 'SMOKE' | 'ELECTRIC'
+    | 'ICE' | 'RAIN' | 'NEON' | null; // ICE/RAIN/NEON kept for legacy compat
+  /** Word appears alone on screen — requires word duration ≥ 700ms */
+  isolation?: boolean;
+  specialEffect?: string | null;
+  evolutionRule?: string | null;
+}
+
 // (SymbolSystem, CameraLanguage, ShotType, SilenceDirective removed — dead V2 fields)
 
 export interface Chapter {
@@ -183,3 +181,4 @@ export interface Chapter {
 }
 
 // (SilenceDirective removed — dead V2 field)
+

@@ -6,8 +6,8 @@ import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer"
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import type { CardMode } from "@/components/lyric/PlayerHeader";
 import { MomentPanel } from "@/components/lyric/MomentPanel";
+import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
-import { OneTruth } from "@/components/lyric/OneTruth";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
@@ -84,7 +84,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
   const [comments, setComments] = useState<Comment[]>([]);
   const [viralClipOpen, setViralClipOpen] = useState(false);
-  const [userSessionFires, setUserSessionFires] = useState<Record<number, number>>({});
   const [profileMap, setProfileMap] = useState<Record<string, { avatarUrl: string | null; displayName: string | null }>>({});
 
   const audioState = useSyncExternalStore(audioController.subscribe, audioController.getSnapshot, audioController.getSnapshot);
@@ -112,7 +111,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
   const [hasUnlocked, setHasUnlocked] = useState(false);
-  const [truthCompleted, setTruthCompleted] = useState(false);
 
   // Auto-play for non-feed embeds (FitTab) when player is ready
   useEffect(() => {
@@ -315,11 +313,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   useEffect(() => {
     if (!durationSec || !player) return;
     if (currentTimeSec > durationSec + 2.2 && cardMode === "listen") {
-      const empData = ((data ?? prefetchedData) as any)?.empowerment_promise;
-      setCardMode(empData?.hooks?.length ? "empowerment" : "truth");
+      setCardMode("empowerment");
       player.audio.loop = false;
     }
-  }, [currentTimeSec, durationSec, cardMode, player, data, prefetchedData]);
+  }, [currentTimeSec, durationSec, cardMode, player]);
 
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
@@ -394,12 +391,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     if (activeLine) return activeLine.lineIndex;
     const t = player?.audio?.currentTime ?? 0;
     for (let i = moments.length - 1; i >= 0; i -= 1) {
-      if (t >= moments[i].startSec - 0.1) {
-        // Prefer the first line's lineIndex so deriveMomentFireCounts can find it.
-        // Only fall back to sectionIndex if the moment has no lyric lines (beat/instrumental).
-        const firstLine = moments[i].lines[0];
-        return firstLine ? firstLine.lineIndex : moments[i].sectionIndex;
-      }
+      if (t >= moments[i].startSec - 0.1) return moments[i].sectionIndex;
     }
     return 0;
   }, [activeLine, player, moments]);
@@ -477,29 +469,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             empowermentPromise={
               ((data ?? prefetchedData) as any)?.empowerment_promise ?? null
             }
-            onDismiss={() => setCardMode("truth")}
-          />
-        )}
-
-        {cardMode === "truth" && (
-          <OneTruth
-            danceId={danceId}
-            moments={moments}
-            fireHeat={fireHeat}
-            comments={comments}
-            userFires={userSessionFires}
-            allLines={(((data ?? prefetchedData) as any)?.lines ?? []).map((line: any, lineIndex: number) => ({
-              text: line?.text ?? "",
-              lineIndex,
-            }))}
-            initialBeat={truthCompleted ? "meaning" : undefined}
-            onContinue={() => {
-              setTruthCompleted(true);
-              setCardMode("moments");
-            }}
-            onCommentSubmitted={(comment) => {
-              setComments((prev) => [...prev, comment]);
-            }}
+            onDismiss={() => setCardMode("moments")}
           />
         )}
 
@@ -516,8 +486,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             profileMap={profileMap}
             fireUserMap={fireUserMap}
             fireAnonCount={fireAnonCount}
-            spotifyTrackId={spotifyTrackId ?? null}
-            lyricDanceUrl={lyricDanceUrl ?? null}
             onFireMoment={(lineIndex, timeSec, holdMs) => {
               if (!danceId) return;
               player?.fireFire(holdMs);
@@ -539,6 +507,15 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           />
         )}
 
+        {cardMode === "results" && (
+          <CardResultsPanel
+            moments={moments}
+            fireHeat={fireHeat}
+            spotifyTrackId={spotifyTrackId ?? null}
+            postId={postId ?? null}
+            lyricDanceUrl={lyricDanceUrl ?? null}
+          />
+        )}
       </div>
 
       {cardMode === "listen" && (
@@ -549,6 +526,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             player={player}
             currentTimeSec={currentTimeSec}
             danceId={danceId}
+            comments={comments}
             onFireTap={() => {
               if (holdFireIntervalRef.current) {
                 clearInterval(holdFireIntervalRef.current);
@@ -572,11 +550,15 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               emitFire(danceId, getCurrentFireIndex(), player?.audio.currentTime ?? 0, holdMs, "feed", userId ?? null);
             }}
             onSeekTo={seekOnly}
-            onUserFire={(momentIdx, holdMs) => {
-              setUserSessionFires((prev) => ({
-                ...prev,
-                [momentIdx]: (prev[momentIdx] ?? 0) + holdMs,
-              }));
+            onToastTap={(momentIdx) => {
+              const m = moments[momentIdx];
+              if (m && player) {
+                player.audio.currentTime = Math.max(0, m.startSec - 0.01);
+                player.setRegion(m.startSec, m.endSec);
+                player.setMuted(false);
+                player.play();
+              }
+              setCardMode("moments");
             }}
           />
         </div>

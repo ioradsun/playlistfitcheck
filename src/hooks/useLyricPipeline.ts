@@ -12,7 +12,6 @@ import { buildPhrases } from "@/lib/phraseEngine";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { FilmMode } from "@/components/lyric/LyricFitTab";
-import type { AudioAnalysis } from "@/engine/audioAnalyzer";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 export type PipelineStageStatus = "pending" | "running" | "done" | "error";
@@ -56,7 +55,7 @@ interface UsePipelineSchedulerParams {
   runIdRef: React.MutableRefObject<number>;
   lastCompletedRunIdRef: React.MutableRefObject<number>;
 
-  startCinematicDirection: (force?: boolean) => Promise<void>;
+  startCinematicDirection: (lines: LyricLine[], force?: boolean) => Promise<void>;
   startHookDetection: () => Promise<void>;
 }
 
@@ -85,343 +84,6 @@ interface UsePipelineSchedulerReturn {
     error?: string | null;
   }) => void;
   handleSectionImagesError: (error: string | null) => void;
-}
-
-interface EnergySection {
-  index: number;
-  startSec: number;
-  endSec: number;
-  avgEnergy: number;
-  peakEnergy: number;
-  avgBrightness: number;
-  slope: number;
-  deltaFromPrev: number;
-}
-
-function buildSectionsFromEnergy(
-  analysis: AudioAnalysis,
-  maxSections: number = 8,
-  minSectionDuration: number = 8,
-): EnergySection[] {
-  const { frames, frameRate } = analysis;
-  if (frames.length === 0) return [];
-
-  const duration = frames[frames.length - 1].time;
-  const windowSize = Math.round(frameRate * 2);
-  const smoothed: number[] = new Array(frames.length);
-
-  for (let i = 0; i < frames.length; i++) {
-    const start = Math.max(0, i - windowSize);
-    const end = Math.min(frames.length, i + windowSize);
-    let sum = 0;
-    for (let j = start; j < end; j++) {
-      sum += frames[j].energy;
-    }
-    smoothed[i] = sum / (end - start);
-  }
-
-  const minGapFrames = Math.round(frameRate * minSectionDuration);
-  const valleys: Array<{ frame: number; depth: number }> = [];
-
-  for (let i = minGapFrames; i < smoothed.length - minGapFrames; i++) {
-    if (smoothed[i] <= smoothed[i - 1] && smoothed[i] <= smoothed[i + 1]) {
-      if (valleys.length === 0 || i - valleys[valleys.length - 1].frame > minGapFrames) {
-        valleys.push({ frame: i, depth: smoothed[i] });
-      }
-    }
-  }
-
-  const selected = valleys
-    .slice()
-    .sort((a, b) => a.depth - b.depth)
-    .slice(0, maxSections - 1)
-    .sort((a, b) => a.frame - b.frame);
-
-  const boundaryFrames = [0, ...selected.map((v) => v.frame), frames.length - 1];
-
-  const sections = boundaryFrames.slice(0, -1).map((startFrame, i) => {
-    const endFrame = boundaryFrames[i + 1];
-    const frameSlice = frames.slice(startFrame, Math.max(startFrame + 1, endFrame + 1));
-    const avgEnergy =
-      frameSlice.reduce((sum, frame) => sum + frame.energy, 0) / frameSlice.length;
-    const peakEnergy = frameSlice.reduce(
-      (max, frame) => (frame.energy > max ? frame.energy : max),
-      0,
-    );
-    const avgBrightness =
-      frameSlice.reduce((sum, frame) => sum + frame.brightness, 0) / frameSlice.length;
-    const firstEnergy = frameSlice[0]?.energy ?? avgEnergy;
-    const lastEnergy = frameSlice[frameSlice.length - 1]?.energy ?? avgEnergy;
-
-    return {
-      index: i,
-      startSec: Math.round((startFrame / frameRate) * 100) / 100,
-      endSec: Math.round((endFrame / frameRate) * 100) / 100,
-      avgEnergy: Math.round(avgEnergy * 1000) / 1000,
-      peakEnergy: Math.round(peakEnergy * 1000) / 1000,
-      avgBrightness: Math.round(avgBrightness * 1000) / 1000,
-      slope: Math.round((lastEnergy - firstEnergy) * 1000) / 1000,
-      deltaFromPrev: 0,
-    };
-  });
-
-  const withDelta = sections.map((section, i) => ({
-    ...section,
-    deltaFromPrev:
-      i === 0 ? 0 : Math.round((section.avgEnergy - sections[i - 1].avgEnergy) * 1000) / 1000,
-  }));
-
-  if (withDelta.length < 3 && duration > 15) {
-    const count = Math.min(maxSections, Math.max(3, Math.ceil(duration / 30)));
-    const forced = Array.from({ length: count }, (_, i) => {
-      const startSec = (duration / count) * i;
-      const endSec = (duration / count) * (i + 1);
-      const startFrame = Math.max(0, Math.floor(startSec * frameRate));
-      const endFrame = Math.min(frames.length - 1, Math.floor(endSec * frameRate));
-      const frameSlice = frames.slice(startFrame, Math.max(startFrame + 1, endFrame + 1));
-      const avgEnergy =
-        frameSlice.reduce((sum, frame) => sum + frame.energy, 0) / frameSlice.length;
-      const peakEnergy = frameSlice.reduce(
-        (max, frame) => (frame.energy > max ? frame.energy : max),
-        0,
-      );
-      const avgBrightness =
-        frameSlice.reduce((sum, frame) => sum + frame.brightness, 0) / frameSlice.length;
-      const firstEnergy = frameSlice[0]?.energy ?? avgEnergy;
-      const lastEnergy = frameSlice[frameSlice.length - 1]?.energy ?? avgEnergy;
-      return {
-        index: i,
-        startSec: Math.round(startSec * 100) / 100,
-        endSec: Math.round(endSec * 100) / 100,
-        avgEnergy: Math.round(avgEnergy * 1000) / 1000,
-        peakEnergy: Math.round(peakEnergy * 1000) / 1000,
-        avgBrightness: Math.round(avgBrightness * 1000) / 1000,
-        slope: Math.round((lastEnergy - firstEnergy) * 1000) / 1000,
-        deltaFromPrev: 0,
-      };
-    });
-    return forced.map((section, i) => ({
-      ...section,
-      deltaFromPrev:
-        i === 0 ? 0 : Math.round((section.avgEnergy - forced[i - 1].avgEnergy) * 1000) / 1000,
-    }));
-  }
-
-  return enforceMaxSectionDuration(withDelta, frames, frameRate);
-}
-
-const MAX_SECTION_SEC = 30;
-
-/**
- * Subdivide any section longer than MAX_SECTION_SEC.
- * Splits at the deepest energy valley within the oversized section.
- * Repeats until all sections are under the cap.
- */
-function enforceMaxSectionDuration(
-  sections: EnergySection[],
-  frames: Array<{ time: number; energy: number; brightness: number }>,
-  frameRate: number,
-): EnergySection[] {
-  let result = [...sections];
-  let changed = true;
-
-  while (changed) {
-    changed = false;
-    const next: EnergySection[] = [];
-
-    for (const section of result) {
-      const dur = section.endSec - section.startSec;
-      if (dur <= MAX_SECTION_SEC) {
-        next.push(section);
-        continue;
-      }
-
-      const startFrame = Math.max(0, Math.round(section.startSec * frameRate));
-      const endFrame = Math.min(frames.length - 1, Math.round(section.endSec * frameRate));
-      const minGap = Math.round(frameRate * 5); // at least 5s from edges
-
-      let bestFrame = -1;
-      let bestEnergy = Infinity;
-      for (let i = startFrame + minGap; i < endFrame - minGap; i++) {
-        if (frames[i].energy < bestEnergy) {
-          bestEnergy = frames[i].energy;
-          bestFrame = i;
-        }
-      }
-
-      if (bestFrame < 0) {
-        bestFrame = Math.round((startFrame + endFrame) / 2);
-      }
-
-      const splitSec = Math.round((bestFrame / frameRate) * 100) / 100;
-
-      const makeHalf = (sFrame: number, eFrame: number, sSec: number, eSec: number): EnergySection => {
-        const slice = frames.slice(sFrame, Math.max(sFrame + 1, eFrame + 1));
-        const avgEnergy = slice.reduce((s, f) => s + f.energy, 0) / slice.length;
-        const peakEnergy = slice.reduce((m, f) => (f.energy > m ? f.energy : m), 0);
-        const avgBrightness = slice.reduce((s, f) => s + f.brightness, 0) / slice.length;
-        const firstE = slice[0]?.energy ?? avgEnergy;
-        const lastE = slice[slice.length - 1]?.energy ?? avgEnergy;
-        return {
-          index: 0,
-          startSec: sSec,
-          endSec: eSec,
-          avgEnergy: Math.round(avgEnergy * 1000) / 1000,
-          peakEnergy: Math.round(peakEnergy * 1000) / 1000,
-          avgBrightness: Math.round(avgBrightness * 1000) / 1000,
-          slope: Math.round((lastE - firstE) * 1000) / 1000,
-          deltaFromPrev: 0,
-        };
-      };
-
-      next.push(makeHalf(startFrame, bestFrame, section.startSec, splitSec));
-      next.push(makeHalf(bestFrame, endFrame, splitSec, section.endSec));
-      changed = true;
-    }
-
-    result = next;
-  }
-
-  return result.map((s, i) => ({
-    ...s,
-    index: i,
-    deltaFromPrev: i === 0 ? 0 : Math.round((s.avgEnergy - result[i - 1].avgEnergy) * 1000) / 1000,
-  }));
-}
-
-function deriveVisualMoodFromEnergy(
-  avgEnergy: number,
-  peakEnergy: number,
-  avgBrightness: number,
-  deltaFromPrev: number,
-): string {
-  if (peakEnergy > 0.85 && deltaFromPrev > 0.15) return "aggressive";
-  if (avgEnergy > 0.7) return avgBrightness > 0.5 ? "anthemic" : "defiant";
-  if (avgEnergy > 0.55) return avgBrightness > 0.6 ? "euphoric" : "triumphant";
-  if (avgEnergy > 0.4) return avgBrightness > 0.5 ? "dreamy" : "hypnotic";
-  if (avgEnergy > 0.25) return avgBrightness > 0.4 ? "nostalgic" : "melancholy";
-  if (avgEnergy > 0.15) return "intimate";
-  return "vulnerable";
-}
-
-function hslToHex(h: number, s: number, l: number): string {
-  const sat = s / 100;
-  const light = l / 100;
-  const c = (1 - Math.abs(2 * light - 1)) * sat;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = light - c / 2;
-
-  let r = 0;
-  let g = 0;
-  let b = 0;
-
-  if (h < 60) [r, g, b] = [c, x, 0];
-  else if (h < 120) [r, g, b] = [x, c, 0];
-  else if (h < 180) [r, g, b] = [0, c, x];
-  else if (h < 240) [r, g, b] = [0, x, c];
-  else if (h < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
-
-  const toHex = (channel: number) =>
-    Math.round((channel + m) * 255)
-      .toString(16)
-      .padStart(2, "0");
-
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
-}
-
-const WORLD_HUE_KEYWORDS: Array<{ keywords: string[]; hue: number }> = [
-  { keywords: ['snow', 'ice', 'frost', 'winter', 'cold', 'frozen', 'blizzard', 'arctic'], hue: 200 },
-  { keywords: ['fire', 'flame', 'burn', 'ember', 'lava', 'heat', 'candle'], hue: 20 },
-  { keywords: ['rain', 'storm', 'ocean', 'sea', 'water', 'flood', 'drown', 'wave'], hue: 210 },
-  { keywords: ['night', 'dark', 'midnight', 'shadow', 'moon', '3am', '4am'], hue: 240 },
-  { keywords: ['sun', 'gold', 'dawn', 'sunrise', 'morning', 'light', 'glow'], hue: 40 },
-  { keywords: ['forest', 'tree', 'pine', 'leaf', 'grass', 'garden', 'jungle'], hue: 140 },
-  { keywords: ['desert', 'sand', 'dust', 'dry', 'wasteland', 'road', 'highway'], hue: 35 },
-  { keywords: ['neon', 'club', 'city', 'street', 'urban', 'concrete'], hue: 280 },
-  { keywords: ['sky', 'cloud', 'heaven', 'float', 'drift', 'wind', 'air'], hue: 195 },
-  { keywords: ['blood', 'red', 'heart', 'rose', 'valentine', 'crimson'], hue: 350 },
-  { keywords: ['smoke', 'haze', 'fog', 'mist', 'grey', 'gray', 'ash'], hue: 220 },
-  { keywords: ['star', 'space', 'cosmic', 'galaxy', 'universe', 'void'], hue: 260 },
-  { keywords: ['church', 'gospel', 'soul', 'spirit', 'pray', 'holy'], hue: 45 },
-  { keywords: ['mountain', 'peak', 'summit', 'cliff', 'rock', 'stone'], hue: 210 },
-];
-
-function deriveWorldHue(world: string, nouns: string[]): number {
-  const worldLower = (world ?? '').toLowerCase();
-  const nounsLower = nouns.join(' ').toLowerCase();
-  let bestScore = 0;
-  let bestHue = 220;
-  for (const entry of WORLD_HUE_KEYWORDS) {
-    const worldHits = entry.keywords.filter(kw => worldLower.includes(kw)).length * 3;
-    const nounHits = entry.keywords.filter(kw => nounsLower.includes(kw)).length;
-    const score = worldHits + nounHits;
-    if (score > bestScore) {
-      bestScore = score;
-      bestHue = entry.hue;
-    }
-  }
-  return bestHue;
-}
-
-function deriveDominantColorFromEnergy(
-  avgEnergy: number,
-  avgBrightness: number,
-  worldHue: number,
-  sectionIndex: number,
-): string {
-  const hueShift = (sectionIndex % 3 - 1) * 12;
-  const hue = (worldHue + hueShift + 360) % 360;
-  const saturation = Math.round(25 + avgEnergy * 40);
-  const lightness = Math.round(30 + avgBrightness * 10 + avgEnergy * 12);
-  return hslToHex(hue, saturation, lightness);
-}
-
-function enrichSectionsWithEnergy(direction: any, audioSections: EnergySection[]) {
-  const energyByIndex = new Map(audioSections.map((section) => [section.index, section]));
-  const sections = Array.isArray(direction?.sections) ? direction.sections : [];
-  const world = direction?.world ?? '';
-  const allNouns = sections.flatMap((s: any) => Array.isArray(s.nouns) ? s.nouns : []);
-  const worldHue = deriveWorldHue(world, allNouns);
-  return sections.map((section: any, index: number) => {
-    const match = energyByIndex.get(section?.sectionIndex ?? section?.index ?? index);
-    if (!match) return section;
-    return {
-      ...section,
-      visualMood: deriveVisualMoodFromEnergy(
-        match.avgEnergy,
-        match.peakEnergy,
-        match.avgBrightness,
-        match.deltaFromPrev,
-      ),
-      dominantColor: deriveDominantColorFromEnergy(
-        match.avgEnergy,
-        match.avgBrightness,
-        worldHue,
-        index,
-      ),
-      avgEnergy: match.avgEnergy,
-      peakEnergy: match.peakEnergy,
-      avgBrightness: match.avgBrightness,
-      slope: match.slope,
-      deltaFromPrev: match.deltaFromPrev,
-    };
-  });
-}
-
-function evenTimeSplit(durationSec: number, maxSections: number = 8): EnergySection[] {
-  const duration = durationSec || 60;
-  const count = Math.min(maxSections, Math.max(3, Math.ceil(duration / 30)));
-  return Array.from({ length: count }, (_, i) => ({
-    index: i,
-    startSec: Math.round((duration / count) * i * 100) / 100,
-    endSec: Math.round((duration / count) * (i + 1) * 100) / 100,
-    avgEnergy: 0.35,
-    peakEnergy: 0.5,
-    avgBrightness: 0.45,
-    slope: 0,
-    deltaFromPrev: 0,
-  }));
 }
 
 async function createDanceRowAndGenerateImages({
@@ -508,8 +170,6 @@ async function createDanceRowAndGenerateImages({
           : {}),
       } as any)
       .eq("id", resolvedDanceId);
-
-    // Invalidate localStorage so reload fetches fresh DB data
     try { localStorage.removeItem(`tfm:lyric:${resolvedDanceId}`); } catch {}
   } else {
     if (!audioFile) {
@@ -652,68 +312,6 @@ async function createDanceRowAndGenerateImages({
   };
 }
 
-async function callCinematicDirection(opts: {
-  title: string;
-  artist: string;
-  audioUrl?: string;
-  artistDirection?: string;
-  instrumental?: boolean;
-  beatGrid: BeatGridData | null;
-  audioDurationSec: number;
-}) {
-  const analysis = opts.beatGrid?._analysis;
-  const audioSections =
-    analysis?.frames?.length && analysis.frameRate > 0
-      ? buildSectionsFromEnergy(analysis)
-      : evenTimeSplit(opts.audioDurationSec);
-
-  const { data } = await invokeWithTimeout(
-    "cinematic-direction",
-    {
-      title: opts.title,
-      artist: opts.artist,
-      audio_url: opts.audioUrl,
-      artist_direction: opts.artistDirection,
-      instrumental: opts.instrumental ?? false,
-      mode: "scene" as const,
-      audioSections: audioSections.map((s) => {
-        const avg = s.avgEnergy ?? 0;
-        const delta = s.deltaFromPrev ?? 0;
-        const slope = s.slope ?? 0;
-
-        let level: string;
-        if (avg < 0.35) level = "low";
-        else if (avg > 0.65) level = "high";
-        else level = "mid";
-
-        let direction = "";
-        if (delta > 0.08 || slope > 0.08) direction = "+rising";
-        else if (delta < -0.08 || slope < -0.08) direction = "+falling";
-
-        return {
-          index: s.index,
-          startSec: s.startSec,
-          endSec: s.endSec,
-          energyHint: level + direction,
-        };
-      }),
-    },
-    120_000,
-  );
-
-  if (!data?.cinematicDirection) {
-    throw new Error("Scene direction returned no data");
-  }
-
-  return {
-    direction: {
-      ...data.cinematicDirection,
-      sections: enrichSectionsWithEnergy(data.cinematicDirection, audioSections),
-    },
-    meta: data._meta || null,
-  };
-}
-
 export function usePipelineScheduler({
   initialLyric,
   filmMode,
@@ -844,16 +442,15 @@ export function usePipelineScheduler({
   useEffect(() => {
     if (filmMode === "beat") return;
     if (!audioUrl) return;
-    if (!beatGridDone) return;
     if (cinematicTriggeredRef.current) return;
     cinematicTriggeredRef.current = true;
     const force = pipelineRetryCount > 0;
-    console.time("[pipeline] beat→cinematic");
-    void startCinematicDirection(force);
+
+    void startCinematicDirection(lines, force);
   }, [
     filmMode,
     audioUrl,
-    beatGridDone,
+    lines,
     pipelineRetryCount,
     startCinematicDirection,
   ]);
@@ -1334,15 +931,7 @@ export function useLyricPipeline({
       return;
     }
 
-    const heroHints = cinematicDirection?.sections
-      ?.filter((s: any) => s.heroWords?.length)
-      .map((s: any) => ({
-        startSec: s.startSec,
-        endSec: s.endSec,
-        heroWords: s.heroWords,
-      })) ?? [];
-
-    const phraseResult = buildPhrases(words, heroHints.length ? heroHints : undefined);
+    const phraseResult = buildPhrases(words);
     phraseResultRef.current = phraseResult;
 
     setCinematicDirection((prev: any) => ({
@@ -1351,7 +940,7 @@ export function useLyricPipeline({
       hookPhrase: phraseResult.hookPhrase,
       _phraseSource: "client_v1",
     }));
-  }, [words, cinematicDirection]);
+  }, [words]);
 
   useEffect(() => {
     if (audioBuffer) return;
@@ -1757,31 +1346,6 @@ export function useLyricPipeline({
   }, [renderData, cinematicDirection]);
 
   const hookDetectionRunRef = useRef(false);
-  const commitCinematicDirection = useCallback((enrichedScene: any) => {
-    setCinematicDirection(enrichedScene);
-    cinematicDirectionRef.current = enrichedScene;
-
-    setRenderData((prev: any) => {
-      const updatedRenderData = {
-        ...(prev || {}),
-        cinematicDirection: enrichedScene,
-        cinematic_direction: enrichedScene,
-        description: enrichedScene.world ?? enrichedScene.description,
-      };
-      if (savedIdRef.current) {
-        persistQueue.enqueue({
-          table: "lyric_projects",
-          id: savedIdRef.current,
-          payload: {
-            cinematic_direction: enrichedScene,
-            render_data: updatedRenderData,
-          },
-        });
-      }
-      return updatedRenderData;
-    });
-  }, [setCinematicDirection, setRenderData]);
-
   const startHookDetection = useCallback(async () => {
     if (hookDetectionRunRef.current) return;
     if (!words?.length || !lines?.length) return;
@@ -1849,7 +1413,7 @@ export function useLyricPipeline({
   ]);
 
   const startCinematicDirection = useCallback(
-    async (force = false) => {
+    async (sourceLines: LyricLine[], force = false) => {
       if (!lyricData) return;
       const myRunId = ++runIdRef.current;
       {
@@ -1869,30 +1433,136 @@ export function useLyricPipeline({
       setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
 
       try {
-        const { direction: sceneDirection, meta: sceneMeta } = await callCinematicDirection({
+        const lyricsForDirection = sourceLines
+          .filter((l: any) => l.tag !== "adlib")
+          .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
+        let audioSections: any[] = [];
+        if (lyricsForDirection.length > 0) {
+          const sectionCount = Math.min(
+            8,
+            Math.max(1, Math.ceil(lyricsForDirection.length / 4)),
+          );
+          const linesPerSection = Math.max(
+            1,
+            Math.ceil(lyricsForDirection.length / sectionCount),
+          );
+          audioSections = Array.from({ length: sectionCount }, (_, i) => {
+            const startIdx = i * linesPerSection;
+            const endIdx = Math.min(
+              (i + 1) * linesPerSection,
+              lyricsForDirection.length,
+            ) - 1;
+            const firstLine = lyricsForDirection[startIdx];
+            const lastLine = lyricsForDirection[Math.max(startIdx, endIdx)];
+            const startSec = firstLine?.start ?? i * 10;
+            const endSec =
+              lastLine?.end ??
+              Math.max(startSec + 8, (i + 1) * 10);
+            const duration = Math.max(0.1, endSec - startSec);
+            const beatDensity = beatGrid?.bpm
+              ? (beatGrid.bpm / 60)
+              : lyricsForDirection
+                  .slice(startIdx, endIdx + 1)
+                  .filter((line) => line.text?.trim().length > 0).length / duration;
+
+            return {
+              index: i,
+              startSec,
+              endSec,
+              role:
+                i === 0
+                  ? "intro"
+                  : i === sectionCount - 1
+                    ? "outro"
+                    : "main",
+              avgEnergy: 0.5,
+              beatDensity,
+              lyrics: lyricsForDirection
+                .slice(startIdx, endIdx + 1)
+                .map((line, offset) => ({
+                  text: line.text,
+                  lineIndex: startIdx + offset,
+                })),
+            };
+          });
+          // Enforce max 30s per section — split oversized sections at midpoint
+          const MAX_SEC = 30;
+          let splitAgain = true;
+          while (splitAgain) {
+            splitAgain = false;
+            const next: typeof audioSections = [];
+            for (const sec of audioSections) {
+              const dur = (sec.endSec ?? 0) - (sec.startSec ?? 0);
+              if (dur > MAX_SEC) {
+                const mid = (sec.startSec + sec.endSec) / 2;
+                const midLines = sec.lyrics?.filter((l: any) => {
+                  const lineStart = lyricsForDirection[l.lineIndex]?.start ?? 0;
+                  return lineStart < mid;
+                }) ?? [];
+                const restLines = sec.lyrics?.filter((l: any) => {
+                  const lineStart = lyricsForDirection[l.lineIndex]?.start ?? 0;
+                  return lineStart >= mid;
+                }) ?? [];
+                next.push({ ...sec, endSec: mid, lyrics: midLines });
+                next.push({ ...sec, index: -1, startSec: mid, lyrics: restLines });
+                splitAgain = true;
+              } else {
+                next.push(sec);
+              }
+            }
+            audioSections = next;
+          }
+          // Re-index after splitting
+          audioSections.forEach((s: any, i: number) => { s.index = i; });
+        }
+
+        const sharedBody = {
           title: lyricData.title || "Untitled",
           artist:
             artistNameRef.current && artistNameRef.current !== "artist"
               ? artistNameRef.current
               : "Unknown Artist",
-          audioUrl: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
-          artistDirection: sceneDescription?.trim() || undefined,
-          beatGrid,
-          audioDurationSec,
-        });
+          lines: lyricsForDirection,
+          lyrics: lyricsForDirection
+            .map((line: { text: string }) => line.text)
+            .join("\n"),
+          audio_url: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
+          beatGrid: beatGrid
+            ? {
+                bpm: beatGrid.bpm,
+                beats: beatGrid.beats,
+                confidence: beatGrid.confidence,
+              }
+            : undefined,
+          beatGridSummary: beatGrid
+            ? {
+                bpm: beatGrid.bpm,
+                confidence: beatGrid.confidence,
+                totalBeats: beatGrid.beats.length,
+              }
+            : undefined,
+          lyricId: savedIdRef.current || undefined,
+          artist_direction: sceneDescription?.trim() || undefined,
+          audioSections,
+        };
+
+        const { data: sceneResult } = await invokeWithTimeout(
+          "cinematic-direction",
+          { ...sharedBody, mode: "scene" },
+          120_000,
+        );
         if (myRunId !== runIdRef.current) return;
+
+        if (!sceneResult?.cinematicDirection) {
+          throw new Error("Scene direction returned no data");
+        }
+
+        const sceneDirection = sceneResult.cinematicDirection;
+        const sceneMeta = sceneResult._meta || null;
 
         if (!mountedRef.current) return;
 
-        const heroHints = sceneDirection?.sections
-          ?.filter((s: any) => s.heroWords?.length)
-          .map((s: any) => ({
-            startSec: s.startSec,
-            endSec: s.endSec,
-            heroWords: s.heroWords,
-          })) ?? [];
-        const phraseResult = phraseResultRef.current ??
-          (words?.length ? buildPhrases(words, heroHints.length ? heroHints : undefined) : null);
+        const phraseResult = phraseResultRef.current ?? (words?.length ? buildPhrases(words) : null);
         const enrichedScene = {
           ...(beatGrid
             ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
@@ -1904,7 +1574,32 @@ export function useLyricPipeline({
           _meta: { scene: sceneMeta },
         };
 
-        commitCinematicDirection(enrichedScene);
+        setCinematicDirection(enrichedScene);
+        cinematicDirectionRef.current = enrichedScene;
+
+        {
+          setRenderData((prev: any) => {
+            const updatedRenderData = {
+              ...(prev || {}),
+              cinematicDirection: enrichedScene,
+              cinematic_direction: enrichedScene,
+              description: enrichedScene.description,
+              mood: enrichedScene.mood,
+              meaning: enrichedScene.meaning,
+            };
+            if (savedIdRef.current) {
+              persistQueue.enqueue({
+                table: "lyric_projects",
+                id: savedIdRef.current,
+                payload: {
+                  cinematic_direction: enrichedScene,
+                  render_data: updatedRenderData,
+                },
+              });
+            }
+            return updatedRenderData;
+          });
+        }
 
         if (myRunId !== runIdRef.current) return;
 
@@ -2022,7 +1717,6 @@ export function useLyricPipeline({
       initialLyric,
       sceneDescription,
       audioDurationSec,
-      commitCinematicDirection,
     ],
   );
 
@@ -2116,29 +1810,129 @@ export function useLyricPipeline({
       setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
 
       try {
-        const { direction: sceneDirection, meta: sceneMeta } = await callCinematicDirection({
+        let beats = beatGrid.beats;
+        if (beats.length === 0 && beatGrid.bpm > 0) {
+          const period = 60 / beatGrid.bpm;
+          const phase = beatGrid._phase ?? 0;
+          const dur = audioDurationSec || 60;
+          const synthetic: number[] = [];
+          for (let t = phase; t < dur; t += period) synthetic.push(t);
+          beats = synthetic;
+        }
+        const maxSections = 8;
+        const beatsPerSection = Math.max(16, Math.ceil(beats.length / maxSections));
+        const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));
+        let audioSections = Array.from({ length: sectionCount }, (_, i) => {
+          const startBeat = i * beatsPerSection;
+          const endBeat = Math.min((i + 1) * beatsPerSection, beats.length) - 1;
+          const startSec = beats[startBeat] ?? 0;
+          const endSec = beats[endBeat] ?? (audioDurationSec || 60);
+          const energySlice = beatGrid.beatEnergies?.slice(startBeat, endBeat + 1) ?? [];
+          const avgEnergy = energySlice.length > 0
+            ? energySlice.reduce((a, b) => a + b, 0) / energySlice.length
+            : 0.5;
+          return {
+            index: i,
+            startSec,
+            endSec,
+            role: i === 0 ? "intro" : i === sectionCount - 1 ? "outro" : "main",
+            avgEnergy,
+            beatDensity: beatsPerSection / Math.max(0.1, endSec - startSec),
+            lyrics: [],
+          };
+        });
+        // Enforce max 30s per section — split oversized sections at midpoint
+        const MAX_SEC = 30;
+        let splitAgain = true;
+        while (splitAgain) {
+          splitAgain = false;
+          const next: typeof audioSections = [];
+          for (const sec of audioSections) {
+            const dur = (sec.endSec ?? 0) - (sec.startSec ?? 0);
+            if (dur > MAX_SEC) {
+              const mid = (sec.startSec + sec.endSec) / 2;
+              const midLines = sec.lyrics?.filter((l: any) => {
+                const lineStart = lyricsForDirection[l.lineIndex]?.start ?? 0;
+                return lineStart < mid;
+              }) ?? [];
+              const restLines = sec.lyrics?.filter((l: any) => {
+                const lineStart = lyricsForDirection[l.lineIndex]?.start ?? 0;
+                return lineStart >= mid;
+              }) ?? [];
+              next.push({ ...sec, endSec: mid, lyrics: midLines });
+              next.push({ ...sec, index: -1, startSec: mid, lyrics: restLines });
+              splitAgain = true;
+            } else {
+              next.push(sec);
+            }
+          }
+          audioSections = next;
+        }
+        // Re-index after splitting
+        audioSections.forEach((s: any, i: number) => { s.index = i; });
+
+        const body = {
           title: lyricData?.title ?? "Untitled Beat",
           artist:
             artistNameRef.current && artistNameRef.current !== "artist"
               ? artistNameRef.current
               : "Unknown Artist",
-          audioUrl: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
-          artistDirection: sceneDescription?.trim() || undefined,
+          bpm: beatGrid.bpm,
+          lines: [],
+          lyrics: "",
           instrumental: true,
-          beatGrid,
-          audioDurationSec,
-        });
+          audio_url: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
+          audioSections,
+          beatGrid: {
+            bpm: beatGrid.bpm,
+            beats: beatGrid.beats,
+            confidence: beatGrid.confidence,
+            _duration: audioDurationSec || undefined,
+          },
+          artist_direction: sceneDescription?.trim() || undefined,
+          lyricId: savedIdRef.current || undefined,
+        };
+
+        const { data: sceneResult } = await invokeWithTimeout(
+          "cinematic-direction",
+          { ...body, mode: "scene" },
+          120_000,
+        );
+        if (!sceneResult?.cinematicDirection) {
+          throw new Error("Scene direction returned no data");
+        }
 
         const enrichedScene = {
-          ...sceneDirection,
+          ...sceneResult.cinematicDirection,
           beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence },
           phrases: [],
           _artistDirection: sceneDescription?.trim() || undefined,
           _instrumental: true,
-          _meta: { scene: sceneMeta },
+          _meta: { scene: sceneResult._meta || null },
         };
 
-        commitCinematicDirection(enrichedScene);
+        setCinematicDirection(enrichedScene);
+        cinematicDirectionRef.current = enrichedScene;
+
+        setRenderData((prev: any) => {
+          const updatedRenderData = {
+            ...(prev || {}),
+            cinematicDirection: enrichedScene,
+            cinematic_direction: enrichedScene,
+            description: enrichedScene.description,
+          };
+          if (savedIdRef.current) {
+            persistQueue.enqueue({
+              table: "lyric_projects",
+              id: savedIdRef.current,
+              payload: {
+                cinematic_direction: enrichedScene,
+                render_data: updatedRenderData,
+              },
+            });
+          }
+          return updatedRenderData;
+        });
 
         setGenerationStatus((prev) => ({
           ...prev,
@@ -2179,7 +1973,7 @@ export function useLyricPipeline({
         setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "error" }));
       }
     },
-    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, audioUrl, setSectionImageUrls, setSectionImageProgress, commitCinematicDirection],
+    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, audioUrl, setSectionImageUrls, setSectionImageProgress],
   );
 
   useEffect(() => {

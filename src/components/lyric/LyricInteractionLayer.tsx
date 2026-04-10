@@ -18,7 +18,8 @@ interface FmlyBarProps {
   onSeekTo: (sec: number) => void;
   closingActive?: boolean;
   danceId?: string;
-  onUserFire?: (momentIdx: number, holdMs: number) => void;
+  comments?: Array<{ text: string; line_index: number | null }> ;
+  onToastTap?: (momentIndex: number) => void;
 }
 
 export function FmlyBar({
@@ -32,11 +33,14 @@ export function FmlyBar({
   onSeekTo,
   closingActive = false,
   danceId,
-  onUserFire,
+  comments = [],
+  onToastTap,
 }: FmlyBarProps) {
   const [pressing, setPressing] = useState(false);
   const [renderTick, setRenderTick] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  const [toast, setToast] = useState<{ text: string; momentIndex: number } | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
 
   const fireHoldControllerRef = useRef<ReturnType<typeof createFireHold> | null>(null);
   const userFiresRef = useRef<Record<number, number>>({});
@@ -53,6 +57,8 @@ export function FmlyBar({
   const scrubbingRef = useRef(false);
   const progressPctRef = useRef(0);
   const playheadRef = useRef<HTMLDivElement>(null);
+  const toastMomentRef = useRef<number | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const momentFireCounts = useMemo(
     () => deriveMomentFireCounts(fireHeat, moments),
@@ -88,6 +94,27 @@ export function FmlyBar({
     () => moments.findIndex((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec),
     [moments, currentTimeSec],
   );
+
+  useEffect(() => {
+    if (scrubbingRef.current || currentMomentIdx < 0) return;
+    if (toastMomentRef.current === currentMomentIdx) return;
+    const lineIndex = moments[currentMomentIdx]?.lines[0]?.lineIndex ?? moments[currentMomentIdx]?.sectionIndex;
+    if (lineIndex == null) return;
+    const bucket = comments.filter((c) => c.line_index === lineIndex);
+    if (!bucket.length) return;
+    const latest = bucket[bucket.length - 1];
+    toastMomentRef.current = currentMomentIdx;
+    setToast({ text: latest.text, momentIndex: currentMomentIdx });
+    setToastVisible(true);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastVisible(false);
+    }, 3000);
+  }, [comments, currentMomentIdx, moments]);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+  }, []);
 
   // ── Hydrate user fires from DB on mount ─────────────────────────────────
   useEffect(() => {
@@ -292,7 +319,6 @@ export function FmlyBar({
     if (idx < 0) return;
     userFiresRef.current[idx] = (userFiresRef.current[idx] ?? 0) + holdMs;
     setRenderTick((t) => t + 1);
-    onUserFire?.(idx, holdMs);
   };
 
   const handleFireTap = () => {
@@ -453,6 +479,34 @@ export function FmlyBar({
             onPointerCancel={() => { scrubbingRef.current = false; }}
           />
           </div>
+
+          {toast && (
+            <button
+              type="button"
+              onClick={() => onToastTap?.(toast.momentIndex)}
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: BAR_HEIGHT + 8,
+                transform: "translateX(-50%)",
+                border: "none",
+                background: "none",
+                fontSize: 10,
+                fontFamily: "monospace",
+                color: "rgba(255,255,255,0.25)",
+                maxWidth: "80%",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                cursor: "pointer",
+                opacity: toastVisible ? 1 : 0,
+                transition: "opacity 300ms ease",
+                zIndex: 4,
+              }}
+            >
+              {toast.text}
+            </button>
+          )}
 
           {/* Fire button — centered overlay */}
           <button
