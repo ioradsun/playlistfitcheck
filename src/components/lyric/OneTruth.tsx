@@ -126,6 +126,7 @@ export function OneTruth({
       id: `temp-${Date.now()}`,
       text: trimmed,
       line_index: lineIndex,
+      submitted_at: new Date().toISOString(),
       user_id: user?.id ?? null,
     };
     onCommentSubmitted(optimistic);
