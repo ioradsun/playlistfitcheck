@@ -12,6 +12,7 @@ import { buildPhrases } from "@/lib/phraseEngine";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { FilmMode } from "@/components/lyric/LyricFitTab";
+import type { AudioAnalysis } from "@/engine/audioAnalyzer";
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 export type PipelineStageStatus = "pending" | "running" | "done" | "error";
@@ -84,6 +85,68 @@ interface UsePipelineSchedulerReturn {
     error?: string | null;
   }) => void;
   handleSectionImagesError: (error: string | null) => void;
+}
+
+function buildSectionsFromEnergy(
+  analysis: AudioAnalysis,
+  maxSections: number = 8,
+  minSectionDuration: number = 8,
+): Array<{ index: number; startSec: number; endSec: number }> {
+  const { frames, frameRate } = analysis;
+  if (frames.length === 0) return [];
+
+  const duration = frames[frames.length - 1].time;
+  const windowSize = Math.round(frameRate * 2);
+  const smoothed: number[] = new Array(frames.length);
+
+  for (let i = 0; i < frames.length; i++) {
+    const start = Math.max(0, i - windowSize);
+    const end = Math.min(frames.length, i + windowSize);
+    let sum = 0;
+    for (let j = start; j < end; j++) {
+      sum += frames[j].energy;
+    }
+    smoothed[i] = sum / (end - start);
+  }
+
+  const minGapFrames = Math.round(frameRate * minSectionDuration);
+  const valleys: Array<{ frame: number; depth: number }> = [];
+
+  for (let i = minGapFrames; i < smoothed.length - minGapFrames; i++) {
+    if (smoothed[i] <= smoothed[i - 1] && smoothed[i] <= smoothed[i + 1]) {
+      if (valleys.length === 0 || i - valleys[valleys.length - 1].frame > minGapFrames) {
+        valleys.push({ frame: i, depth: smoothed[i] });
+      }
+    }
+  }
+
+  const selected = valleys
+    .slice()
+    .sort((a, b) => a.depth - b.depth)
+    .slice(0, maxSections - 1)
+    .sort((a, b) => a.frame - b.frame);
+
+  const boundaryFrames = [0, ...selected.map((v) => v.frame), frames.length - 1];
+
+  const sections = boundaryFrames.slice(0, -1).map((startFrame, i) => {
+    const endFrame = boundaryFrames[i + 1];
+    return {
+      index: i,
+      startSec: Math.round((startFrame / frameRate) * 100) / 100,
+      endSec: Math.round((endFrame / frameRate) * 100) / 100,
+    };
+  });
+
+  if (sections.length < 3 && duration > 60) {
+    const count = Math.min(maxSections, Math.max(3, Math.ceil(duration / 30)));
+    return Array.from({ length: count }, (_, i) => ({
+      index: i,
+      startSec: Math.round((duration / count) * i * 100) / 100,
+      endSec: Math.round((duration / count) * (i + 1) * 100) / 100,
+    }));
+  }
+
+  return sections;
 }
 
 async function createDanceRowAndGenerateImages({
@@ -1412,7 +1475,7 @@ export function useLyricPipeline({
   ]);
 
   const startCinematicDirection = useCallback(
-    async (sourceLines: LyricLine[], force = false) => {
+    async (_sourceLines: LyricLine[], force = false) => {
       if (!lyricData) return;
       const myRunId = ++runIdRef.current;
       {
@@ -1432,58 +1495,18 @@ export function useLyricPipeline({
       setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
 
       try {
-        const lyricsForDirection = sourceLines
-          .filter((l: any) => l.tag !== "adlib")
-          .map((l: any) => ({ text: l.text, start: l.start, end: l.end }));
         let audioSections: any[] = [];
-        if (lyricsForDirection.length > 0) {
-          const sectionCount = Math.min(
-            8,
-            Math.max(1, Math.ceil(lyricsForDirection.length / 4)),
-          );
-          const linesPerSection = Math.max(
-            1,
-            Math.ceil(lyricsForDirection.length / sectionCount),
-          );
-          audioSections = Array.from({ length: sectionCount }, (_, i) => {
-            const startIdx = i * linesPerSection;
-            const endIdx = Math.min(
-              (i + 1) * linesPerSection,
-              lyricsForDirection.length,
-            ) - 1;
-            const firstLine = lyricsForDirection[startIdx];
-            const lastLine = lyricsForDirection[Math.max(startIdx, endIdx)];
-            const startSec = firstLine?.start ?? i * 10;
-            const endSec =
-              lastLine?.end ??
-              Math.max(startSec + 8, (i + 1) * 10);
-            const duration = Math.max(0.1, endSec - startSec);
-            const beatDensity = beatGrid?.bpm
-              ? (beatGrid.bpm / 60)
-              : lyricsForDirection
-                  .slice(startIdx, endIdx + 1)
-                  .filter((line) => line.text?.trim().length > 0).length / duration;
-
-            return {
-              index: i,
-              startSec,
-              endSec,
-              role:
-                i === 0
-                  ? "intro"
-                  : i === sectionCount - 1
-                    ? "outro"
-                    : "main",
-              avgEnergy: 0.5,
-              beatDensity,
-              lyrics: lyricsForDirection
-                .slice(startIdx, endIdx + 1)
-                .map((line, offset) => ({
-                  text: line.text,
-                  lineIndex: startIdx + offset,
-                })),
-            };
-          });
+        const analysis = beatGrid?._analysis;
+        if (analysis && analysis.frames.length > 0) {
+          audioSections = buildSectionsFromEnergy(analysis);
+        } else {
+          const dur = audioDurationSec || 60;
+          const count = Math.min(8, Math.max(3, Math.ceil(dur / 30)));
+          audioSections = Array.from({ length: count }, (_, i) => ({
+            index: i,
+            startSec: Math.round((dur / count) * i * 100) / 100,
+            endSec: Math.round((dur / count) * (i + 1) * 100) / 100,
+          }));
         }
 
         const sharedBody = {
@@ -1492,33 +1515,19 @@ export function useLyricPipeline({
             artistNameRef.current && artistNameRef.current !== "artist"
               ? artistNameRef.current
               : "Unknown Artist",
-          lines: lyricsForDirection,
-          lyrics: lyricsForDirection
-            .map((line: { text: string }) => line.text)
-            .join("\n"),
           audio_url: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
-          beatGrid: beatGrid
-            ? {
-                bpm: beatGrid.bpm,
-                beats: beatGrid.beats,
-                confidence: beatGrid.confidence,
-              }
-            : undefined,
-          beatGridSummary: beatGrid
-            ? {
-                bpm: beatGrid.bpm,
-                confidence: beatGrid.confidence,
-                totalBeats: beatGrid.beats.length,
-              }
-            : undefined,
-          lyricId: savedIdRef.current || undefined,
           artist_direction: sceneDescription?.trim() || undefined,
-          audioSections,
+          mode: "scene" as const,
+          audioSections: audioSections.map((s) => ({
+            index: s.index,
+            startSec: s.startSec,
+            endSec: s.endSec,
+          })),
         };
 
         const { data: sceneResult } = await invokeWithTimeout(
           "cinematic-direction",
-          { ...sharedBody, mode: "scene" },
+          sharedBody,
           120_000,
         );
         if (myRunId !== runIdRef.current) return;
@@ -1780,37 +1789,19 @@ export function useLyricPipeline({
       setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
 
       try {
-        let beats = beatGrid.beats;
-        if (beats.length === 0 && beatGrid.bpm > 0) {
-          const period = 60 / beatGrid.bpm;
-          const phase = beatGrid._phase ?? 0;
+        const analysis = beatGrid?._analysis;
+        let audioSections: Array<{ index: number; startSec: number; endSec: number }>;
+        if (analysis && analysis.frames.length > 0) {
+          audioSections = buildSectionsFromEnergy(analysis);
+        } else {
           const dur = audioDurationSec || 60;
-          const synthetic: number[] = [];
-          for (let t = phase; t < dur; t += period) synthetic.push(t);
-          beats = synthetic;
-        }
-        const maxSections = 8;
-        const beatsPerSection = Math.max(16, Math.ceil(beats.length / maxSections));
-        const sectionCount = Math.max(1, Math.ceil(beats.length / beatsPerSection));
-        const audioSections = Array.from({ length: sectionCount }, (_, i) => {
-          const startBeat = i * beatsPerSection;
-          const endBeat = Math.min((i + 1) * beatsPerSection, beats.length) - 1;
-          const startSec = beats[startBeat] ?? 0;
-          const endSec = beats[endBeat] ?? (audioDurationSec || 60);
-          const energySlice = beatGrid.beatEnergies?.slice(startBeat, endBeat + 1) ?? [];
-          const avgEnergy = energySlice.length > 0
-            ? energySlice.reduce((a, b) => a + b, 0) / energySlice.length
-            : 0.5;
-          return {
+          const count = Math.min(8, Math.max(3, Math.ceil(dur / 30)));
+          audioSections = Array.from({ length: count }, (_, i) => ({
             index: i,
-            startSec,
-            endSec,
-            role: i === 0 ? "intro" : i === sectionCount - 1 ? "outro" : "main",
-            avgEnergy,
-            beatDensity: beatsPerSection / Math.max(0.1, endSec - startSec),
-            lyrics: [],
-          };
-        });
+            startSec: Math.round((dur / count) * i * 100) / 100,
+            endSec: Math.round((dur / count) * (i + 1) * 100) / 100,
+          }));
+        }
 
         const body = {
           title: lyricData?.title ?? "Untitled Beat",
@@ -1818,25 +1809,20 @@ export function useLyricPipeline({
             artistNameRef.current && artistNameRef.current !== "artist"
               ? artistNameRef.current
               : "Unknown Artist",
-          bpm: beatGrid.bpm,
-          lines: [],
-          lyrics: "",
-          instrumental: true,
           audio_url: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
-          audioSections,
-          beatGrid: {
-            bpm: beatGrid.bpm,
-            beats: beatGrid.beats,
-            confidence: beatGrid.confidence,
-            _duration: audioDurationSec || undefined,
-          },
           artist_direction: sceneDescription?.trim() || undefined,
-          lyricId: savedIdRef.current || undefined,
+          instrumental: true,
+          mode: "scene" as const,
+          audioSections: audioSections.map((s) => ({
+            index: s.index,
+            startSec: s.startSec,
+            endSec: s.endSec,
+          })),
         };
 
         const { data: sceneResult } = await invokeWithTimeout(
           "cinematic-direction",
-          { ...body, mode: "scene" },
+          body,
           120_000,
         );
         if (!sceneResult?.cinematicDirection) {
