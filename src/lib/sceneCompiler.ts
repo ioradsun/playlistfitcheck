@@ -815,7 +815,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     });
   }
 
-    const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
+  const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
 
   const compiledSections: CompiledSection[] = resolvedSections.map((s: any, index: number) => ({
     index,

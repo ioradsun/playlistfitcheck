@@ -5794,7 +5794,7 @@ export class LyricDancePlayer {
     frame.chunks = chunks;
     frame.particles = [];
     return frame;
-      }
+  }
 
   /** Draw background gradient to an arbitrary ctx (used for snapshot baking) */
   private _drawBackgroundToCtx(ctx: CanvasRenderingContext2D, frame: ScaledKeyframe): void {
