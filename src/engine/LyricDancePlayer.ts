@@ -41,7 +41,7 @@ import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage, getPreloadedImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
-import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
+import { resolveTypographyFromDirection, getFontNamesForPreload, type ResolvedTypography } from "@/lib/fontResolver";
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
 import {
   resolveActiveGroup,

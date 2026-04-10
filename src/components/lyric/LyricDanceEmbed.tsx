@@ -43,7 +43,7 @@ export interface LyricDanceEmbedHandle {
   wickBarEnabled: boolean;
 }
 
-type Comment = { id: string; text: string; line_index: number | null; submitted_at?: string; user_id: string | null };
+type Comment = { id: string; text: string; line_index: number | null; submitted_at: string; user_id: string | null };
 
 export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed({
   lyricDanceId,

@@ -137,14 +137,14 @@ export function OneTruth({
     }, 1500);
 
     await supabase
-      .from("project_comments" as never)
+      .from("project_comments")
       .insert({
         project_id: danceId,
         line_index: lineIndex,
         text: trimmed,
         session_id: getSessionId(),
         user_id: user?.id ?? null,
-      });
+      } as any);
   }, [text, userMoment, danceId, onCommentSubmitted, user?.id, fmlyMoment, onContinue]);
 
   useEffect(() => {
