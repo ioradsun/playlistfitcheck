@@ -7,8 +7,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 //
 // AI receives: audio file + section timestamps + optional artist direction
 // AI processes each moment: transcribe → design → next
-// Font and particle are per-moment. Client resolves globals.
-// World is written last as a summary, not a plan.
+// Font is one family for the whole video, chosen last.
+// Each moment gets fontStyle (weight/case/spacing) for typographic performance.
+// Particle is per-moment. Client resolves global particle.
+// World is written last as a summary.
 // AI does NOT: pick colors, moods, or any render enum
 // ═══════════════════════════════════════════════════════════════
 
@@ -38,8 +40,9 @@ Process the moments IN ORDER. Each moment is its OWN vignette.
 Do not plan ahead. Do not connect moments into one story.
 Listen to what the lyrics say RIGHT NOW and build a scene from those specific words.
 
-AFTER all moments are complete, step back and define the cinematic world —
-the visual universe that ties these vignettes together.
+AFTER all moments are complete, step back and:
+- Define the cinematic world that ties these vignettes together.
+- Pick ONE font family for the entire lyric video.
 
 Return ONLY valid JSON in this exact shape:
 
@@ -51,16 +54,30 @@ Return ONLY valid JSON in this exact shape:
       "see": "One sentence: what the camera sees. A shot description, not an atmosphere.",
       "nouns": ["2-4 concrete objects visible in this shot"],
       "heroWords": ["2-5 emotionally charged words from your transcribedLyrics, ALL CAPS"],
-      "font": "One Google Font family name that fits this moment",
+      "fontStyle": {
+        "weight": "light | regular | bold | black",
+        "case": "uppercase | lowercase | mixed",
+        "spacing": "tight | normal | wide"
+      },
       "particle": "One element from the PARTICLE LIST that fits this moment"
     }
   ],
-  "world": "The cinematic universe these vignettes live inside — one evocative sentence, 15 words max"
+  "world": "The cinematic universe these vignettes live inside — one evocative sentence, 15 words max",
+  "font": "One font family from the FONT LIST for the entire lyric video"
 }
 
 PARTICLE LIST:
 dust, embers, smoke, rain, snow, stars, fireflies, petals, ash,
 crystals, confetti, lightning, moths, glare, glitch, fire
+
+FONT LIST — pick ONE. Do not use fonts outside this list:
+  BOLD / HIGH-IMPACT: Bebas Neue, Anton, Oswald, Archivo Black, Big Shoulders Display, Teko, Rajdhani
+  CLEAN / MODERN: Space Grotesk, Montserrat, Inter, Poppins, DM Sans, Outfit, Sora
+  ELEGANT / CINEMATIC: Playfair Display, DM Serif Display, Cormorant Garamond, Libre Baskerville, Lora, Crimson Text
+  WARM / NOSTALGIC: Merriweather, Source Serif 4, Alegreya, Fraunces
+  ETHEREAL / FLOATING: Cormorant, Raleway, Cinzel, Josefin Sans, Quicksand
+  RAW / CONDENSED: Barlow Condensed, Fjalla One, Pathway Extreme, Saira Condensed
+  DISPLAY / EXPRESSIVE: Fredoka, Comfortaa, Baloo 2, Righteous, Rubik
 
 RULES FOR "transcribedLyrics":
 - Write what you ACTUALLY HEAR. Do not invent lyrics.
@@ -84,7 +101,19 @@ RULES FOR "see":
   Bad: "dark emotional environment"
 
 RULES FOR "font":
-- A real Google Font family name that fits this moment's energy.
+- Chosen AFTER all moments are designed. You have heard the full song.
+- Pick ONE family from the FONT LIST whose personality matches the lyrics.
+- The font family is the voice. It stays constant for the entire video.
+
+RULES FOR "fontStyle":
+- Each moment gets its own styling within the chosen font family.
+- The font family stays the same. The feeling changes through styling.
+- Treat each moment like a different performance of the same voice.
+  Quiet/intimate moments → light weight, lowercase, wide spacing
+  Aggressive/anthemic moments → black weight, uppercase, tight spacing
+  Neutral/mid-energy moments → regular weight, mixed case, normal spacing
+  Rising tension → bold weight, uppercase, tight spacing
+  Falling/release → light weight, lowercase, wide spacing
 
 RULES FOR "world":
 - Written AFTER all moments are designed. It is a summary, not a plan.
@@ -128,15 +157,22 @@ interface RequestBody {
   mode?: "scene";
 }
 
+interface FontStyle {
+  weight: string;
+  case: string;
+  spacing: string;
+}
+
 interface AIResponse {
   world: string;
+  font: string;
   moments: Array<{
     transcribedLyrics: string;
     action: string;
     see: string;
     nouns: string[];
     heroWords?: string[];
-    font: string;
+    fontStyle?: FontStyle;
     particle: string;
   }>;
 }
@@ -190,6 +226,17 @@ function extractJson(raw: string): Record<string, any> | null {
 
 // ── Validation ───────────────────────────────────────────────
 
+const VALID_WEIGHTS = ["light", "regular", "bold", "black"] as const;
+const VALID_CASES = ["uppercase", "lowercase", "mixed"] as const;
+const VALID_SPACINGS = ["tight", "normal", "wide"] as const;
+
+function validateFontStyle(raw: any): FontStyle {
+  const weight = VALID_WEIGHTS.includes(raw?.weight) ? raw.weight : "regular";
+  const fontCase = VALID_CASES.includes(raw?.case) ? raw.case : "mixed";
+  const spacing = VALID_SPACINGS.includes(raw?.spacing) ? raw.spacing : "normal";
+  return { weight, case: fontCase, spacing };
+}
+
 function validate(
   raw: Record<string, any>,
   sectionCount: number,
@@ -200,14 +247,14 @@ function validate(
       ? raw.world.trim().slice(0, 150)
       : "cinematic scene";
 
+  // Font — AI picks one after hearing everything
+  let font = typeof raw.font === "string" ? raw.font.trim() : "";
+  if (!font || font.length < 2 || font.length > 60) font = "Montserrat";
+
   let moments: AIResponse["moments"] = [];
 
   if (Array.isArray(raw.moments)) {
     moments = raw.moments.map((m: any) => {
-      // Font
-      let font = typeof m?.font === "string" ? m.font.trim() : "";
-      if (!font || font.length < 2 || font.length > 60) font = "Montserrat";
-
       // Particle
       let particle = String(m?.particle ?? "").toLowerCase().trim();
       if (!VALID_PARTICLES.includes(particle as any)) particle = "dust";
@@ -239,7 +286,7 @@ function validate(
               .filter((w: string) => w.length > 1)
               .slice(0, 5)
           : undefined,
-        font,
+        fontStyle: m?.fontStyle ? validateFontStyle(m.fontStyle) : { weight: "regular", case: "mixed", spacing: "normal" },
         particle,
       };
     });
@@ -253,7 +300,7 @@ function validate(
         action: `Scene ${moments.length + 1} continues`,
         see: `Scene ${moments.length + 1}`,
         nouns: moments[0]?.nouns?.slice(0, 2) ?? [],
-        font: "Montserrat",
+        fontStyle: { weight: "regular", case: "mixed", spacing: "normal" },
         particle: "dust",
       });
     }
@@ -262,63 +309,31 @@ function validate(
     }
   }
 
-  return { world, moments };
+  return { world, font, moments };
 }
 
 
-/**
- * Derive global font and particle from per-moment decisions.
- * Font: most repeated wins. If all different, first moment wins.
- * Particle: duration-weighted frequency.
- */
-function resolveGlobals(
-  moments: AIResponse["moments"],
-  sections: AudioSectionInput[],
-): { font: string; particle: string } {
-  // Font: simple frequency, tie-break = first occurrence
-  const fontCounts = new Map<string, number>();
-  for (const m of moments) {
-    fontCounts.set(m.font, (fontCounts.get(m.font) ?? 0) + 1);
-  }
-  let bestFont = moments[0]?.font ?? "Montserrat";
-  let bestFontCount = 0;
-  for (const [font, count] of fontCounts) {
-    if (count > bestFontCount) {
-      bestFontCount = count;
-      bestFont = font;
-    }
-  }
-  // If all fonts are unique (count=1 for all), use first moment's font
-  if (bestFontCount <= 1 && moments.length > 0) {
-    bestFont = moments[0].font;
-  }
-
-  // Particle: duration-weighted
+function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
+  // Particle: duration-weighted frequency
   const particleWeights = new Map<string, number>();
-  for (let i = 0; i < moments.length; i++) {
+  for (let i = 0; i < result.moments.length; i++) {
     const dur = sections[i] ? sections[i].endSec - sections[i].startSec : 10;
-    const p = moments[i].particle;
+    const p = result.moments[i].particle;
     particleWeights.set(p, (particleWeights.get(p) ?? 0) + dur);
   }
-  let bestParticle = "dust";
+  let globalParticle = "dust";
   let bestWeight = -1;
   for (const [p, w] of particleWeights) {
     if (w > bestWeight) {
       bestWeight = w;
-      bestParticle = p;
+      globalParticle = p;
     }
   }
 
-  return { font: bestFont, particle: bestParticle };
-}
-
-function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
-  const globals = resolveGlobals(result.moments, sections);
-
   return {
     world: result.world,
-    particle: globals.particle,
-    font: globals.font,
+    particle: globalParticle,
+    font: result.font,
 
     sections: result.moments.map((moment, i) => {
       return {
@@ -328,7 +343,7 @@ function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
         transcribedLyrics: moment.transcribedLyrics,
         nouns: moment.nouns,
         heroWords: moment.heroWords?.length ? moment.heroWords : null,
-        font: moment.font,
+        fontStyle: moment.fontStyle ?? null,
         particle: moment.particle,
         startSec: sections[i]?.startSec ?? i * 10,
         endSec: sections[i]?.endSec ?? (i + 1) * 10,
@@ -512,9 +527,8 @@ serve(async (req) => {
     const validated = validate(rawResult, sections.length);
     const cinematicDirection = toClientShape(validated, sections);
 
-    const globals = resolveGlobals(validated.moments, sections);
     console.log(
-      `[cinematic-direction] v3 complete: font=${globals.font}, particle=${globals.particle}, world="${validated.world}", moments=${validated.moments.length}`,
+      `[cinematic-direction] v3 complete: font=${validated.font}, world="${validated.world}", moments=${validated.moments.length}`,
     );
 
     return new Response(
