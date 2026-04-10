@@ -594,11 +594,27 @@ async function callCinematicDirection(opts: {
       artist_direction: opts.artistDirection,
       instrumental: opts.instrumental ?? false,
       mode: "scene" as const,
-      audioSections: audioSections.map(({ index, startSec, endSec }) => ({
-        index,
-        startSec,
-        endSec,
-      })),
+      audioSections: audioSections.map((s) => {
+        const avg = s.avgEnergy ?? 0;
+        const delta = s.deltaFromPrev ?? 0;
+        const slope = s.slope ?? 0;
+
+        let level: string;
+        if (avg < 0.35) level = "low";
+        else if (avg > 0.65) level = "high";
+        else level = "mid";
+
+        let direction = "";
+        if (delta > 0.08 || slope > 0.08) direction = "+rising";
+        else if (delta < -0.08 || slope < -0.08) direction = "+falling";
+
+        return {
+          index: s.index,
+          startSec: s.startSec,
+          endSec: s.endSec,
+          energyHint: level + direction,
+        };
+      }),
     },
     120_000,
   );
