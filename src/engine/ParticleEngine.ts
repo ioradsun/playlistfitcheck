@@ -162,6 +162,7 @@ export class ParticleEngine {
   private beatBoostFrames = 0;
   private time = 0;
   private lastBeatIntensity = 0;
+  private _lastBeatIntensity = 0;
   private lightning: LightningBolt[] = [];
   private densityMultiplier = 1;
   private speedMultiplier = 1;
@@ -314,6 +315,7 @@ export class ParticleEngine {
     if (this.updateFrameCounter % this.updateFrameSkip !== 0) return;
     if (nextConfig) this.config = nextConfig;
     if (this.config.system === "none") return;
+    this._lastBeatIntensity = beatIntensity;
 
     const dt = Math.min(deltaMs / 16.67, 3);
     const onBeat = beatIntensity > 0.6 && this.lastBeatIntensity <= 0.6;
@@ -338,8 +340,10 @@ export class ParticleEngine {
       this.updateParticleBySystem(p, dt, beatIntensity, onBeat);
       p.vy += 0.02 * (this.gravityMultiplier - 1) * dt;
 
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
+      if (this.config.system !== "glare") {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
       p.rotation += p.rotationSpeed * dt;
       p.phase += 0.02 * dt;
       p.age += dt;
@@ -694,12 +698,12 @@ export class ParticleEngine {
         break;
       case "glare":
         p.x = Math.random() * this.bounds.w;
-        p.y = Math.random() * this.bounds.h * 0.6;
-        p.size = 25 + Math.random() * 55;
-        p.opacity = 0.12 + Math.random() * 0.18;
-        p.vx = (Math.random() - 0.5) * 0.08;
-        p.vy = -0.03 - Math.random() * 0.07;
-        p.life = 5000 + Math.random() * 4000;
+        p.y = Math.random() * this.bounds.h * 0.7;
+        p.size = 10 + Math.random() * 30;
+        p.opacity = 0.06 + Math.random() * 0.14;
+        p.vx = (Math.random() - 0.5) * 0.15;
+        p.vy = -0.04 - Math.random() * 0.1;
+        p.life = 2500 + Math.random() * 3000;
         break;
       default:
         p.active = false;
@@ -790,8 +794,15 @@ export class ParticleEngine {
         p.vy = clamp(p.vy, -1.2, 1.2);
         break;
       }
-      case "glare":
+      case "glare": {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.x += Math.sin(p.age * 0.0005 + p.phase * 6.28) * 0.15;
+        if (onBeat) {
+          p.size *= 1 + beatPulse * 0.25;
+        }
         break;
+      }
       default:
         break;
     }
@@ -888,14 +899,16 @@ export class ParticleEngine {
         break;
       case "glare": {
         const breath = 0.85 + Math.sin(p.age * 0.0008 + p.x * 0.01) * 0.15;
-        const alpha = p.opacity * breath;
-        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+        const beatGlow = this._lastBeatIntensity ?? 0;
+        const alpha = Math.min(0.6, p.opacity * breath * (1 + beatGlow * 0.4));
+        const glareSize = p.size * (1 + beatGlow * 0.3);
+        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glareSize);
         gradient.addColorStop(0, `rgba(255, 248, 231, ${alpha})`);
-        gradient.addColorStop(0.35, `rgba(255, 220, 120, ${alpha * 0.4})`);
+        gradient.addColorStop(0.3, `rgba(255, 220, 120, ${alpha * 0.35})`);
         gradient.addColorStop(1, `rgba(255, 200, 50, 0)`);
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, glareSize, 0, Math.PI * 2);
         ctx.fill();
         break;
       }
