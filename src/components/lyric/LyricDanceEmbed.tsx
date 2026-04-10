@@ -394,7 +394,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     if (activeLine) return activeLine.lineIndex;
     const t = player?.audio?.currentTime ?? 0;
     for (let i = moments.length - 1; i >= 0; i -= 1) {
-      if (t >= moments[i].startSec - 0.1) return moments[i].sectionIndex;
+      if (t >= moments[i].startSec - 0.1) {
+        // Prefer the first line's lineIndex so deriveMomentFireCounts can find it.
+        // Only fall back to sectionIndex if the moment has no lyric lines (beat/instrumental).
+        const firstLine = moments[i].lines[0];
+        return firstLine ? firstLine.lineIndex : moments[i].sectionIndex;
+      }
     }
     return 0;
   }, [activeLine, player, moments]);
