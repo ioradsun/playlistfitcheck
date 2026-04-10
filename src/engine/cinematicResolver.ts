@@ -1,4 +1,4 @@
-import type { CinematicDirection, CinematicSection } from "@/types/CinematicDirection";
+import type { CinematicDirection } from "@/types/CinematicDirection";
 
 export function normalizeToken(value: string | null | undefined): string {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
@@ -12,30 +12,7 @@ export function normalizeCinematicDirection(
   raw: unknown,
 ): CinematicDirection | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-
-  const cd = raw as CinematicDirection & { chapters?: any[] };
-
-  // Legacy format: chapters[] but no sections[] — convert
-  if (
-    (!Array.isArray(cd.sections) || cd.sections.length === 0)
-    && Array.isArray(cd.chapters)
-    && cd.chapters.length > 0
-  ) {
-    const sections: CinematicSection[] = cd.chapters.map((ch: any, i: number) => ({
-      sectionIndex: i,
-      description: ch.backgroundDirective ?? ch.title ?? `Section ${i}`,
-      visualMood: ch.visualMood ?? ch.atmosphere ?? ch.mood ?? ch.emotionalArc ?? undefined,
-      texture: ch.texture ?? undefined,
-      startSec: ch.startSec ?? undefined,
-      endSec: ch.endSec ?? undefined,
-      startRatio: ch.startRatio ?? undefined,
-      endRatio: ch.endRatio ?? undefined,
-      dominantColor: ch.dominantColor ?? undefined,
-    }));
-    return { ...cd, sections };
-  }
-
+  const cd = raw as CinematicDirection;
   if (!Array.isArray(cd.sections) || cd.sections.length === 0) return null;
-
   return cd;
 }

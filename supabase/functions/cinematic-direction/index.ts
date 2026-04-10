@@ -86,8 +86,7 @@ OUTPUT:
     "accentDensity": "low|medium|high",
     "sectionBehavior": {
       "<role>": "<behavior>"
-    },
-    "reason": "one sentence"
+    }
   }
 
 ALWAYS use system "single". Do not use "paired" or "minimal".
@@ -166,17 +165,16 @@ OUTPUT SCHEMA:
 {
   "description": "one sentence, max 15 words — the visual world in a nutshell",
   "typographyPlan": {
-    "system": "paired|single|minimal",
+    "system": "single",
     "primary": "font name from FONT LIBRARY",
-    "accent": "font name from FONT LIBRARY (empty string for single/minimal)",
+    "accent": "",
     "case": "uppercase|sentence",
     "baseWeight": "light|regular|bold|black",
-    "heroStyle": "accent-font|weight-shift|scale-only|none",
+    "heroStyle": "weight-shift|scale-only|none",
     "accentDensity": "low|medium|high",
     "sectionBehavior": {
       "<role>": "<behavior>"
-    },
-    "reason": "one sentence"
+    }
   },
   "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
   "sections": [
@@ -293,15 +291,14 @@ OUTPUT JSON SCHEMA:
   "emotionalArc": "slow-burn|surge|collapse|dawn|eruption",
   "description": "one-sentence world description",
   "typographyPlan": {
-    "system": "paired|single|minimal",
+    "system": "single",
     "primary": "font name from FONT LIBRARY",
-    "accent": "font name from FONT LIBRARY (empty string for single/minimal)",
+    "accent": "",
     "case": "uppercase|sentence",
     "baseWeight": "light|regular|bold|black",
-    "heroStyle": "accent-font|weight-shift|scale-only|none",
+    "heroStyle": "weight-shift|scale-only|none",
     "accentDensity": "low|medium|high",
-    "sectionBehavior": { "<role>": "<behavior>" },
-    "reason": "one sentence"
+    "sectionBehavior": { "<role>": "<behavior>" }
   },
   "sections": [
     {
@@ -398,7 +395,6 @@ interface RequestBody {
 }
 
 const ENUMS = {
-  sceneTone: ["dark", "light", "mixed"],
   visualMood: [
     "intimate",
     "anthemic",
@@ -448,7 +444,6 @@ function unwrapNested(obj: Record<string, any>): Record<string, any> {
     if (inner && typeof inner === "object" && !Array.isArray(inner)) {
       // Check if the inner object looks like our expected structure
       if (
-        inner.sceneTone ||
         inner.sections ||
         inner.typographyPlan
       ) {
@@ -498,11 +493,9 @@ function validateScene(
   const v = { ...raw };
 
   const DEFAULTS: Record<string, string> = {
-    sceneTone: "dark",
     emotionalArc: "slow-burn",
   };
   for (const key of [
-    "sceneTone",
     "emotionalArc",
   ] as const) {
     const allowed = ENUMS[key] as readonly string[];
@@ -526,14 +519,14 @@ function validateScene(
     if (typeof tp.primary !== 'string' || !VALID_FONTS.some((f) => f.toLowerCase() === tp.primary?.toLowerCase())) {
       tp.primary = 'Montserrat';
     }
-    if (tp.system !== 'paired') tp.accent = '';
+    tp.accent = '';
     if (typeof tp.accent === 'string' && tp.accent && !VALID_FONTS.some((f) => f.toLowerCase() === tp.accent?.toLowerCase())) {
       tp.accent = '';
     }
     if (!['uppercase', 'sentence'].includes(tp.case)) tp.case = 'sentence';
     if (!['light', 'regular', 'bold', 'black'].includes(tp.baseWeight)) tp.baseWeight = 'bold';
-    if (!['accent-font', 'weight-shift', 'scale-only', 'none'].includes(tp.heroStyle)) {
-      tp.heroStyle = tp.system === 'paired' ? 'accent-font' : 'weight-shift';
+    if (!['weight-shift', 'scale-only', 'none'].includes(tp.heroStyle)) {
+      tp.heroStyle = 'weight-shift';
     }
     if (!['low', 'medium', 'high'].includes(tp.accentDensity)) tp.accentDensity = 'low';
     if (tp.sectionBehavior && typeof tp.sectionBehavior === 'object') {
@@ -835,7 +828,7 @@ async function callScene(
                 {
                   role: "user",
                   content:
-                  'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "sceneTone", "typographyPlan", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
+                  'Your previous response was malformed or truncated. Return ONLY valid JSON with "description", "typographyPlan", "emotionalArc", and "sections" array. Each section needs: sectionIndex (starting at 0), description, dominantColor, visualMood, texture. No markdown.',
               },
             ],
             max_completion_tokens: 8000,

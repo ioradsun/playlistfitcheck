@@ -172,10 +172,6 @@ export class CameraRig {
     this._amplitudeScale = Math.max(0, Math.min(1, scale));
   }
 
-  // TODO: implement mood-driven camera behavior using visualMood vocabulary
-  setSectionFromMood(_m: string): void {}
-  // TODO: implement energy-driven camera intensity
-  setEnergy(_e: number): void {}
   setViewport(w: number, h: number): void { this.canvasW = w; this.canvasH = h; }
   loadSongData(): void {}
   /** Viewport scale — all pixel offsets designed for 960px, scale proportionally */

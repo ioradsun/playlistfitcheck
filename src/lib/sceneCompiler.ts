@@ -15,7 +15,6 @@ import {
   resolveTypographyFromDirection,
   getFontNamesForPreload,
   deriveSectionTypography,
-  getDensityBudget,
   WEIGHT_MAP,
   TRACKING_MAP,
   DEFAULT_SECTION_BEHAVIOR,
@@ -78,13 +77,11 @@ interface TypographyProfile {
   textTransform: 'none' | 'uppercase';
   letterSpacing: number;
   heroWeight: number;
-  accentFontFamily: string | null;
   heroStyle: HeroStyle;
 }
 
 export type VisualMode = 'intimate' | 'cinematic' | 'explosive';
-interface WordDirectiveLike { word?: string; emphasisLevel?: number; elementalClass?: string; isolation?: boolean; }
-interface WordMetaEntry { word: string; start: number; end: number; clean: string; directive: WordDirectiveLike | null; lineIndex: number; wordIndex: number; isHeroWord?: boolean; isAdlib?: boolean; }
+interface WordMetaEntry { word: string; start: number; end: number; clean: string; lineIndex: number; wordIndex: number; isHeroWord?: boolean; isAdlib?: boolean; }
 export interface PhraseGroup { words: WordMetaEntry[]; start: number; end: number; anchorWordIdx: number; lineIndex: number; groupIndex: number; phraseHeroWord?: string; }
 
 
@@ -507,7 +504,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const isInferredAdlib = isGhostCluster || isEchoUnderSustain;
 
     const isAdlib = isAdlibFromLine || isInferredAdlib;
-    return { ...w, clean, directive: null, lineIndex, wordIndex: 0, isAdlib: isAdlib || undefined };
+    return { ...w, clean, lineIndex, wordIndex: 0, isAdlib: isAdlib || undefined };
   });
   const lineWordCounters: Record<number, number> = {};
   for (const wm of wordMeta) { lineWordCounters[wm.lineIndex] = lineWordCounters[wm.lineIndex] ?? 0; wm.wordIndex = lineWordCounters[wm.lineIndex]++; }
@@ -609,7 +606,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     textTransform: resolvedTypo.textTransform,
     letterSpacing: resolvedTypo.letterSpacing,
     heroWeight: resolvedTypo.heroWeight,
-    accentFontFamily: resolvedTypo.accentFontFamily ? resolvedTypo.accentFontFamily.replace(/"/g, '').split(',')[0].trim() : null,
     heroStyle: resolvedTypo.heroStyle,
   };
 
@@ -693,10 +689,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
 
-    const hasHero = group.words.some(wm =>
-      wm.isHeroWord === true ||
-      wm.directive?.isolation === true
-    );
+    const hasHero = group.words.some(wm => wm.isHeroWord === true);
 
     // maxLines resolved by resolveLayout: <4 words = 1 line, 4+ = auto wrap
     const maxLines: number | undefined = (group as any)._resolvedMaxLines;
@@ -876,7 +869,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const groupFontSize = groupLayout?.fontSize ?? 56;
     const secIdx = (group as any)._secIdx ?? getSectionForTime(group.start);
     const secTypo = sectionTypoMap[secIdx] ?? DEFAULT_SECTION_BEHAVIOR;
-    const secDensityBudget = getDensityBudget(secTypo.accentDensity);
     const phraseEnergy: number = (group as any)._phraseEnergy ?? 0.5;
     const sectionDamper: number = (group as any)._sectionDamper ?? 0.7;
     const wordDensity: number = (group as any)._wordDensity ?? 2.5;
@@ -916,7 +908,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
       const holdDuration = Math.max(0, wm.end - wm.start);
       const isLongHold = holdDuration >= 0.5;
-      const isDirectiveHero = wm.isHeroWord === true || (wm.directive as any)?.isolation === true;
+      const isDirectiveHero = wm.isHeroWord === true;
       const isHookWord = Boolean(matchPhrase?.isChorus);
       const heroScore =
         (isDirectiveHero ? 0.4 : 0) +
@@ -927,10 +919,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
       const wordWeight = isHero ? Math.max(phraseWeight, resolvedTypo.heroWeight) : phraseWeight;
 
-      let wordFontFamily = baseTypography.fontFamily;
-      if (isHero && baseTypography.heroStyle === 'accent-font' && baseTypography.accentFontFamily) {
-        wordFontFamily = baseTypography.accentFontFamily;
-      }
+      const wordFontFamily = baseTypography.fontFamily;
 
       const transformedText = secTypo.transform === 'uppercase'
         ? wm.word.replace(/[\u2018\u2019]/g, "'").toUpperCase()
@@ -961,31 +950,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       return [base];
     });
 
-    if (resolvedTypo.accentFontFamily && resolvedTypo.heroStyle === 'accent-font') {
-      const accentWords = wordsCompiled
-        .map((word, idx) => ({ word, idx }))
-        .filter(({ word }) => word.fontFamily !== baseTypography.fontFamily);
-
-      if (accentWords.length > secDensityBudget.maxAccentWordsPerPhrase) {
-        accentWords
-          .sort((a, b) => (b.word.heroScore ?? 0) - (a.word.heroScore ?? 0))
-          .slice(secDensityBudget.maxAccentWordsPerPhrase)
-          .forEach(({ word }) => {
-            word.fontFamily = baseTypography.fontFamily;
-            word.fontWeight = phraseWeight;
-          });
-      }
-
-      for (let k = 1; k < wordsCompiled.length; k += 1) {
-        if (
-          wordsCompiled[k].fontFamily !== baseTypography.fontFamily &&
-          wordsCompiled[k - 1].fontFamily !== baseTypography.fontFamily
-        ) {
-          wordsCompiled[k].fontFamily = baseTypography.fontFamily;
-          wordsCompiled[k].fontWeight = phraseWeight;
-        }
-      }
-    }
     return {
       lineIndex: group.lineIndex,
       groupIndex: group.groupIndex,
@@ -1015,38 +979,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       isAdlib: group.words.some(w => w.isAdlib),
     };
   }).sort((a, b) => a.start - b.start);
-
-  // ── Enforce accent phrase ratio across entire song ──
-  if (resolvedTypo.accentFontFamily && resolvedTypo.heroStyle === 'accent-font') {
-    const budget = getDensityBudget(resolvedTypo.accentDensity);
-    const phrasesWithAccent: Array<{ groupIdx: number; maxHeroScore: number }> = [];
-
-    for (let gi = 0; gi < compiledGroups.length; gi += 1) {
-      const group = compiledGroups[gi];
-      const hasAccent = group.words.some(w => w.fontFamily !== baseTypography.fontFamily);
-      if (hasAccent) {
-        const maxScore = Math.max(...group.words.map(w => w.heroScore ?? 0));
-        phrasesWithAccent.push({ groupIdx: gi, maxHeroScore: maxScore });
-      }
-    }
-
-    const maxAccented = Math.max(1, Math.floor(compiledGroups.length * budget.maxAccentedPhraseRatio));
-    if (phrasesWithAccent.length > maxAccented) {
-      phrasesWithAccent.sort((a, b) => b.maxHeroScore - a.maxHeroScore);
-      const toRevert = phrasesWithAccent.slice(maxAccented);
-      for (const { groupIdx } of toRevert) {
-        const group = compiledGroups[groupIdx];
-        const section = sectionTypoMap[getSectionForTime(group.start)] ?? DEFAULT_SECTION_BEHAVIOR;
-        const phraseWeight = WEIGHT_MAP[section.weight] ?? resolvedTypo.fontWeight;
-        for (const word of group.words) {
-          if (word.fontFamily !== baseTypography.fontFamily) {
-            word.fontFamily = baseTypography.fontFamily;
-            word.fontWeight = phraseWeight;
-          }
-        }
-      }
-    }
-  }
 
   const beatEvents: BeatEvent[] = beats.map((time) => ({ time, springVelocity: 0.4, glowMax: 0.3 }));
 

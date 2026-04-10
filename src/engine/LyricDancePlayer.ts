@@ -186,8 +186,6 @@ export interface LiveDebugState {
   songProgress: number;
 
   dirThesis: string;
-  dirChapter: string;
-  dirChapterProgress: number;
   dirIntensity: number;
   dirBgDirective: string;
   dirLightBehavior: string;
@@ -327,8 +325,6 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   songProgress: 0,
 
   dirThesis: "—",
-  dirChapter: "—",
-  dirChapterProgress: 0,
   dirIntensity: 0,
   dirBgDirective: "—",
   dirLightBehavior: "—",
@@ -433,7 +429,6 @@ type ChunkState = {
 
 type ResolvedPlayerState = {
   chapters: any[];
-  wordDirectivesMap: Record<string, any>;
   particleConfig: { texture: string; system: string; density: number; speed: number };
 };
 
@@ -1605,7 +1600,6 @@ export class LyricDancePlayer {
   public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
   public resolvedState: ResolvedPlayerState = {
     chapters: [],
-    wordDirectivesMap: {},
     particleConfig: { texture: 'dust', system: 'dust', density: 0.8, speed: 0.5 },
   };
   
@@ -2689,19 +2683,8 @@ export class LyricDancePlayer {
       const songProg = (clamped - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
       const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
 
-      // Feed section mood + energy — drives Layer 1 (Section Arc) camera behavior
       const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
       const sections = (cd?.sections as any[]) ?? [];
-      const secIdx = this._frameSectionIdx;
-      const currentSection = sections[secIdx];
-      if (currentSection) {
-        this.cameraRig.setSectionFromMood(
-          currentSection.visualMood
-            ?? currentSection.description
-            ?? ''
-        );
-      }
-      this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
 
       const focus: SubjectFocus = {
         x: this.width / 2,
@@ -3439,20 +3422,6 @@ export class LyricDancePlayer {
         const songProg = (smoothedTime - this.songStartSec) / Math.max(1, this.songEndSec - this.songStartSec);
         // Climax = high energy + past halfway through the song
         const isClimax = (beatState?.energy ?? 0) > 0.65 && songProg > 0.50;
-
-        // ── Feed section + energy to camera ──
-        {
-          const currentSection = sections[secIdx];
-
-          if (currentSection) {
-            this.cameraRig.setSectionFromMood(
-              currentSection.visualMood
-                ?? currentSection.description
-                ?? ''
-            );
-          }
-          this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
-        }
 
         const focus: SubjectFocus = {
           x: this.width / 2,
@@ -4866,28 +4835,6 @@ export class LyricDancePlayer {
     }));
   }
 
-  private toWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives'], words?: Array<{ word: string }> | null): Record<string, any> {
-    const map: Record<string, any> = {};
-    // ── AI directives (highest priority) ──
-    if (wordDirectives) {
-      if (Array.isArray(wordDirectives)) {
-        for (const directive of wordDirectives) {
-          const key = String(directive?.word ?? '').trim().toLowerCase();
-          if (!key) continue;
-          map[key] = directive;
-        }
-      } else {
-        for (const [key, value] of Object.entries(wordDirectives)) {
-          const clean = key.trim().toLowerCase();
-          if (!clean) continue;
-          map[clean] = value;
-        }
-      }
-    }
-
-    return map;
-  }
-
   private resolveParticleTexture(sectionIndex: number, direction: CinematicDirection | null | undefined): string {
     const sectionTexture = direction?.sections?.[sectionIndex]?.texture;
     return sectionTexture ?? direction?.texture ?? 'dust';
@@ -4896,20 +4843,11 @@ export class LyricDancePlayer {
   private resolvePlayerState(payload: ScenePayload): void {
     const direction = payload.cinematic_direction;
     const chapters = this.toLegacyChapters(direction);
-    const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives, payload.words as any);
     const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
     const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
-    const currentSection = chapters[sectionIndex];
-    this.cameraRig.setSectionFromMood(
-      currentSection?.atmosphere
-        ?? currentSection?.backgroundDirective
-        ?? currentSection?.title
-        ?? 'verse'
-    );
     const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
     this.resolvedState = {
       chapters,
-      wordDirectivesMap,
       particleConfig: {
         texture,
         system: texture,

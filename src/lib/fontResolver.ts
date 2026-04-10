@@ -4,21 +4,17 @@
  * Layer 1: Use AI's typographyPlan directly if valid
  * Layer 2: Repair invalid choices (unknown fonts, weak pairs, bad combos)
  * Layer 3: Derive concrete rendering tokens
- * Layer 4: Fallback to legacy profile-based scoring
+ * Layer 4: Fallback to safe defaults
  */
 
 import {
-  FONT_MANIFEST,
   findFont,
-  isValidPair,
-  findBestAccent,
-  pairingContrastScore,
   type FontDef,
 } from './typographyManifest';
 
-export type HeroStyle = 'accent-font' | 'weight-shift' | 'scale-only' | 'none';
+export type HeroStyle = 'weight-shift' | 'scale-only' | 'none';
 export type AccentDensity = 'low' | 'medium' | 'high';
-export type TypographySystem = 'paired' | 'single' | 'minimal';
+export type TypographySystem = 'single';
 
 export interface SectionBehavior {
   weight: 'light' | 'regular' | 'bold' | 'black';
@@ -41,7 +37,7 @@ export interface ResolvedTypography {
   letterSpacing: number;
   sectionStrategies: Record<string, string>;
   _meta: {
-    source: 'plan' | 'plan-repaired' | 'profile' | 'legacy' | 'fallback';
+    source: 'plan' | 'plan-repaired' | 'fallback';
     primaryFont: string;
     accentFont: string | null;
     repaired: boolean;
@@ -65,7 +61,7 @@ function resolveFromPlan(cd: any): ResolvedTypography | null {
   const plan = cd?.typographyPlan;
   if (!plan || typeof plan !== 'object') return null;
 
-  const system: TypographySystem = ['paired', 'single', 'minimal'].includes(plan.system) ? plan.system : 'paired';
+  const system: TypographySystem = 'single';
 
   let primaryDef = typeof plan.primary === 'string' ? findFont(plan.primary) : undefined;
   let repaired = false;
@@ -74,30 +70,9 @@ function resolveFromPlan(cd: any): ResolvedTypography | null {
     repaired = true;
   }
 
-  let accentDef: FontDef | null = null;
-  if (system === 'paired') {
-    if (typeof plan.accent === 'string' && plan.accent.trim()) {
-      accentDef = findFont(plan.accent) ?? null;
-    }
-    if (accentDef && !isValidPair(primaryDef, accentDef)) {
-      accentDef = findBestAccent(primaryDef);
-      repaired = true;
-    }
-    if (!accentDef) {
-      accentDef = findBestAccent(primaryDef);
-      repaired = true;
-    }
-    if (accentDef && pairingContrastScore(primaryDef, accentDef) < 2) {
-      accentDef = findBestAccent(primaryDef);
-      repaired = true;
-    }
-  }
-
-  const heroStyle: HeroStyle = ['accent-font', 'weight-shift', 'scale-only', 'none'].includes(plan.heroStyle)
+  const heroStyle: HeroStyle = ['weight-shift', 'scale-only', 'none'].includes(plan.heroStyle)
     ? plan.heroStyle
-    : (system === 'paired' && accentDef ? 'accent-font' : 'weight-shift');
-
-  const effectiveHeroStyle: HeroStyle = heroStyle === 'accent-font' && !accentDef ? 'weight-shift' : heroStyle;
+    : 'weight-shift';
 
   const accentDensity: AccentDensity = ['low', 'medium', 'high'].includes(plan.accentDensity) ? plan.accentDensity : 'low';
 
@@ -120,9 +95,9 @@ function resolveFromPlan(cd: any): ResolvedTypography | null {
     fontFamily: primaryDef.cssFamily,
     fontWeight: baseWeight,
     heroWeight: heroW,
-    accentFontFamily: accentDef?.cssFamily ?? null,
-    accentFontWeight: accentDef ? pickWeight(accentDef, plan.baseWeight ?? 'bold') : null,
-    heroStyle: effectiveHeroStyle,
+    accentFontFamily: null,
+    accentFontWeight: null,
+    heroStyle,
     accentDensity,
     textTransform: plan.case === 'uppercase' ? 'uppercase' : 'none',
     letterSpacing: tracking,
@@ -130,77 +105,32 @@ function resolveFromPlan(cd: any): ResolvedTypography | null {
     _meta: {
       source: repaired ? 'plan-repaired' : 'plan',
       primaryFont: primaryDef.name,
-      accentFont: accentDef?.name ?? null,
-      repaired,
-    },
-  };
-}
-
-const LEGACY_PROFILES: Record<string, any> = {
-  'bold-impact': { force: 'high', intimacy: 'low', polish: 'raw', theatricality: 'high', era: 'modern' },
-  'clean-modern': { force: 'medium', intimacy: 'medium', polish: 'clean', theatricality: 'low', era: 'modern' },
-  'elegant-serif': { force: 'medium', intimacy: 'medium', polish: 'elegant', theatricality: 'medium', era: 'timeless' },
-  'raw-condensed': { force: 'high', intimacy: 'low', polish: 'raw', theatricality: 'medium', era: 'modern' },
-  'whisper-soft': { force: 'low', intimacy: 'high', polish: 'clean', theatricality: 'low', era: 'modern' },
-  'tech-mono': { force: 'low', intimacy: 'low', polish: 'raw', theatricality: 'low', era: 'futuristic' },
-  'display-heavy': { force: 'high', intimacy: 'low', polish: 'raw', theatricality: 'high', era: 'modern' },
-  'editorial-light': { force: 'low', intimacy: 'high', polish: 'elegant', theatricality: 'low', era: 'timeless' },
-};
-
-function resolveFromLegacy(cd: any): ResolvedTypography {
-  const typoKey = typeof cd?.typography === 'string' ? cd.typography : 'clean-modern';
-  const profile = cd?.fontProfile ?? LEGACY_PROFILES[typoKey] ?? LEGACY_PROFILES['clean-modern'];
-
-  const scored = FONT_MANIFEST
-    .filter(f => f.roles.includes('primary'))
-    .map(f => {
-      let score = 0;
-      if (f.energy === profile.force) score += 20;
-      const polishMap: Record<string, string> = { raw: 'low', clean: 'medium', elegant: 'high' };
-      if (f.elegance === (polishMap[profile.polish] ?? 'medium')) score += 15;
-      if (f.warmth === profile.intimacy) score += 15;
-      if (profile.theatricality === 'high' && f.category === 'display') score += 10;
-      if (profile.era === 'futuristic' && f.category === 'mono') score += 10;
-      if (profile.polish === 'elegant' && f.category === 'serif') score += 10;
-      return { font: f, score };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  const best = scored[0]?.font ?? findFont('Montserrat')!;
-  const baseWeight = pickWeight(best, profile.force === 'high' ? 'bold' : 'regular');
-  const heroW = pickHeroWeight(best, baseWeight);
-
-  return {
-    system: 'single',
-    fontFamily: best.cssFamily,
-    fontWeight: baseWeight,
-    heroWeight: heroW,
-    accentFontFamily: null,
-    accentFontWeight: null,
-    heroStyle: 'weight-shift',
-    accentDensity: 'low',
-    textTransform: (profile.force === 'high' || profile.theatricality === 'high') ? 'uppercase' : 'none',
-    letterSpacing: best.width === 'condensed' ? 0.35 : 0.2,
-    sectionStrategies: {},
-    _meta: {
-      source: cd?.fontProfile ? 'profile' : 'legacy',
-      primaryFont: best.name,
       accentFont: null,
-      repaired: false,
+      repaired,
     },
   };
 }
 
 export function resolveTypographyFromDirection(cd: any): ResolvedTypography {
   const fromPlan = resolveFromPlan(cd);
-  if (fromPlan) {
-    console.info('[typography] resolved from plan:', fromPlan._meta);
-    return fromPlan;
-  }
+  if (fromPlan) return fromPlan;
 
-  const fromLegacy = resolveFromLegacy(cd);
-  console.info('[typography] resolved from legacy:', fromLegacy._meta);
-  return fromLegacy;
+  // No typographyPlan — return safe defaults
+  const fallback = findFont('Montserrat')!;
+  return {
+    system: 'single',
+    fontFamily: fallback.cssFamily,
+    fontWeight: 700,
+    heroWeight: 800,
+    accentFontFamily: null,
+    accentFontWeight: null,
+    heroStyle: 'weight-shift',
+    accentDensity: 'low',
+    textTransform: 'none',
+    letterSpacing: 0.2,
+    sectionStrategies: {},
+    _meta: { source: 'fallback', primaryFont: 'Montserrat', accentFont: null, repaired: false },
+  };
 }
 
 export function getFontNamesForPreload(resolved: ResolvedTypography): string[] {
