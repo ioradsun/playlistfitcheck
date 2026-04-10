@@ -2695,8 +2695,7 @@ export class LyricDancePlayer {
       const currentSection = sections[secIdx];
       if (currentSection) {
         this.cameraRig.setSectionFromMood(
-          currentSection.atmosphere
-            ?? currentSection.mood
+          currentSection.visualMood
             ?? currentSection.description
             ?? ''
         );
@@ -3451,8 +3450,7 @@ export class LyricDancePlayer {
 
           if (currentSection) {
             this.cameraRig.setSectionFromMood(
-              currentSection.atmosphere
-                ?? currentSection.mood
+              currentSection.visualMood
                 ?? currentSection.description
                 ?? ''
             );
@@ -3784,25 +3782,6 @@ export class LyricDancePlayer {
       if (this.ambientParticleEngine) {
         this.ambientParticleEngine.setDensityMultiplier(Math.max(0.5, this._activeEffects.particleDensity));
         this.ambientParticleEngine.setSpeedMultiplier(Math.max(0.2, this._activeEffects.particleSpeed));
-      }
-      const atmosphereState = (section as any)?.atmosphereState as string | undefined;
-      if (atmosphereState && this.ambientParticleEngine) {
-        switch (atmosphereState) {
-          case 'still':
-            this.ambientParticleEngine.setSpeedMultiplier(0.15);
-            break;
-          case 'drifting':
-            this.ambientParticleEngine.setSpeedMultiplier(0.5);
-            break;
-          case 'falling':
-            this.ambientParticleEngine.setSpeedMultiplier(0.8);
-            (this.ambientParticleEngine as any).setDirection?.('down');
-            break;
-          case 'swirling':
-            this.ambientParticleEngine.setSpeedMultiplier(1.2);
-            (this.ambientParticleEngine as any).setDirection?.('swirl');
-            break;
-        }
       }
       const mapped = (PARTICLE_SYSTEM_MAP as Record<string, string | undefined>)[texture?.toLowerCase?.() ?? ""]?.toLowerCase?.() ?? texture;
       const currentSystem = this.ambientParticleEngine?.getSystem?.();
@@ -4927,7 +4906,6 @@ export class LyricDancePlayer {
     const currentSection = chapters[sectionIndex];
     this.cameraRig.setSectionFromMood(
       currentSection?.atmosphere
-        ?? currentSection?.mood
         ?? currentSection?.backgroundDirective
         ?? currentSection?.title
         ?? 'verse'
@@ -5658,7 +5636,7 @@ export class LyricDancePlayer {
 
     // CameraRig owns text zoom — effectiveZoom neutralized to 1.0
     const effectiveZoom = 1.0;
-    // Resolve current chapter for atmosphere metadata (no zoom — CameraRig owns that)
+    // Resolve current chapter for visualMood metadata (no zoom — CameraRig owns that)
     let currentChapterIdx = 0;
     for (let i = 0; i < scene.chapters.length; i++) {
       if (songProgress >= scene.chapters[i].startRatio && songProgress < scene.chapters[i].endRatio) {
@@ -5819,7 +5797,7 @@ export class LyricDancePlayer {
       this._evalFrame = {
         timeMs: 0, beatIndex: 0, sectionIndex: 0,
         cameraX: 0, cameraY: 0, cameraZoom: 1, bgBlend: 0,
-        particleColor: '#ffffff', atmosphere: chapter?.atmosphere ?? 'cinematic' as any,
+        particleColor: '#ffffff',
         chunks: [], particles: [],
       } as unknown as ScaledKeyframe;
     }
@@ -5833,7 +5811,6 @@ export class LyricDancePlayer {
     frame.cameraZoom = effectiveZoom;
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
-    frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
     frame.chunks = chunks;
     frame.particles = [];
     return frame;
