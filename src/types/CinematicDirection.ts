@@ -79,6 +79,8 @@ export interface CinematicSection {
   texture?: string;
   /** Concrete visual nouns from AI (v2) */
   nouns?: string[];
+  /** Emotionally weighted lyric words for this section */
+  heroWords?: string[] | null;
 
   // ── Energy features (v2 — set by enrichSectionsWithEnergy) ──
   avgEnergy?: number;

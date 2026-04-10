@@ -72,6 +72,7 @@ Return only valid JSON in this exact shape:
     {
       "see": "one sentence: what is physically on stage right now — what the camera sees",
       "nouns": ["2-4 concrete objects visible in this scene, pulled from the lyrics"],
+      "heroWords": ["2-5 words — the emotionally charged or lyrically significant words in this moment, all caps"],
       "particle": "override from PARTICLE LIST if this moment's atmosphere demands it, otherwise omit"
     }
   ]
@@ -123,7 +124,13 @@ RULES FOR MOMENTS:
   rising → something is building — tension, anticipation in the air.
   falling → something just ended — the set is emptying, cooling down.
 - Each moment's "see" must feel like it grew from the previous one.
-  The world does not reset. It progresses like a short film.`;
+  The world does not reset. It progresses like a short film.
+- "heroWords" are the words in the lyrics at this moment that carry emotional or narrative weight —
+  the words a singer leans into, the words that make the lines land.
+  All caps. No punctuation. Between 2 and 5 words per moment.
+  Pick from the actual lyrics at that timestamp — not from "see".
+  Avoid: I, A, THE, AND, BUT, SO, MY, ME, YOU, IT, IS, WAS, IN, ON, TO, OF, UP, DOWN, OUT
+  Good: ["ALONE", "FIRE"], ["NEVER", "AGAIN", "BROKEN"], ["MONEY", "REAL", "PAIN", "LOST"]`;
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -153,6 +160,7 @@ interface AIResponse {
   moments: Array<{
     see: string;
     nouns: string[];
+    heroWords?: string[];
     particle?: string;
   }>;
 }
@@ -257,6 +265,13 @@ function validate(
       nouns: Array.isArray(m?.nouns)
         ? m.nouns.filter((n: any) => typeof n === "string").slice(0, 6)
         : [],
+      heroWords: Array.isArray(m?.heroWords)
+        ? m.heroWords
+            .filter((w: any) => typeof w === "string" && w.trim())
+            .map((w: any) => w.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""))
+            .filter((w: string) => w.length > 1)
+            .slice(0, 5)
+        : undefined,
       particle:
         typeof m?.particle === "string" ? m.particle.trim().toLowerCase() : undefined,
     }));
@@ -298,6 +313,7 @@ function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
         sectionIndex: i,
         description: moment.see,
         nouns: moment.nouns,
+        heroWords: moment.heroWords?.length ? moment.heroWords : null,
         startSec: sections[i]?.startSec ?? i * 10,
         endSec: sections[i]?.endSec ?? (i + 1) * 10,
         // Placeholders — client derives from energy analysis in v2
