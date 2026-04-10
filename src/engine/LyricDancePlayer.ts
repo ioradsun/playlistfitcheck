@@ -5035,18 +5035,40 @@ export class LyricDancePlayer {
 
   private _rebuildKenBurnsParams(): void {
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const sections = (cd?.sections as any[]) ?? [];
     this._kenBurnsParams = this.sectionImages.map((_, i) => {
-      // Center-zoom only — no panning. Pulse enlarges, never shows edges.
-      // zoomStart > 1.0 ensures the image is always overscanned.
-      // zoomEnd slightly higher = gentle outward drift over the section.
+      const sections = (cd?.sections as any[]) ?? [];
+      const section = sections[i];
+      const energy = section?.avgEnergy ?? 0.3;
+      const peak = section?.peakEnergy ?? 0.5;
+      const slope = section?.slope ?? 0;
+      const delta = section?.deltaFromPrev ?? 0;
+
+      const zoomBase = 1.02 + energy * 0.08;
+      const zoomRange = 0.02 + peak * 0.12;
+      const zoomStart = zoomBase;
+      const zoomEnd = zoomBase + zoomRange;
+
+      const panMagnitude = 0.02 + Math.abs(delta) * 0.15;
+      const direction = i % 2 === 0 ? 1 : -1;
+      const panX = slope > 0.02
+        ? panMagnitude * direction
+        : slope < -0.02
+          ? -panMagnitude * direction * 0.6
+          : panMagnitude * direction * 0.3;
+
+      const panY = slope > 0.03
+        ? -panMagnitude * 0.4
+        : slope < -0.03
+          ? panMagnitude * 0.3
+          : 0;
+
       return {
-        zoomStart: 1.08,
-        zoomEnd: 1.12,
+        zoomStart,
+        zoomEnd,
         panStartX: 0,
         panStartY: 0,
-        panEndX: 0,
-        panEndY: 0,
+        panEndX: panX,
+        panEndY: panY,
       };
     });
   }

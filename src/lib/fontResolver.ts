@@ -77,23 +77,22 @@ const CHARACTER_DEFAULTS: Record<string, {
   system: TypographySystem;
   weight: string;
   textCase: 'uppercase' | 'none';
-  accentDensity: AccentDensity;
 }> = {
-  'hard-rap': { system: 'single', weight: 'black', textCase: 'uppercase', accentDensity: 'low' },
-  'hype-anthem': { system: 'paired', weight: 'bold', textCase: 'uppercase', accentDensity: 'high' },
-  'punk-energy': { system: 'single', weight: 'bold', textCase: 'uppercase', accentDensity: 'low' },
-  'electronic-drive': { system: 'single', weight: 'bold', textCase: 'uppercase', accentDensity: 'low' },
-  'melodic-rap': { system: 'paired', weight: 'bold', textCase: 'none', accentDensity: 'medium' },
-  'pop-hook': { system: 'paired', weight: 'bold', textCase: 'none', accentDensity: 'medium' },
-  'indie-float': { system: 'single', weight: 'regular', textCase: 'none', accentDensity: 'low' },
-  'afro-groove': { system: 'paired', weight: 'bold', textCase: 'none', accentDensity: 'medium' },
-  'slow-romantic-rnb': { system: 'paired', weight: 'regular', textCase: 'none', accentDensity: 'medium' },
-  'acoustic-bare': { system: 'single', weight: 'regular', textCase: 'none', accentDensity: 'low' },
-  'dark-mood': { system: 'single', weight: 'bold', textCase: 'none', accentDensity: 'low' },
-  'ambient-drift': { system: 'minimal', weight: 'light', textCase: 'none', accentDensity: 'low' },
-  'spoken-word': { system: 'single', weight: 'regular', textCase: 'none', accentDensity: 'low' },
-  'gospel-soul': { system: 'paired', weight: 'bold', textCase: 'none', accentDensity: 'high' },
-  'lo-fi-chill': { system: 'minimal', weight: 'regular', textCase: 'none', accentDensity: 'low' },
+  'hard-rap': { system: 'single', weight: 'black', textCase: 'uppercase' },
+  'hype-anthem': { system: 'single', weight: 'bold', textCase: 'uppercase' },
+  'punk-energy': { system: 'single', weight: 'bold', textCase: 'uppercase' },
+  'electronic-drive': { system: 'single', weight: 'bold', textCase: 'uppercase' },
+  'melodic-rap': { system: 'single', weight: 'bold', textCase: 'none' },
+  'pop-hook': { system: 'single', weight: 'bold', textCase: 'none' },
+  'indie-float': { system: 'single', weight: 'regular', textCase: 'none' },
+  'afro-groove': { system: 'single', weight: 'bold', textCase: 'none' },
+  'slow-romantic-rnb': { system: 'single', weight: 'regular', textCase: 'none' },
+  'acoustic-bare': { system: 'single', weight: 'regular', textCase: 'none' },
+  'dark-mood': { system: 'single', weight: 'bold', textCase: 'none' },
+  'ambient-drift': { system: 'single', weight: 'light', textCase: 'none' },
+  'spoken-word': { system: 'single', weight: 'regular', textCase: 'none' },
+  'gospel-soul': { system: 'single', weight: 'bold', textCase: 'none' },
+  'lo-fi-chill': { system: 'single', weight: 'regular', textCase: 'none' },
 };
 
 function pickWeight(font: FontDef, target: string): number {
@@ -112,12 +111,12 @@ function resolveFromCharacter(cd: any): ResolvedTypography | null {
   if (!targetGenres) return null;
 
   const defaults = CHARACTER_DEFAULTS[character] ?? {
-    system: 'paired',
+    system: 'single',
     weight: 'bold',
     textCase: 'none',
-    accentDensity: 'medium',
   };
 
+  // Score fonts by genreFit overlap
   const scored = FONT_MANIFEST
     .filter(f => f.roles.includes('primary'))
     .map(f => ({
@@ -138,31 +137,26 @@ function resolveFromCharacter(cd: any): ResolvedTypography | null {
   for (let i = 0; i < character.length; i++) {
     hash = ((hash << 5) - hash + character.charCodeAt(i)) | 0;
   }
-  const pickIndex = Math.abs(hash) % pool.length;
-  const primary = pool[pickIndex].font;
-
-  const system = defaults.system;
-  const accent = system === 'paired' ? findBestAccent(primary) : null;
+  const primary = pool[Math.abs(hash) % pool.length].font;
   const baseWeight = pickWeight(primary, defaults.weight);
   const heroW = pickHeroWeight(primary, baseWeight);
-  const heroStyle: HeroStyle = system === 'paired' && accent ? 'accent-font' : 'weight-shift';
 
   return {
-    system,
+    system: 'single',
     fontFamily: primary.cssFamily,
     fontWeight: baseWeight,
     heroWeight: heroW,
-    accentFontFamily: accent?.cssFamily ?? null,
-    accentFontWeight: accent ? pickWeight(accent, 'bold') : null,
-    heroStyle,
-    accentDensity: defaults.accentDensity,
+    accentFontFamily: null,
+    accentFontWeight: null,
+    heroStyle: 'weight-shift',
+    accentDensity: 'low',
     textTransform: defaults.textCase,
     letterSpacing: primary.width === 'condensed' ? 0.35 : 0.2,
     sectionStrategies: {},
     _meta: {
       source: 'character',
       primaryFont: primary.name,
-      accentFont: accent?.name ?? null,
+      accentFont: null,
       repaired: false,
     },
   };

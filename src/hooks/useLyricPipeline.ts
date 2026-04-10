@@ -251,16 +251,56 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
 }
 
-function deriveDominantColorFromEnergy(avgEnergy: number, avgBrightness: number): string {
-  const hue = Math.round(30 + avgBrightness * 180);
-  const saturation = Math.round(40 + avgEnergy * 30);
-  const lightness = Math.round(35 + avgEnergy * 15);
+const WORLD_HUE_KEYWORDS: Array<{ keywords: string[]; hue: number }> = [
+  { keywords: ['snow', 'ice', 'frost', 'winter', 'cold', 'frozen', 'blizzard', 'arctic'], hue: 200 },
+  { keywords: ['fire', 'flame', 'burn', 'ember', 'lava', 'heat', 'candle'], hue: 20 },
+  { keywords: ['rain', 'storm', 'ocean', 'sea', 'water', 'flood', 'drown', 'wave'], hue: 210 },
+  { keywords: ['night', 'dark', 'midnight', 'shadow', 'moon', '3am', '4am'], hue: 240 },
+  { keywords: ['sun', 'gold', 'dawn', 'sunrise', 'morning', 'light', 'glow'], hue: 40 },
+  { keywords: ['forest', 'tree', 'pine', 'leaf', 'grass', 'garden', 'jungle'], hue: 140 },
+  { keywords: ['desert', 'sand', 'dust', 'dry', 'wasteland', 'road', 'highway'], hue: 35 },
+  { keywords: ['neon', 'club', 'city', 'street', 'urban', 'concrete'], hue: 280 },
+  { keywords: ['sky', 'cloud', 'heaven', 'float', 'drift', 'wind', 'air'], hue: 195 },
+  { keywords: ['blood', 'red', 'heart', 'rose', 'valentine', 'crimson'], hue: 350 },
+  { keywords: ['smoke', 'haze', 'fog', 'mist', 'grey', 'gray', 'ash'], hue: 220 },
+  { keywords: ['star', 'space', 'cosmic', 'galaxy', 'universe', 'void'], hue: 260 },
+  { keywords: ['church', 'gospel', 'soul', 'spirit', 'pray', 'holy'], hue: 45 },
+  { keywords: ['mountain', 'peak', 'summit', 'cliff', 'rock', 'stone'], hue: 210 },
+];
+
+function deriveWorldHue(world: string, nouns: string[]): number {
+  const searchText = `${world} ${nouns.join(' ')}`.toLowerCase();
+  let bestScore = 0;
+  let bestHue = 220;
+  for (const entry of WORLD_HUE_KEYWORDS) {
+    const score = entry.keywords.filter(kw => searchText.includes(kw)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestHue = entry.hue;
+    }
+  }
+  return bestHue;
+}
+
+function deriveDominantColorFromEnergy(
+  avgEnergy: number,
+  avgBrightness: number,
+  worldHue: number,
+  sectionIndex: number,
+): string {
+  const hueShift = (sectionIndex % 3 - 1) * 12;
+  const hue = (worldHue + hueShift + 360) % 360;
+  const saturation = Math.round(25 + avgEnergy * 40);
+  const lightness = Math.round(30 + avgBrightness * 10 + avgEnergy * 12);
   return hslToHex(hue, saturation, lightness);
 }
 
 function enrichSectionsWithEnergy(direction: any, audioSections: EnergySection[]) {
   const energyByIndex = new Map(audioSections.map((section) => [section.index, section]));
   const sections = Array.isArray(direction?.sections) ? direction.sections : [];
+  const world = direction?.world ?? '';
+  const allNouns = sections.flatMap((s: any) => Array.isArray(s.nouns) ? s.nouns : []);
+  const worldHue = deriveWorldHue(world, allNouns);
   return sections.map((section: any, index: number) => {
     const match = energyByIndex.get(section?.sectionIndex ?? section?.index ?? index);
     if (!match) return section;
@@ -272,7 +312,12 @@ function enrichSectionsWithEnergy(direction: any, audioSections: EnergySection[]
         match.avgBrightness,
         match.deltaFromPrev,
       ),
-      dominantColor: deriveDominantColorFromEnergy(match.avgEnergy, match.avgBrightness),
+      dominantColor: deriveDominantColorFromEnergy(
+        match.avgEnergy,
+        match.avgBrightness,
+        worldHue,
+        index,
+      ),
       avgEnergy: match.avgEnergy,
       peakEnergy: match.peakEnergy,
       avgBrightness: match.avgBrightness,
