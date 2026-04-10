@@ -32,13 +32,21 @@ export interface ChunkAnimState {
 export interface AnimBeatState { pulse: number; phase: number; }
 
 // ─── 1. Resolve active group ────────────────────────────────
+const _activeGroupResult = { activeIdx: -1, cursor: 0 };
+
 export function resolveActiveGroup(
   groups: CompiledPhraseGroup[], tSec: number, cursor: number, prevTime: number,
 ): { activeIdx: number; cursor: number } {
-  if (groups.length === 0) return { activeIdx: -1, cursor: 0 };
+  if (groups.length === 0) {
+    _activeGroupResult.activeIdx = -1;
+    _activeGroupResult.cursor = 0;
+    return _activeGroupResult;
+  }
   if (tSec < prevTime - 0.5) cursor = 0;
   while (cursor < groups.length - 1) { if (tSec >= groups[cursor + 1].start) cursor++; else break; }
-  return { activeIdx: cursor, cursor };
+  _activeGroupResult.activeIdx = cursor;
+  _activeGroupResult.cursor = cursor;
+  return _activeGroupResult;
 }
 
 // ─── 2. Phrase state ────────────────────────────────────────
