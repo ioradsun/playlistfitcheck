@@ -207,7 +207,86 @@ function buildSectionsFromEnergy(
     }));
   }
 
-  return withDelta;
+  return enforceMaxSectionDuration(withDelta, frames, frameRate);
+}
+
+const MAX_SECTION_SEC = 30;
+
+/**
+ * Subdivide any section longer than MAX_SECTION_SEC.
+ * Splits at the deepest energy valley within the oversized section.
+ * Repeats until all sections are under the cap.
+ */
+function enforceMaxSectionDuration(
+  sections: EnergySection[],
+  frames: Array<{ time: number; energy: number; brightness: number }>,
+  frameRate: number,
+): EnergySection[] {
+  let result = [...sections];
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    const next: EnergySection[] = [];
+
+    for (const section of result) {
+      const dur = section.endSec - section.startSec;
+      if (dur <= MAX_SECTION_SEC) {
+        next.push(section);
+        continue;
+      }
+
+      const startFrame = Math.max(0, Math.round(section.startSec * frameRate));
+      const endFrame = Math.min(frames.length - 1, Math.round(section.endSec * frameRate));
+      const minGap = Math.round(frameRate * 5); // at least 5s from edges
+
+      let bestFrame = -1;
+      let bestEnergy = Infinity;
+      for (let i = startFrame + minGap; i < endFrame - minGap; i++) {
+        if (frames[i].energy < bestEnergy) {
+          bestEnergy = frames[i].energy;
+          bestFrame = i;
+        }
+      }
+
+      if (bestFrame < 0) {
+        bestFrame = Math.round((startFrame + endFrame) / 2);
+      }
+
+      const splitSec = Math.round((bestFrame / frameRate) * 100) / 100;
+
+      const makeHalf = (sFrame: number, eFrame: number, sSec: number, eSec: number): EnergySection => {
+        const slice = frames.slice(sFrame, Math.max(sFrame + 1, eFrame + 1));
+        const avgEnergy = slice.reduce((s, f) => s + f.energy, 0) / slice.length;
+        const peakEnergy = slice.reduce((m, f) => (f.energy > m ? f.energy : m), 0);
+        const avgBrightness = slice.reduce((s, f) => s + f.brightness, 0) / slice.length;
+        const firstE = slice[0]?.energy ?? avgEnergy;
+        const lastE = slice[slice.length - 1]?.energy ?? avgEnergy;
+        return {
+          index: 0,
+          startSec: sSec,
+          endSec: eSec,
+          avgEnergy: Math.round(avgEnergy * 1000) / 1000,
+          peakEnergy: Math.round(peakEnergy * 1000) / 1000,
+          avgBrightness: Math.round(avgBrightness * 1000) / 1000,
+          slope: Math.round((lastE - firstE) * 1000) / 1000,
+          deltaFromPrev: 0,
+        };
+      };
+
+      next.push(makeHalf(startFrame, bestFrame, section.startSec, splitSec));
+      next.push(makeHalf(bestFrame, endFrame, splitSec, section.endSec));
+      changed = true;
+    }
+
+    result = next;
+  }
+
+  return result.map((s, i) => ({
+    ...s,
+    index: i,
+    deltaFromPrev: i === 0 ? 0 : Math.round((s.avgEnergy - result[i - 1].avgEnergy) * 1000) / 1000,
+  }));
 }
 
 function deriveVisualMoodFromEnergy(
@@ -415,7 +494,7 @@ async function createDanceRowAndGenerateImages({
           artistNameRef.current !== "artist" ? artistNameRef.current : null,
         title: lyricData?.title || "Untitled",
         cinematic_direction: cinematicDirection,
-        words: isInstrumental ? null : words ?? null,
+        ...(isInstrumental ? { words: null } : words ? { words } : {}),
         palette: derivePaletteFromDirection(cinematicDirection),
         ...(beatGrid
           ? {
@@ -429,6 +508,9 @@ async function createDanceRowAndGenerateImages({
           : {}),
       } as any)
       .eq("id", resolvedDanceId);
+
+    // Invalidate localStorage so reload fetches fresh DB data
+    try { localStorage.removeItem(`tfm:lyric:${resolvedDanceId}`); } catch {}
   } else {
     if (!audioFile) {
       setGenerationStatus((prev) => ({ ...prev, sectionImages: "error" }));
@@ -489,7 +571,7 @@ async function createDanceRowAndGenerateImages({
           ? []
           : (lyricData?.lines || []).filter((l: any) => l.tag !== "adlib"),
         cinematic_direction: cinematicDirection,
-        words: isInstrumental ? null : words ?? null,
+        ...(isInstrumental ? { words: null } : words ? { words } : {}),
         beat_grid: beatGrid
           ? {
               bpm: beatGrid.bpm,
