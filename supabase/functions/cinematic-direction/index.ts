@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // AI classifies. Code selects. Audio modulates.
 //
 // AI receives: audio file + section timestamps + optional artist direction
-// AI returns:  character + world + particle + font + per-moment visuals
+// AI returns: world + particle + font + per-moment visuals
 // AI does NOT: pick colors, moods, textures, or any render enum
 // ═══════════════════════════════════════════════════════════════
 
@@ -18,18 +18,6 @@ const corsHeaders = {
 
 const PRIMARY_MODEL = "google/gemini-3-flash-preview";
 const FALLBACK_MODEL = "google/gemini-2.5-flash";
-
-// ── Song character vocabulary ────────────────────────────────
-// Typographic personalities, not genres.
-// Maps to genreFit[] in client's FONT_MANIFEST.
-const SONG_CHARACTERS = [
-  "hard-rap", "hype-anthem", "punk-energy", "electronic-drive",
-  "melodic-rap", "pop-hook", "indie-float", "afro-groove",
-  "slow-romantic-rnb", "acoustic-bare", "dark-mood", "ambient-drift",
-  "spoken-word", "gospel-soul", "lo-fi-chill",
-] as const;
-
-type SongCharacter = (typeof SONG_CHARACTERS)[number];
 
 const VALID_PARTICLES = [
   "dust", "embers", "smoke", "rain", "snow", "stars", "fireflies",
@@ -64,7 +52,6 @@ Let the lyrics guide the imagery: what the singer is saying at that moment shoul
 Return only valid JSON in this exact shape:
 
 {
-  "character": "one tag from the CHARACTER LIST",
   "world": "the visual universe in 12 words or fewer — be specific, not generic",
   "particle": "the default ambient element from the PARTICLE LIST",
   "font": "one Google Font family name that matches the song's energy and mood",
@@ -77,11 +64,6 @@ Return only valid JSON in this exact shape:
     }
   ]
 }
-
-CHARACTER LIST:
-hard-rap, hype-anthem, punk-energy, electronic-drive, melodic-rap, pop-hook,
-indie-float, afro-groove, slow-romantic-rnb, acoustic-bare, dark-mood,
-ambient-drift, spoken-word, gospel-soul, lo-fi-chill
 
 PARTICLE LIST:
 dust, embers, smoke, rain, snow, stars, fireflies, petals, ash,
@@ -106,14 +88,15 @@ RULES FOR "world":
   Bad: "cinematic dark world"
 
 RULES FOR "font":
-- A real Google Font family name. Pick what FEELS like this song.
-  Aggressive/bold → Impact, Oswald, Bebas Neue, Anton, Black Ops One
-  Melodic/emotional → Poppins, Outfit, Nunito, Quicksand
-  Dark/moody → Space Grotesk, JetBrains Mono, IBM Plex Mono
-  Elegant/soulful → Playfair Display, Cormorant Garamond, DM Serif Display
-  Playful → Fredoka, Comfortaa, Baloo 2, Righteous
-  Cinematic/epic → Cinzel, Archivo Black, Big Shoulders Display
-  These are examples, not limits.
+- A real Google Font family name. Look at your world description and ask:
+  what typeface belongs on the poster for this film?
+  Elegant/intimate worlds → Cormorant Garamond, Playfair Display, DM Serif Display
+  Raw/urban worlds → Space Grotesk, Bebas Neue, Oswald, Anton
+  Warm/nostalgic worlds → Libre Baskerville, Lora, DM Serif Text
+  Ethereal/drifting worlds → Cormorant, Raleway, Cinzel
+  High-energy/kinetic worlds → Archivo Black, Anton, Big Shoulders Display
+  Playful/warm worlds → Fredoka, Comfortaa, Baloo 2
+  These are examples, not limits. Pick any real Google Font that fits the world.
 
 RULES FOR MOMENTS:
 - One moment per timestamp provided. Match the count exactly.
@@ -152,7 +135,6 @@ interface RequestBody {
 }
 
 interface AIResponse {
-  character: SongCharacter;
   world: string;
   particle: string;
   font: string;
@@ -217,15 +199,6 @@ function validate(
   raw: Record<string, any>,
   sectionCount: number,
 ): AIResponse {
-  // Character
-  let character = String(raw.character ?? "").toLowerCase().trim() as SongCharacter;
-  if (!SONG_CHARACTERS.includes(character)) {
-    const match = SONG_CHARACTERS.find(
-      (c) => character.includes(c) || c.includes(character),
-    );
-    character = (match ?? "melodic-rap") as SongCharacter;
-  }
-
   // World
   const world =
     typeof raw.world === "string" && raw.world.trim()
@@ -289,7 +262,7 @@ function validate(
     }
   }
 
-  return { character, world, particle, font, moments };
+  return { world, particle, font, moments };
 }
 
 // ── Transform to client contract ─────────────────────────────
@@ -297,7 +270,6 @@ function validate(
 
 function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
   return {
-    character: result.character,
     world: result.world,
     particle: result.particle,
     font: result.font,
@@ -496,7 +468,7 @@ serve(async (req) => {
     const cinematicDirection = toClientShape(validated, sections);
 
     console.log(
-      `[cinematic-direction] v2 complete: character=${validated.character}, particle=${validated.particle}, world="${validated.world}", moments=${validated.moments.length}`,
+      `[cinematic-direction] v2 complete: particle=${validated.particle}, world="${validated.world}", moments=${validated.moments.length}`,
     );
 
     return new Response(
@@ -505,7 +477,6 @@ serve(async (req) => {
         _meta: {
           version: "v2",
           model: PRIMARY_MODEL,
-          character: validated.character,
           particle: validated.particle,
           momentCount: validated.moments.length,
         },
