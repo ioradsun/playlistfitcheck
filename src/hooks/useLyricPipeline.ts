@@ -1252,7 +1252,15 @@ export function useLyricPipeline({
       return;
     }
 
-    const phraseResult = buildPhrases(words);
+    const heroHints = cinematicDirection?.sections
+      ?.filter((s: any) => s.heroWords?.length)
+      .map((s: any) => ({
+        startSec: s.startSec,
+        endSec: s.endSec,
+        heroWords: s.heroWords,
+      })) ?? [];
+
+    const phraseResult = buildPhrases(words, heroHints.length ? heroHints : undefined);
     phraseResultRef.current = phraseResult;
 
     setCinematicDirection((prev: any) => ({
@@ -1261,7 +1269,7 @@ export function useLyricPipeline({
       hookPhrase: phraseResult.hookPhrase,
       _phraseSource: "client_v1",
     }));
-  }, [words]);
+  }, [words, cinematicDirection]);
 
   useEffect(() => {
     if (audioBuffer) return;
@@ -1794,7 +1802,15 @@ export function useLyricPipeline({
 
         if (!mountedRef.current) return;
 
-        const phraseResult = phraseResultRef.current ?? (words?.length ? buildPhrases(words) : null);
+        const heroHints = sceneDirection?.sections
+          ?.filter((s: any) => s.heroWords?.length)
+          .map((s: any) => ({
+            startSec: s.startSec,
+            endSec: s.endSec,
+            heroWords: s.heroWords,
+          })) ?? [];
+        const phraseResult = phraseResultRef.current ??
+          (words?.length ? buildPhrases(words, heroHints.length ? heroHints : undefined) : null);
         const enrichedScene = {
           ...(beatGrid
             ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
