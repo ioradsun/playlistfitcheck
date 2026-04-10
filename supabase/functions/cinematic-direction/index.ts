@@ -43,11 +43,12 @@ const SYSTEM_PROMPT = `You direct lyric videos. Listen to this song. Return JSON
 {
   "character": "one tag from the CHARACTER LIST",
   "world": "the visual universe in 12 words or fewer",
-  "particle": "one ambient element from the PARTICLE LIST",
+  "particle": "the default ambient element from the PARTICLE LIST",
   "moments": [
     {
       "see": "what the camera SEES — one specific visual sentence",
-      "nouns": ["2-4 concrete objects visible in the scene"]
+      "nouns": ["2-4 concrete objects visible in the scene"],
+      "particle": "override from PARTICLE LIST if this moment's scene demands it, otherwise omit"
     }
   ]
 }
@@ -57,7 +58,7 @@ hard-rap, hype-anthem, punk-energy, electronic-drive, melodic-rap, pop-hook,
 indie-float, afro-groove, slow-romantic-rnb, acoustic-bare, dark-mood,
 ambient-drift, spoken-word, gospel-soul, lo-fi-chill
 
-PARTICLE LIST (the ONE ambient element that fills this world's air):
+PARTICLE LIST:
 dust, embers, smoke, rain, snow, stars, fireflies, petals, ash,
 crystals, confetti, lightning, moths, glare, glitch, fire
 
@@ -65,7 +66,8 @@ RULES:
 - Listen to the full song before responding.
 - "character" describes the song's personality from its sound and lyrics. Not its genre label.
 - "world" is ONE place. Every moment lives in that same world.
-- "particle" is the single ambient element present throughout the world. Rain for a rainy world. Embers for a fiery one. Dust for a desert. Pick what fits the world you chose.
+- "particle" at the top level is the default ambient element present throughout the world. Rain for a rainy world. Embers for a fiery one. Dust for a desert.
+- Each moment SHOULD include its own "particle" — the element in the air for THAT scene. Different scenes have different atmospheres, like shots in a film. A cemetery gate has smoke. A marble angel has moths. A candlelit tomb has fire. A foggy valley has ash. Pick the particle that fits what the camera sees in each moment. If a moment's particle is the same as the default, you can omit it, but don't be afraid of variety.
 - "see" describes what a camera physically sees. Not a mood. Not adjectives.
   Good: "Phone screen lighting up on an empty passenger seat"
   Good: "Rain streaking across a bus window, city lights smearing into gold"
@@ -101,6 +103,7 @@ interface AIResponse {
   moments: Array<{
     see: string;
     nouns: string[];
+    particle?: string;
   }>;
 }
 
@@ -198,6 +201,8 @@ function validate(
       nouns: Array.isArray(m?.nouns)
         ? m.nouns.filter((n: any) => typeof n === "string").slice(0, 6)
         : [],
+      particle:
+        typeof m?.particle === "string" ? m.particle.trim().toLowerCase() : undefined,
     }));
   }
 
@@ -226,17 +231,24 @@ function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
     world: result.world,
     particle: result.particle,
 
-    sections: result.moments.map((moment, i) => ({
-      sectionIndex: i,
-      description: moment.see,
-      nouns: moment.nouns,
-      startSec: sections[i]?.startSec ?? i * 10,
-      endSec: sections[i]?.endSec ?? (i + 1) * 10,
-      // Placeholders — client derives from energy analysis in v2
-      visualMood: "intimate",
-      dominantColor: "#C9A96E",
-      texture: result.particle,
-    })),
+    sections: result.moments.map((moment, i) => {
+      let texture = result.particle;
+      if (moment.particle && VALID_PARTICLES.includes(moment.particle as any)) {
+        texture = moment.particle;
+      }
+
+      return {
+        sectionIndex: i,
+        description: moment.see,
+        nouns: moment.nouns,
+        startSec: sections[i]?.startSec ?? i * 10,
+        endSec: sections[i]?.endSec ?? (i + 1) * 10,
+        // Placeholders — client derives from energy analysis in v2
+        visualMood: "intimate",
+        dominantColor: "#C9A96E",
+        texture,
+      };
+    }),
   };
 }
 
