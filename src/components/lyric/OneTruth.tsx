@@ -9,6 +9,7 @@ interface Comment {
   id: string;
   text: string;
   line_index: number | null;
+  submitted_at: string;
   user_id: string | null;
 }
 
@@ -125,6 +126,7 @@ export function OneTruth({
       id: `temp-${Date.now()}`,
       text: trimmed,
       line_index: lineIndex,
+      submitted_at: new Date().toISOString(),
       user_id: user?.id ?? null,
     };
     onCommentSubmitted(optimistic);
@@ -137,14 +139,14 @@ export function OneTruth({
     }, 1500);
 
     await supabase
-      .from("project_comments" as never)
+      .from("project_comments")
       .insert({
         project_id: danceId,
         line_index: lineIndex,
         text: trimmed,
         session_id: getSessionId(),
         user_id: user?.id ?? null,
-      });
+      } as any);
   }, [text, userMoment, danceId, onCommentSubmitted, user?.id, fmlyMoment, onContinue]);
 
   useEffect(() => {
