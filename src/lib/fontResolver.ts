@@ -41,7 +41,7 @@ export interface ResolvedTypography {
   letterSpacing: number;
   sectionStrategies: Record<string, string>;
   _meta: {
-    source: 'ai-font' | 'character' | 'plan' | 'plan-repaired' | 'profile' | 'legacy' | 'fallback';
+    source: 'ai-font' | 'plan' | 'plan-repaired' | 'profile' | 'legacy' | 'fallback';
     primaryFont: string;
     accentFont: string | null;
     repaired: boolean;
@@ -50,50 +50,6 @@ export interface ResolvedTypography {
 
 export const WEIGHT_MAP: Record<string, number> = { light: 300, regular: 400, bold: 700, black: 800 };
 export const TRACKING_MAP: Record<string, number> = { tight: 0.35, normal: 0.2, wide: 0.5 };
-
-// ── Character-based font selection (v2) ──────────────────────
-// Maps song character tags from cinematic direction v2 to genreFit search terms.
-// The AI classifies the song personality; code picks the font.
-const CHARACTER_TO_GENRES: Record<string, string[]> = {
-  'hard-rap': ['hip-hop', 'trap', 'drill', 'grime'],
-  'hype-anthem': ['anthem', 'sport', 'hip-hop'],
-  'punk-energy': ['punk', 'rock', 'indie'],
-  'electronic-drive': ['electronic', 'techno', 'hyperpop'],
-  'melodic-rap': ['hip-hop', 'r-and-b', 'pop'],
-  'pop-hook': ['pop', 'general', 'k-pop'],
-  'indie-float': ['indie', 'ambient', 'minimal'],
-  'afro-groove': ['afrobeat', 'funk', 'pop'],
-  'slow-romantic-rnb': ['r-and-b', 'neo-soul', 'contemporary'],
-  'acoustic-bare': ['acoustic', 'gentle', 'folk'],
-  'dark-mood': ['dark-trap', 'gothic', 'industrial'],
-  'ambient-drift': ['ambient', 'minimal', 'experimental'],
-  'spoken-word': ['spoken-word', 'editorial'],
-  'gospel-soul': ['gospel', 'soul', 'anthem'],
-  'lo-fi-chill': ['lo-fi', 'indie', 'ambient'],
-};
-
-// Typography energy defaults per character
-const CHARACTER_DEFAULTS: Record<string, {
-  system: TypographySystem;
-  weight: string;
-  textCase: 'uppercase' | 'none';
-}> = {
-  'hard-rap': { system: 'single', weight: 'black', textCase: 'uppercase' },
-  'hype-anthem': { system: 'single', weight: 'bold', textCase: 'uppercase' },
-  'punk-energy': { system: 'single', weight: 'bold', textCase: 'uppercase' },
-  'electronic-drive': { system: 'single', weight: 'bold', textCase: 'uppercase' },
-  'melodic-rap': { system: 'single', weight: 'bold', textCase: 'none' },
-  'pop-hook': { system: 'single', weight: 'bold', textCase: 'none' },
-  'indie-float': { system: 'single', weight: 'regular', textCase: 'none' },
-  'afro-groove': { system: 'single', weight: 'bold', textCase: 'none' },
-  'slow-romantic-rnb': { system: 'single', weight: 'regular', textCase: 'none' },
-  'acoustic-bare': { system: 'single', weight: 'regular', textCase: 'none' },
-  'dark-mood': { system: 'single', weight: 'bold', textCase: 'none' },
-  'ambient-drift': { system: 'single', weight: 'light', textCase: 'none' },
-  'spoken-word': { system: 'single', weight: 'regular', textCase: 'none' },
-  'gospel-soul': { system: 'single', weight: 'bold', textCase: 'none' },
-  'lo-fi-chill': { system: 'single', weight: 'regular', textCase: 'none' },
-};
 
 function pickWeight(font: FontDef, target: string): number {
   const t = WEIGHT_MAP[target] ?? 700;
@@ -110,12 +66,13 @@ function resolveFromAIFont(cd: any): ResolvedTypography | null {
   const fontName = typeof cd?.font === 'string' ? cd.font.trim() : '';
   if (!fontName || fontName.length < 2) return null;
 
-  const character = typeof cd?.character === 'string' ? cd.character.toLowerCase() : '';
-  const isAggressive = ['hard-rap', 'hype-anthem', 'punk-energy', 'electronic-drive'].includes(character);
-  const isLight = ['ambient-drift', 'lo-fi-chill', 'acoustic-bare'].includes(character);
-  const baseWeight = isAggressive ? 800 : isLight ? 400 : 600;
+  const sections: any[] = Array.isArray(cd?.sections) ? cd.sections : [];
+  const avgEnergy = sections.length
+    ? sections.reduce((sum: number, s: any) => sum + (s.avgEnergy ?? 0.5), 0) / sections.length
+    : 0.5;
+  const baseWeight = avgEnergy > 0.65 ? 800 : avgEnergy > 0.4 ? 600 : 400;
   const heroWeight = Math.min(900, baseWeight + 200);
-  const textCase: 'uppercase' | 'none' = isAggressive ? 'uppercase' : 'none';
+  const textCase: 'uppercase' | 'none' = avgEnergy > 0.65 ? 'uppercase' : 'none';
 
   return {
     system: 'single',
@@ -132,63 +89,6 @@ function resolveFromAIFont(cd: any): ResolvedTypography | null {
     _meta: {
       source: 'ai-font',
       primaryFont: fontName,
-      accentFont: null,
-      repaired: false,
-    },
-  };
-}
-
-function resolveFromCharacter(cd: any): ResolvedTypography | null {
-  const character = typeof cd?.character === 'string' ? cd.character.toLowerCase().trim() : '';
-  const targetGenres = CHARACTER_TO_GENRES[character];
-  if (!targetGenres) return null;
-
-  const defaults = CHARACTER_DEFAULTS[character] ?? {
-    system: 'single',
-    weight: 'bold',
-    textCase: 'none',
-  };
-
-  // Score fonts by genreFit overlap
-  const scored = FONT_MANIFEST
-    .filter(f => f.roles.includes('primary'))
-    .map(f => ({
-      font: f,
-      score: f.genreFit.filter(g => targetGenres.includes(g)).length,
-    }))
-    .filter(s => s.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  if (scored.length === 0) return null;
-
-  const pool = scored.slice(0, Math.min(3, scored.length));
-  const worldStr = typeof cd?.world === 'string' ? cd.world : '';
-  let hash = 0;
-  for (let i = 0; i < worldStr.length; i++) {
-    hash = ((hash << 5) - hash + worldStr.charCodeAt(i)) | 0;
-  }
-  for (let i = 0; i < character.length; i++) {
-    hash = ((hash << 5) - hash + character.charCodeAt(i)) | 0;
-  }
-  const primary = pool[Math.abs(hash) % pool.length].font;
-  const baseWeight = pickWeight(primary, defaults.weight);
-  const heroW = pickHeroWeight(primary, baseWeight);
-
-  return {
-    system: 'single',
-    fontFamily: primary.cssFamily,
-    fontWeight: baseWeight,
-    heroWeight: heroW,
-    accentFontFamily: null,
-    accentFontWeight: null,
-    heroStyle: 'weight-shift',
-    accentDensity: 'low',
-    textTransform: defaults.textCase,
-    letterSpacing: primary.width === 'condensed' ? 0.35 : 0.2,
-    sectionStrategies: {},
-    _meta: {
-      source: 'character',
-      primaryFont: primary.name,
       accentFont: null,
       repaired: false,
     },
@@ -330,12 +230,6 @@ export function resolveTypographyFromDirection(cd: any): ResolvedTypography {
   if (fromAI) {
     console.info('[typography] resolved from AI font:', fromAI._meta);
     return fromAI;
-  }
-
-  const fromCharacter = resolveFromCharacter(cd);
-  if (fromCharacter) {
-    console.info('[typography] resolved from character:', fromCharacter._meta);
-    return fromCharacter;
   }
 
   const fromPlan = resolveFromPlan(cd);
