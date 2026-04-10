@@ -91,3 +91,16 @@ class PersistQueue {
 }
 
 export const persistQueue = new PersistQueue();
+
+// Flush pending writes when the page is being left or hidden.
+// visibilitychange→hidden is more reliable than beforeunload on mobile Safari.
+if (typeof window !== "undefined") {
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      void persistQueue.flushNow();
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    void persistQueue.flushNow();
+  });
+}
