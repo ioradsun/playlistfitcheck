@@ -6,8 +6,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // AI classifies. Code selects. Audio modulates.
 //
 // AI receives: audio file + section timestamps + optional artist direction
-// AI returns:  character + world + particle + per-moment visuals
-// AI does NOT: pick fonts, colors, moods, textures, or any render enum
+// AI returns:  character + world + particle + font + per-moment visuals
+// AI does NOT: pick colors, moods, textures, or any render enum
 // ═══════════════════════════════════════════════════════════════
 
 const corsHeaders = {
@@ -44,6 +44,7 @@ const SYSTEM_PROMPT = `You direct lyric videos. Listen to this song. Return JSON
   "character": "one tag from the CHARACTER LIST",
   "world": "the visual universe in 12 words or fewer",
   "particle": "the default ambient element from the PARTICLE LIST",
+  "font": "one Google Font family name that matches the song's energy and mood",
   "moments": [
     {
       "see": "what the camera SEES — one specific visual sentence",
@@ -76,6 +77,15 @@ RULES:
   Bad: "moody urban environment with dark tones"
 - "nouns" are physical things visible in the scene, grounded in the lyrics you hear.
 - One moment per timestamp section provided. Match the count exactly.
+- "font" is a real Google Font family name. Pick the typeface that FEELS like this song.
+  Aggressive/bold songs → Impact, Oswald, Bebas Neue, Anton, Black Ops One
+  Melodic/emotional songs → Poppins, Inter, Outfit, Nunito, Quicksand
+  Dark/moody songs → Space Grotesk, JetBrains Mono, Fira Code, IBM Plex Mono
+  Elegant/soulful songs → Playfair Display, Cormorant Garamond, Libre Baskerville, DM Serif Display
+  Playful/fun songs → Fredoka, Comfortaa, Baloo 2, Righteous
+  Clean/modern songs → Montserrat, Raleway, Work Sans, Plus Jakarta Sans
+  Cinematic/epic songs → Cinzel, Archivo Black, Teko, Big Shoulders Display
+  These are examples, not limits. Pick any real Google Font that fits.
 - All moments must feel like shots from the same film, not different planets.`;
 
 // ── Types ────────────────────────────────────────────────────
@@ -100,6 +110,7 @@ interface AIResponse {
   character: SongCharacter;
   world: string;
   particle: string;
+  font: string;
   moments: Array<{
     see: string;
     nouns: string[];
@@ -190,6 +201,12 @@ function validate(
     else particle = "dust";
   }
 
+  // Font
+  let font = typeof raw.font === "string" ? raw.font.trim() : "";
+  if (!font || font.length < 2 || font.length > 60) {
+    font = "Montserrat";
+  }
+
   // Moments
   let moments: AIResponse["moments"] = [];
   if (Array.isArray(raw.moments)) {
@@ -219,7 +236,7 @@ function validate(
     }
   }
 
-  return { character, world, particle, moments };
+  return { character, world, particle, font, moments };
 }
 
 // ── Transform to client contract ─────────────────────────────
@@ -230,6 +247,7 @@ function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
     character: result.character,
     world: result.world,
     particle: result.particle,
+    font: result.font,
 
     sections: result.moments.map((moment, i) => {
       let texture = result.particle;

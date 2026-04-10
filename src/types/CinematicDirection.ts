@@ -17,6 +17,10 @@ export interface FontProfile {
 }
 
 export interface CinematicDirection {
+  // ── v2.1 fields ──
+  /** AI-picked Google Font family name */
+  font?: string;
+
   // ── v2 fields (current) ──
   /** Song personality classification — maps to font genreFit */
   character?: string;
