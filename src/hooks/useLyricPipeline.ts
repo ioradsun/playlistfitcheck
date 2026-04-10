@@ -87,11 +87,22 @@ interface UsePipelineSchedulerReturn {
   handleSectionImagesError: (error: string | null) => void;
 }
 
+interface EnergySection {
+  index: number;
+  startSec: number;
+  endSec: number;
+  avgEnergy: number;
+  peakEnergy: number;
+  avgBrightness: number;
+  slope: number;
+  deltaFromPrev: number;
+}
+
 function buildSectionsFromEnergy(
   analysis: AudioAnalysis,
   maxSections: number = 8,
   minSectionDuration: number = 8,
-): Array<{ index: number; startSec: number; endSec: number }> {
+): EnergySection[] {
   const { frames, frameRate } = analysis;
   if (frames.length === 0) return [];
 
@@ -130,23 +141,156 @@ function buildSectionsFromEnergy(
 
   const sections = boundaryFrames.slice(0, -1).map((startFrame, i) => {
     const endFrame = boundaryFrames[i + 1];
+    const frameSlice = frames.slice(startFrame, Math.max(startFrame + 1, endFrame + 1));
+    const avgEnergy =
+      frameSlice.reduce((sum, frame) => sum + frame.energy, 0) / frameSlice.length;
+    const peakEnergy = frameSlice.reduce(
+      (max, frame) => (frame.energy > max ? frame.energy : max),
+      0,
+    );
+    const avgBrightness =
+      frameSlice.reduce((sum, frame) => sum + frame.brightness, 0) / frameSlice.length;
+    const firstEnergy = frameSlice[0]?.energy ?? avgEnergy;
+    const lastEnergy = frameSlice[frameSlice.length - 1]?.energy ?? avgEnergy;
+
     return {
       index: i,
       startSec: Math.round((startFrame / frameRate) * 100) / 100,
       endSec: Math.round((endFrame / frameRate) * 100) / 100,
+      avgEnergy: Math.round(avgEnergy * 1000) / 1000,
+      peakEnergy: Math.round(peakEnergy * 1000) / 1000,
+      avgBrightness: Math.round(avgBrightness * 1000) / 1000,
+      slope: Math.round((lastEnergy - firstEnergy) * 1000) / 1000,
+      deltaFromPrev: 0,
     };
   });
 
-  if (sections.length < 3 && duration > 60) {
+  const withDelta = sections.map((section, i) => ({
+    ...section,
+    deltaFromPrev:
+      i === 0 ? 0 : Math.round((section.avgEnergy - sections[i - 1].avgEnergy) * 1000) / 1000,
+  }));
+
+  if (withDelta.length < 3 && duration > 15) {
     const count = Math.min(maxSections, Math.max(3, Math.ceil(duration / 30)));
-    return Array.from({ length: count }, (_, i) => ({
-      index: i,
-      startSec: Math.round((duration / count) * i * 100) / 100,
-      endSec: Math.round((duration / count) * (i + 1) * 100) / 100,
+    const forced = Array.from({ length: count }, (_, i) => {
+      const startSec = (duration / count) * i;
+      const endSec = (duration / count) * (i + 1);
+      const startFrame = Math.max(0, Math.floor(startSec * frameRate));
+      const endFrame = Math.min(frames.length - 1, Math.floor(endSec * frameRate));
+      const frameSlice = frames.slice(startFrame, Math.max(startFrame + 1, endFrame + 1));
+      const avgEnergy =
+        frameSlice.reduce((sum, frame) => sum + frame.energy, 0) / frameSlice.length;
+      const peakEnergy = frameSlice.reduce(
+        (max, frame) => (frame.energy > max ? frame.energy : max),
+        0,
+      );
+      const avgBrightness =
+        frameSlice.reduce((sum, frame) => sum + frame.brightness, 0) / frameSlice.length;
+      const firstEnergy = frameSlice[0]?.energy ?? avgEnergy;
+      const lastEnergy = frameSlice[frameSlice.length - 1]?.energy ?? avgEnergy;
+      return {
+        index: i,
+        startSec: Math.round(startSec * 100) / 100,
+        endSec: Math.round(endSec * 100) / 100,
+        avgEnergy: Math.round(avgEnergy * 1000) / 1000,
+        peakEnergy: Math.round(peakEnergy * 1000) / 1000,
+        avgBrightness: Math.round(avgBrightness * 1000) / 1000,
+        slope: Math.round((lastEnergy - firstEnergy) * 1000) / 1000,
+        deltaFromPrev: 0,
+      };
+    });
+    return forced.map((section, i) => ({
+      ...section,
+      deltaFromPrev:
+        i === 0 ? 0 : Math.round((section.avgEnergy - forced[i - 1].avgEnergy) * 1000) / 1000,
     }));
   }
 
-  return sections;
+  return withDelta;
+}
+
+function deriveVisualMoodFromEnergy(
+  avgEnergy: number,
+  peakEnergy: number,
+  avgBrightness: number,
+  deltaFromPrev: number,
+): string {
+  if (peakEnergy > 0.85 && deltaFromPrev > 0.15) return "aggressive";
+  if (avgEnergy > 0.7) return avgBrightness > 0.5 ? "anthemic" : "defiant";
+  if (avgEnergy > 0.55) return avgBrightness > 0.6 ? "euphoric" : "triumphant";
+  if (avgEnergy > 0.4) return avgBrightness > 0.5 ? "dreamy" : "hypnotic";
+  if (avgEnergy > 0.25) return avgBrightness > 0.4 ? "nostalgic" : "melancholy";
+  if (avgEnergy > 0.15) return "intimate";
+  return "vulnerable";
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sat = s / 100;
+  const light = l / 100;
+  const c = (1 - Math.abs(2 * light - 1)) * sat;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = light - c / 2;
+
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+
+  const toHex = (channel: number) =>
+    Math.round((channel + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+}
+
+function deriveDominantColorFromEnergy(avgEnergy: number, avgBrightness: number): string {
+  const hue = Math.round(30 + avgBrightness * 180);
+  const saturation = Math.round(40 + avgEnergy * 30);
+  const lightness = Math.round(35 + avgEnergy * 15);
+  return hslToHex(hue, saturation, lightness);
+}
+
+function enrichSectionsWithEnergy(direction: any, audioSections: EnergySection[]) {
+  const energyByIndex = new Map(audioSections.map((section) => [section.index, section]));
+  const sections = Array.isArray(direction?.sections) ? direction.sections : [];
+  return sections.map((section: any, index: number) => {
+    const match = energyByIndex.get(section?.index ?? index);
+    if (!match) return section;
+    return {
+      ...section,
+      visualMood: deriveVisualMoodFromEnergy(
+        match.avgEnergy,
+        match.peakEnergy,
+        match.avgBrightness,
+        match.deltaFromPrev,
+      ),
+      dominantColor: deriveDominantColorFromEnergy(match.avgEnergy, match.avgBrightness),
+      emotionalArc: match.slope >= 0.05 ? "rising" : match.slope <= -0.05 ? "falling" : "steady",
+    };
+  });
+}
+
+function evenTimeSplit(durationSec: number, maxSections: number = 8): EnergySection[] {
+  const duration = durationSec || 60;
+  const count = Math.min(maxSections, Math.max(3, Math.ceil(duration / 30)));
+  return Array.from({ length: count }, (_, i) => ({
+    index: i,
+    startSec: Math.round((duration / count) * i * 100) / 100,
+    endSec: Math.round((duration / count) * (i + 1) * 100) / 100,
+    avgEnergy: 0.35,
+    peakEnergy: 0.5,
+    avgBrightness: 0.45,
+    slope: 0,
+    deltaFromPrev: 0,
+  }));
 }
 
 async function createDanceRowAndGenerateImages({
@@ -371,6 +515,52 @@ async function createDanceRowAndGenerateImages({
     allComplete,
     generatedCount: urls.filter(Boolean).length,
     total: dirSections.length,
+  };
+}
+
+async function callCinematicDirection(opts: {
+  title: string;
+  artist: string;
+  audioUrl?: string;
+  artistDirection?: string;
+  instrumental?: boolean;
+  beatGrid: BeatGridData | null;
+  audioDurationSec: number;
+}) {
+  const analysis = opts.beatGrid?._analysis;
+  const audioSections =
+    analysis?.frames?.length && analysis.frameRate > 0
+      ? buildSectionsFromEnergy(analysis)
+      : evenTimeSplit(opts.audioDurationSec);
+
+  const { data } = await invokeWithTimeout(
+    "cinematic-direction",
+    {
+      title: opts.title,
+      artist: opts.artist,
+      audio_url: opts.audioUrl,
+      artist_direction: opts.artistDirection,
+      instrumental: opts.instrumental ?? false,
+      mode: "scene" as const,
+      audioSections: audioSections.map(({ index, startSec, endSec }) => ({
+        index,
+        startSec,
+        endSec,
+      })),
+    },
+    120_000,
+  );
+
+  if (!data?.cinematicDirection) {
+    throw new Error("Scene direction returned no data");
+  }
+
+  return {
+    direction: {
+      ...data.cinematicDirection,
+      sections: enrichSectionsWithEnergy(data.cinematicDirection, audioSections),
+    },
+    meta: data._meta || null,
   };
 }
 
@@ -1495,49 +1685,18 @@ export function useLyricPipeline({
       setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
 
       try {
-        let audioSections: any[] = [];
-        const analysis = beatGrid?._analysis;
-        if (analysis && analysis.frames.length > 0) {
-          audioSections = buildSectionsFromEnergy(analysis);
-        } else {
-          const dur = audioDurationSec || 60;
-          const count = Math.min(8, Math.max(3, Math.ceil(dur / 30)));
-          audioSections = Array.from({ length: count }, (_, i) => ({
-            index: i,
-            startSec: Math.round((dur / count) * i * 100) / 100,
-            endSec: Math.round((dur / count) * (i + 1) * 100) / 100,
-          }));
-        }
-
-        const sharedBody = {
+        const { direction: sceneDirection, meta: sceneMeta } = await callCinematicDirection({
           title: lyricData.title || "Untitled",
           artist:
             artistNameRef.current && artistNameRef.current !== "artist"
               ? artistNameRef.current
               : "Unknown Artist",
-          audio_url: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
-          artist_direction: sceneDescription?.trim() || undefined,
-          mode: "scene" as const,
-          audioSections: audioSections.map((s) => ({
-            index: s.index,
-            startSec: s.startSec,
-            endSec: s.endSec,
-          })),
-        };
-
-        const { data: sceneResult } = await invokeWithTimeout(
-          "cinematic-direction",
-          sharedBody,
-          120_000,
-        );
+          audioUrl: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
+          artistDirection: sceneDescription?.trim() || undefined,
+          beatGrid,
+          audioDurationSec,
+        });
         if (myRunId !== runIdRef.current) return;
-
-        if (!sceneResult?.cinematicDirection) {
-          throw new Error("Scene direction returned no data");
-        }
-
-        const sceneDirection = sceneResult.cinematicDirection;
-        const sceneMeta = sceneResult._meta || null;
 
         if (!mountedRef.current) return;
 
@@ -1563,8 +1722,6 @@ export function useLyricPipeline({
               cinematicDirection: enrichedScene,
               cinematic_direction: enrichedScene,
               description: enrichedScene.description,
-              mood: enrichedScene.mood,
-              meaning: enrichedScene.meaning,
             };
             if (savedIdRef.current) {
               persistQueue.enqueue({
@@ -1789,53 +1946,26 @@ export function useLyricPipeline({
       setPipelineStages((prev) => ({ ...prev, cinematic: "running" }));
 
       try {
-        const analysis = beatGrid?._analysis;
-        let audioSections: Array<{ index: number; startSec: number; endSec: number }>;
-        if (analysis && analysis.frames.length > 0) {
-          audioSections = buildSectionsFromEnergy(analysis);
-        } else {
-          const dur = audioDurationSec || 60;
-          const count = Math.min(8, Math.max(3, Math.ceil(dur / 30)));
-          audioSections = Array.from({ length: count }, (_, i) => ({
-            index: i,
-            startSec: Math.round((dur / count) * i * 100) / 100,
-            endSec: Math.round((dur / count) * (i + 1) * 100) / 100,
-          }));
-        }
-
-        const body = {
+        const { direction: sceneDirection, meta: sceneMeta } = await callCinematicDirection({
           title: lyricData?.title ?? "Untitled Beat",
           artist:
             artistNameRef.current && artistNameRef.current !== "artist"
               ? artistNameRef.current
               : "Unknown Artist",
-          audio_url: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
-          artist_direction: sceneDescription?.trim() || undefined,
+          audioUrl: audioUrl?.startsWith("blob:") ? undefined : (audioUrl || undefined),
+          artistDirection: sceneDescription?.trim() || undefined,
           instrumental: true,
-          mode: "scene" as const,
-          audioSections: audioSections.map((s) => ({
-            index: s.index,
-            startSec: s.startSec,
-            endSec: s.endSec,
-          })),
-        };
-
-        const { data: sceneResult } = await invokeWithTimeout(
-          "cinematic-direction",
-          body,
-          120_000,
-        );
-        if (!sceneResult?.cinematicDirection) {
-          throw new Error("Scene direction returned no data");
-        }
+          beatGrid,
+          audioDurationSec,
+        });
 
         const enrichedScene = {
-          ...sceneResult.cinematicDirection,
+          ...sceneDirection,
           beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence },
           phrases: [],
           _artistDirection: sceneDescription?.trim() || undefined,
           _instrumental: true,
-          _meta: { scene: sceneResult._meta || null },
+          _meta: { scene: sceneMeta },
         };
 
         setCinematicDirection(enrichedScene);
