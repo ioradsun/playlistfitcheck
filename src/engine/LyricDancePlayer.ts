@@ -1625,6 +1625,8 @@ export class LyricDancePlayer {
   private _lastFont = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
+  private _cachedTypography: ResolvedTypography | null = null;
+  private _cachedTypographyDirectionRef: any = null;
 
   // ═══ Compiled Scene (replaces timeline) ═══
   private compiledScene: CompiledScene | null = null;
@@ -1974,13 +1976,22 @@ export class LyricDancePlayer {
     performance.mark("engine:firstPaint");
   }
 
+  private getTypography(cd: any): ResolvedTypography {
+    if (this._cachedTypography && this._cachedTypographyDirectionRef === cd) {
+      return this._cachedTypography;
+    }
+    this._cachedTypography = resolveTypographyFromDirection(cd);
+    this._cachedTypographyDirectionRef = cd;
+    return this._cachedTypography;
+  }
+
   /**
    * Resolve the primary font family name via the typography resolver.
    * Handles typographyPlan (new), fontProfile, and legacy typography keys.
    * Falls back to Montserrat if no valid font is found.
    */
   private getTargetFontFamily(): string {
-    const resolved = resolveTypographyFromDirection(this.data?.cinematic_direction);
+    const resolved = this.getTypography(this.data?.cinematic_direction);
     const names = getFontNamesForPreload(resolved);
     return names[0] ?? 'Montserrat';
   }
@@ -3677,13 +3688,13 @@ export class LyricDancePlayer {
   }
 
   private getResolvedFont(): string {
-    const resolved = resolveTypographyFromDirection(this.payload?.cinematic_direction);
+    const resolved = this.getTypography(this.payload?.cinematic_direction);
     return resolved.fontFamily;
   }
 
 
   private async preloadFonts(): Promise<void> {
-    const resolved = resolveTypographyFromDirection(this.payload?.cinematic_direction);
+    const resolved = this.getTypography(this.payload?.cinematic_direction);
     const fontNames = getFontNamesForPreload(resolved);
     const results = await Promise.all(fontNames.map(name => ensureFontReady(name)));
     const loaded = results.every(Boolean);
@@ -4874,23 +4885,19 @@ export class LyricDancePlayer {
       || (this.audio?.duration > 0 ? this.audio.duration : null)
       || (this.songEndSec > 0 ? this.songEndSec : undefined);
     return enrichSections(direction.sections, dur).map((section) => ({
+      sectionIndex: section.sectionIndex,
       title: section.description ?? `Section ${section.sectionIndex}`,
       startSec: section.startSec,
       endSec: section.endSec,
       startRatio: section.startRatio,
       endRatio: section.endRatio,
-      emotionalArc: section.mood ?? "",
-      motion: section.motion,
+      description: section.description ?? "",
       texture: section.texture,
-      atmosphere: section.atmosphere,
-      backgroundDirective: section.description ?? "",
-      sectionIndex: section.sectionIndex,
-      mood: section.mood,
       visualMood: section.visualMood,
-      atmosphereState: section.atmosphereState,
       dominantColor: section.dominantColor,
+      avgEnergy: (section as any).avgEnergy,
       zoom: 1,
-      driftIntensity: direction.motion === "fluid" ? 0.3 : 0.1,
+      driftIntensity: 0.1,
     }));
   }
 

@@ -17,43 +17,56 @@ export interface FontProfile {
 }
 
 export interface CinematicDirection {
-  // New backend fields (v2 prompt)
+  // ── v2 fields (current) ──
+  /** Song personality classification — maps to font genreFit */
+  character?: string;
+  /** Visual universe — one sentence, shared across all sections */
+  world?: string;
+  /** Ambient particle type for the entire song */
+  particle?: string;
+  /** World description (same as world, for backward compat) */
+  description?: string;
+  /** Scene tone — derived from energy */
   sceneTone?: string;
-  atmosphere?: string;
-  motion?: string;
-  typography?: string;
-  fontProfile?: FontProfile;
-  texture?: string;
+  /** Song-level emotional arc — derived from section energy in sceneCompiler */
   emotionalArc?: string;
-  palette?: string;
+
   sections?: CinematicSection[];
 
-  // WordDirectives: new format = array, old format = Record
-  // Legacy field — word emphasis data from old AI prompt format
-  wordDirectives?: WordDirective[] | Record<string, WordDirective>;
-
-  // Storyboard: new format = StoryboardEntry[], old legacy objects
-  storyboard?: StoryboardEntry[] | Record<string, any>[];
-
-  /** AI-grouped phrases: which words appear on screen together.
-   *  Each phrase is one "reading beat" — a complete thought the viewer reads and absorbs. */
+  /** AI-grouped phrases: which words appear on screen together */
   phrases?: CinematicPhrase[];
   hookPhrase?: string;
-  /** Detected chorus lyric text (repeated lines) */
-  chorusText?: string;
 
-  // ── Legacy fields (deprecated — use resolvers instead) ─────
-  /** @deprecated Use emotionalArc + resolvers */
+  // ── Legacy fields (kept for cached DB data only) ──
+  /** @deprecated v1 — use character + fontResolver */
+  typography?: string;
+  /** @deprecated v1 — use character + fontResolver */
+  fontProfile?: FontProfile;
+  /** @deprecated v1 — particle is now song-level */
+  texture?: string;
+  /** @deprecated v1 */
+  atmosphere?: string;
+  /** @deprecated v1 */
+  motion?: string;
+  /** @deprecated v1 */
+  palette?: string;
+  /** @deprecated v1 — word emphasis from old prompt */
+  wordDirectives?: WordDirective[] | Record<string, WordDirective>;
+  /** @deprecated v1 */
+  storyboard?: StoryboardEntry[] | Record<string, any>[];
+  /** @deprecated v1 */
+  chorusText?: string;
+  /** @deprecated v0 */
   thesis?: string;
-  /** @deprecated Legacy visual world from V1 prompt */
+  /** @deprecated v0 */
   visualWorld?: Record<string, any>;
-  /** @deprecated Use sections + enrichSections() */
+  /** @deprecated v0 — use sections + enrichSections() */
   chapters?: Chapter[];
-  /** @deprecated Legacy tension curve from V1 prompt */
+  /** @deprecated v0 */
   tensionCurve?: any[];
-  /** @deprecated Legacy climax directive from V1 prompt */
+  /** @deprecated v0 */
   climax?: Record<string, any>;
-  /** @deprecated Legacy ending directive from V1 prompt */
+  /** @deprecated v0 */
   ending?: Record<string, any>;
 }
 
@@ -62,31 +75,49 @@ export interface CinematicDirection {
 export interface CinematicSection {
   sectionIndex: number;
   description: string;
-  mood?: string;
-  /** Visual mood keyword from fixed vocabulary — drives cinematic grading */
+  /** Visual mood — energy-derived in v2 */
   visualMood?: string;
-  motion?: string;
-  texture?: string;
-  typography?: string;
-  fontProfile?: FontProfile;
-  atmosphere?: string;
-  /** Time boundary in seconds (from audioSections) */
-  startSec?: number;
-  /** Time boundary in seconds (from audioSections) */
-  endSec?: number;
-  /** Computed by enrichSections() — ratio 0–1 */
-  startRatio?: number;
-  /** Computed by enrichSections() — ratio 0–1 */
-  endRatio?: number;
-  structuralLabel?: string;
-  /** AI boundary suggestion — only present for low-confidence sections */
-  suggestedStartSec?: number;
-  /** AI boundary suggestion — only present for low-confidence sections */
-  suggestedEndSec?: number;
-  /** How particles behave in this section */
-  atmosphereState?: 'still' | 'drifting' | 'falling' | 'swirling';
-  /** Section's dominant color — drives palette */
+  /** Dominant color hex — energy-derived in v2 */
   dominantColor?: string;
+  /** Particle texture — same as song-level particle in v2 */
+  texture?: string;
+  /** Concrete visual nouns from AI (v2) */
+  nouns?: string[];
+
+  // ── Energy features (v2 — set by enrichSectionsWithEnergy) ──
+  avgEnergy?: number;
+  peakEnergy?: number;
+  avgBrightness?: number;
+  slope?: number;
+  deltaFromPrev?: number;
+
+  // ── Time boundaries ──
+  startSec?: number;
+  endSec?: number;
+  /** Computed by enrichSections() */
+  startRatio?: number;
+  /** Computed by enrichSections() */
+  endRatio?: number;
+
+  // ── Legacy fields (kept for cached data) ──
+  /** @deprecated v1 */
+  mood?: string;
+  /** @deprecated v1 */
+  motion?: string;
+  /** @deprecated v1 */
+  atmosphere?: string;
+  /** @deprecated v1 */
+  typography?: string;
+  /** @deprecated v1 */
+  fontProfile?: FontProfile;
+  /** @deprecated v1 */
+  structuralLabel?: string;
+  /** @deprecated v1 */
+  suggestedStartSec?: number;
+  /** @deprecated v1 */
+  suggestedEndSec?: number;
+  /** @deprecated v1 */
+  atmosphereState?: 'still' | 'drifting' | 'falling' | 'swirling';
 }
 
 export interface CinematicPhrase {

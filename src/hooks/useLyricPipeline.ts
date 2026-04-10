@@ -56,7 +56,7 @@ interface UsePipelineSchedulerParams {
   runIdRef: React.MutableRefObject<number>;
   lastCompletedRunIdRef: React.MutableRefObject<number>;
 
-  startCinematicDirection: (lines: LyricLine[], force?: boolean) => Promise<void>;
+  startCinematicDirection: (force?: boolean) => Promise<void>;
   startHookDetection: () => Promise<void>;
 }
 
