@@ -262,7 +262,7 @@ function enrichSectionsWithEnergy(direction: any, audioSections: EnergySection[]
   const energyByIndex = new Map(audioSections.map((section) => [section.index, section]));
   const sections = Array.isArray(direction?.sections) ? direction.sections : [];
   return sections.map((section: any, index: number) => {
-    const match = energyByIndex.get(section?.index ?? index);
+    const match = energyByIndex.get(section?.sectionIndex ?? section?.index ?? index);
     if (!match) return section;
     return {
       ...section,
@@ -273,7 +273,11 @@ function enrichSectionsWithEnergy(direction: any, audioSections: EnergySection[]
         match.deltaFromPrev,
       ),
       dominantColor: deriveDominantColorFromEnergy(match.avgEnergy, match.avgBrightness),
-      emotionalArc: match.slope >= 0.05 ? "rising" : match.slope <= -0.05 ? "falling" : "steady",
+      avgEnergy: match.avgEnergy,
+      peakEnergy: match.peakEnergy,
+      avgBrightness: match.avgBrightness,
+      slope: match.slope,
+      deltaFromPrev: match.deltaFromPrev,
     };
   });
 }
@@ -694,15 +698,16 @@ export function usePipelineScheduler({
   useEffect(() => {
     if (filmMode === "beat") return;
     if (!audioUrl) return;
+    if (!beatGridDone) return;
     if (cinematicTriggeredRef.current) return;
     cinematicTriggeredRef.current = true;
     const force = pipelineRetryCount > 0;
-
-    void startCinematicDirection(lines, force);
+    console.time("[pipeline] beat→cinematic");
+    void startCinematicDirection(force);
   }, [
     filmMode,
     audioUrl,
-    lines,
+    beatGridDone,
     pipelineRetryCount,
     startCinematicDirection,
   ]);
@@ -1665,7 +1670,7 @@ export function useLyricPipeline({
   ]);
 
   const startCinematicDirection = useCallback(
-    async (_sourceLines: LyricLine[], force = false) => {
+    async (force = false) => {
       if (!lyricData) return;
       const myRunId = ++runIdRef.current;
       {
