@@ -434,7 +434,6 @@ type ChunkState = {
 
 type ResolvedPlayerState = {
   chapters: any[];
-  wordDirectivesMap: Record<string, any>;
   particleConfig: { texture: string; system: string; density: number; speed: number };
 };
 
@@ -1606,7 +1605,6 @@ export class LyricDancePlayer {
   public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
   public resolvedState: ResolvedPlayerState = {
     chapters: [],
-    wordDirectivesMap: {},
     particleConfig: { texture: 'dust', system: 'dust', density: 0.8, speed: 0.5 },
   };
   
@@ -2704,14 +2702,6 @@ export class LyricDancePlayer {
       const sections = (cd?.sections as any[]) ?? [];
       const secIdx = this._frameSectionIdx;
       const currentSection = sections[secIdx];
-      if (currentSection) {
-        this.cameraRig.setSectionFromMood(
-          currentSection.atmosphere
-            ?? currentSection.mood
-            ?? currentSection.description
-            ?? ''
-        );
-      }
       this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
 
       const focus: SubjectFocus = {
@@ -3460,14 +3450,6 @@ export class LyricDancePlayer {
           const secIdx = this._frameSectionIdx;
           const currentSection = sections[secIdx];
 
-          if (currentSection) {
-            this.cameraRig.setSectionFromMood(
-              currentSection.atmosphere
-                ?? currentSection.mood
-                ?? currentSection.description
-                ?? ''
-            );
-          }
           this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
         }
 
@@ -4886,7 +4868,6 @@ export class LyricDancePlayer {
       || (this.songEndSec > 0 ? this.songEndSec : undefined);
     return enrichSections(direction.sections, dur).map((section) => ({
       sectionIndex: section.sectionIndex,
-      title: section.description ?? `Section ${section.sectionIndex}`,
       startSec: section.startSec,
       endSec: section.endSec,
       startRatio: section.startRatio,
@@ -4896,56 +4877,23 @@ export class LyricDancePlayer {
       visualMood: section.visualMood,
       dominantColor: section.dominantColor,
       avgEnergy: (section as any).avgEnergy,
-      zoom: 1,
-      driftIntensity: 0.1,
     }));
   }
 
-  private toWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives'], words?: Array<{ word: string }> | null): Record<string, any> {
-    const map: Record<string, any> = {};
-    // ── AI directives (highest priority) ──
-    if (wordDirectives) {
-      if (Array.isArray(wordDirectives)) {
-        for (const directive of wordDirectives) {
-          const key = String(directive?.word ?? '').trim().toLowerCase();
-          if (!key) continue;
-          map[key] = directive;
-        }
-      } else {
-        for (const [key, value] of Object.entries(wordDirectives)) {
-          const clean = key.trim().toLowerCase();
-          if (!clean) continue;
-          map[clean] = value;
-        }
-      }
-    }
-
-    return map;
-  }
-
   private resolveParticleTexture(sectionIndex: number, direction: CinematicDirection | null | undefined): string {
-    const sectionTexture = direction?.sections?.[sectionIndex]?.texture;
-    return sectionTexture ?? direction?.texture ?? 'dust';
+    return direction?.sections?.[sectionIndex]?.texture
+      ?? direction?.particle
+      ?? direction?.texture
+      ?? 'dust';
   }
 
   private resolvePlayerState(payload: ScenePayload): void {
     const direction = payload.cinematic_direction;
     const chapters = this.toLegacyChapters(direction);
-    const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives, payload.words as any);
-    const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
     const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
-    const currentSection = chapters[sectionIndex];
-    this.cameraRig.setSectionFromMood(
-      currentSection?.atmosphere
-        ?? currentSection?.mood
-        ?? currentSection?.backgroundDirective
-        ?? currentSection?.title
-        ?? 'verse'
-    );
     const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
     this.resolvedState = {
       chapters,
-      wordDirectivesMap,
       particleConfig: {
         texture,
         system: texture,
