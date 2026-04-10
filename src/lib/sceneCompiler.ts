@@ -827,7 +827,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     targetZoom: distanceToZoom['Medium'] ?? 1.0,
     emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
     typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
-    atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
+    atmosphere: (payload.cinematic_direction as any)?.world ?? chapter.atmosphere ?? 'cinematic',
   }));
 
   const analysis = (payload.beat_grid as any)?._analysis ?? null;
@@ -1061,7 +1061,18 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     beatEvents,
     bpm,
     chapters: compiledChapters,
-    emotionalArc: ((payload.cinematic_direction as any)?.emotionalArc as string | undefined) ?? 'slow-burn',
+    emotionalArc: (() => {
+      const sections = (payload.cinematic_direction as any)?.sections ?? [];
+      if (sections.length < 2) return 'slow-burn';
+      const firstEnergy = sections[0]?.avgEnergy ?? 0.3;
+      const peakEnergy = Math.max(...sections.map((s: any) => s?.avgEnergy ?? 0));
+      const lastEnergy = sections[sections.length - 1]?.avgEnergy ?? 0.3;
+      if (peakEnergy > firstEnergy * 1.5 && lastEnergy < peakEnergy * 0.7) return 'surge';
+      if (lastEnergy > firstEnergy * 1.3) return 'dawn';
+      if (lastEnergy < firstEnergy * 0.6) return 'collapse';
+      if (peakEnergy > 0.75) return 'eruption';
+      return 'slow-burn';
+    })(),
     visualMode,
     baseFontFamily: baseTypography.fontFamily,
     baseFontWeight: baseTypography.fontWeight,
