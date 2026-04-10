@@ -197,17 +197,6 @@ export interface LiveDebugState {
   symbolSecondary: string;
   symbolState: string;
 
-  cameraDistance: string;
-  cameraMovement: string;
-
-  wordDirectiveWord: string;
-  wordDirectiveBehavior: string;
-  wordDirectiveEntry: string;
-  wordDirectiveEmphasis: number;
-  wordDirectiveExit: string;
-  wordDirectiveGhostTrail: boolean;
-  wordDirectiveGhostDir: string;
-
   lineHeroWord: string;
   lineEntry: string;
   lineExit: string;
@@ -337,17 +326,6 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   symbolPrimary: "—",
   symbolSecondary: "—",
   symbolState: "—",
-
-  cameraDistance: "Wide",
-  cameraMovement: "—",
-
-  wordDirectiveWord: "",
-  wordDirectiveBehavior: "—",
-  wordDirectiveEntry: "—",
-  wordDirectiveEmphasis: 0,
-  wordDirectiveExit: "—",
-  wordDirectiveGhostTrail: false,
-  wordDirectiveGhostDir: "—",
 
   lineHeroWord: "",
   lineEntry: "fades",
@@ -4872,7 +4850,6 @@ export class LyricDancePlayer {
       endSec: section.endSec,
       startRatio: section.startRatio,
       endRatio: section.endRatio,
-      description: section.description ?? "",
       texture: section.texture,
       visualMood: section.visualMood,
       dominantColor: section.dominantColor,
