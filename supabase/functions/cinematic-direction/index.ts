@@ -6,9 +6,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // Moment-first chain of thought.
 //
 // AI receives: audio file + section timestamps + optional artist direction
-// AI processes each moment sequentially: transcribe → design
+// AI processes each moment: transcribe → design → next
 // Font and particle are per-moment. Client resolves globals.
-// AI does NOT: pick colors, moods, textures, or any render enum
+// World is written last as a summary, not a plan.
+// AI does NOT: pick colors, moods, or any render enum
 // ═══════════════════════════════════════════════════════════════
 
 const corsHeaders = {
@@ -37,6 +38,9 @@ Process the moments IN ORDER. Each moment is its OWN vignette.
 Do not plan ahead. Do not connect moments into one story.
 Listen to what the lyrics say RIGHT NOW and build a scene from those specific words.
 
+AFTER all moments are complete, step back and define the cinematic world —
+the visual universe that ties these vignettes together.
+
 Return ONLY valid JSON in this exact shape:
 
 {
@@ -47,10 +51,11 @@ Return ONLY valid JSON in this exact shape:
       "see": "One sentence: what the camera sees. A shot description, not an atmosphere.",
       "nouns": ["2-4 concrete objects visible in this shot"],
       "heroWords": ["2-5 emotionally charged words from your transcribedLyrics, ALL CAPS"],
-      "font": "One Google Font that fits THIS moment's energy and mood",
-      "particle": "One element from the PARTICLE LIST that fits THIS moment's atmosphere"
+      "font": "One Google Font family name that fits this moment",
+      "particle": "One element from the PARTICLE LIST that fits this moment"
     }
-  ]
+  ],
+  "world": "The cinematic universe these vignettes live inside — one evocative sentence, 15 words max"
 }
 
 PARTICLE LIST:
@@ -67,44 +72,27 @@ RULES FOR "action":
 - A physical verb. Someone is DOING something.
   Good: "He pulls the cap off his head and holds it against his chest"
   Good: "She slides her phone across the table, screen lit with a goodbye text"
-  Good: "A hand raises a red cup toward a circle of friends"
+  Good: "A hand reaches up from dark water, fingers splaying wide"
   Bad: "The atmosphere feels heavy with emotion"
-  Bad: "Intimate energy fills the room"
   Bad: "A sense of loss permeates the space"
-- The action should be a DIRECT visual response to the transcribedLyrics.
-  If the lyrics say "raise a lighter" — show someone raising a lighter.
-  If the lyrics say "frozen here in time" — show someone standing completely still.
 
 RULES FOR "see":
 - A camera shot, not a feeling.
   Good: "Close-up on his hands gripping the folded diploma, knuckles white"
   Good: "Wide shot of the parking lot emptying, one car left with headlights on"
-  Good: "Over-the-shoulder as she walks down the corridor, not looking back"
   Bad: "moody cinematic atmosphere"
   Bad: "dark emotional environment"
 
 RULES FOR "font":
-- A real Google Font family name that matches THIS moment's energy.
-  Quiet/intimate moments → Cormorant Garamond, Playfair Display, DM Serif Display, Libre Baskerville
-  Raw/aggressive moments → Space Grotesk, Bebas Neue, Oswald, Anton
-  Warm/nostalgic moments → Lora, DM Serif Text, Libre Baskerville
-  Ethereal/floating moments → Cormorant, Raleway, Cinzel
-  High-energy/anthemic moments → Archivo Black, Anton, Big Shoulders Display
-  Playful/warm moments → Fredoka, Comfortaa, Baloo 2
-  Do NOT default to the same font for every moment. Listen to the energy shift.
+- A real Google Font family name that fits this moment's energy.
 
-RULES FOR "particle":
-- Match the mood and imagery of THIS moment, not the whole song.
-  If the lyrics mention fire/burning → embers or fire
-  If the moment is quiet and still → dust or smoke
-  If the moment is celebratory → confetti or glare
-  If the lyrics mention rain/storm/crying → rain
-  Do NOT use the same particle for every moment.
-
-RULES FOR "heroWords":
-- Pulled directly from your transcribedLyrics.
-- The most concrete, imageable words — nouns and strong verbs, not pronouns or filler.
-- ALL CAPS. 2-5 words.
+RULES FOR "world":
+- Written AFTER all moments are designed. It is a summary, not a plan.
+- One evocative sentence describing the visual universe these scenes share.
+  Good: "A locked bedroom where intrusive thoughts rattle the door like uninvited guests"
+  Good: "The last night of summer, told through hands that can't hold on"
+  Bad: "dark emotional landscape"
+  Bad: "cinematic urban world"
 
 RULES FOR MOMENTS:
 - One moment per timestamp provided. Match the count exactly.
@@ -113,7 +101,12 @@ RULES FOR MOMENTS:
   Low: tight, close, intimate. One object, one light source.
   High: wide, open, overwhelming. Scale up.
   Rising: tension building — leaning forward, gripping tighter.
-  Falling: release — shoulders dropping, letting go.`;
+  Falling: release — shoulders dropping, letting go.
+
+RULES FOR "heroWords":
+- Pulled directly from your transcribedLyrics.
+- The most concrete, imageable words — nouns and strong verbs, not pronouns or filler.
+- ALL CAPS. 2-5 words.`;
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -136,6 +129,7 @@ interface RequestBody {
 }
 
 interface AIResponse {
+  world: string;
   moments: Array<{
     transcribedLyrics: string;
     action: string;
@@ -200,6 +194,12 @@ function validate(
   raw: Record<string, any>,
   sectionCount: number,
 ): AIResponse {
+  // World — AI writes this after all moments
+  const world =
+    typeof raw.world === "string" && raw.world.trim()
+      ? raw.world.trim().slice(0, 150)
+      : "cinematic scene";
+
   let moments: AIResponse["moments"] = [];
 
   if (Array.isArray(raw.moments)) {
@@ -262,68 +262,61 @@ function validate(
     }
   }
 
-  return { moments };
+  return { world, moments };
 }
 
+
 /**
- * Derive global font/particle from per-moment decisions.
- * Weighted by section duration so longer sections (chorus) dominate.
+ * Derive global font and particle from per-moment decisions.
+ * Font: most repeated wins. If all different, first moment wins.
+ * Particle: duration-weighted frequency.
  */
 function resolveGlobals(
   moments: AIResponse["moments"],
   sections: AudioSectionInput[],
-): { font: string; particle: string; world: string } {
-  // Duration-weighted frequency count
-  const fontWeights = new Map<string, number>();
-  const particleWeights = new Map<string, number>();
+): { font: string; particle: string } {
+  // Font: simple frequency, tie-break = first occurrence
+  const fontCounts = new Map<string, number>();
+  for (const m of moments) {
+    fontCounts.set(m.font, (fontCounts.get(m.font) ?? 0) + 1);
+  }
+  let bestFont = moments[0]?.font ?? "Montserrat";
+  let bestFontCount = 0;
+  for (const [font, count] of fontCounts) {
+    if (count > bestFontCount) {
+      bestFontCount = count;
+      bestFont = font;
+    }
+  }
+  // If all fonts are unique (count=1 for all), use first moment's font
+  if (bestFontCount <= 1 && moments.length > 0) {
+    bestFont = moments[0].font;
+  }
 
+  // Particle: duration-weighted
+  const particleWeights = new Map<string, number>();
   for (let i = 0; i < moments.length; i++) {
     const dur = sections[i] ? sections[i].endSec - sections[i].startSec : 10;
-    const m = moments[i];
-    fontWeights.set(m.font, (fontWeights.get(m.font) ?? 0) + dur);
-    particleWeights.set(m.particle, (particleWeights.get(m.particle) ?? 0) + dur);
+    const p = moments[i].particle;
+    particleWeights.set(p, (particleWeights.get(p) ?? 0) + dur);
   }
-
-  const pickMax = (map: Map<string, number>, fallback: string): string => {
-    let best = fallback;
-    let bestWeight = -1;
-    for (const [key, weight] of map) {
-      if (weight > bestWeight) {
-        bestWeight = weight;
-        best = key;
-      }
-    }
-    return best;
-  };
-
-  // Build a world description from the most common nouns across moments
-  const nounCounts = new Map<string, number>();
-  for (const m of moments) {
-    for (const n of m.nouns) {
-      const lower = n.toLowerCase();
-      nounCounts.set(lower, (nounCounts.get(lower) ?? 0) + 1);
+  let bestParticle = "dust";
+  let bestWeight = -1;
+  for (const [p, w] of particleWeights) {
+    if (w > bestWeight) {
+      bestWeight = w;
+      bestParticle = p;
     }
   }
-  const topNouns = [...nounCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([n]) => n);
-  const world = topNouns.length > 0
-    ? topNouns.join(", ")
-    : "cinematic scene";
 
-  return {
-    font: pickMax(fontWeights, "Montserrat"),
-    particle: pickMax(particleWeights, "dust"),
-    world,
-  };
+  return { font: bestFont, particle: bestParticle };
 }
 
 function toClientShape(result: AIResponse, sections: AudioSectionInput[]) {
   const globals = resolveGlobals(result.moments, sections);
 
   return {
-    world: globals.world,
+    world: result.world,
     particle: globals.particle,
     font: globals.font,
 
@@ -521,7 +514,7 @@ serve(async (req) => {
 
     const globals = resolveGlobals(validated.moments, sections);
     console.log(
-      `[cinematic-direction] v3 complete: font=${globals.font}, particle=${globals.particle}, moments=${validated.moments.length}`,
+      `[cinematic-direction] v3 complete: font=${globals.font}, particle=${globals.particle}, world="${validated.world}", moments=${validated.moments.length}`,
     );
 
     return new Response(
