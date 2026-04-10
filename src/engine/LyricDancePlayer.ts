@@ -45,10 +45,9 @@ import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fo
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
 import {
   resolveActiveGroup,
-  computePhraseState,
   computeWordStateInto,
   detectSoloHero,
-  type AnimBeatState,
+  type PhraseAnimState,
   type WordAnimState,
 } from '@/engine/PhraseAnimator';
 
@@ -1751,6 +1750,8 @@ export class LyricDancePlayer {
   private _frameMomentIdx = -1;
   private _framePalette: string[] | null = null;
   private _framePaletteTime = -1; // audio time when palette was last resolved
+  private _phraseStateCache: PhraseAnimState = { groupStart: 0, groupEnd: 0, heroType: 'word', pushInScale: 1.0 };
+  private _emptyParticles: any[] = [];
   private _moments: Moment[] = [];
   private _smokePhraseAge = 999;
   private _currentSectionPalette: SectionPalette = deserializeSectionPalette([
@@ -3402,31 +3403,29 @@ export class LyricDancePlayer {
       this._frameDt = Math.min(deltaMs, 33.33) / 16.67; // normalized to 60fps
 
       // ═══ Per-frame caches: section index + palette ═══
-      {
-        const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-        const sections = (cd?.sections as any[]) ?? [];
-        const dur = this.getSongDuration() || (this.audio?.duration > 0 ? this.audio.duration : 1);
-        // In region mode, lock section index to the section at region_start.
-        // A 10-second hook that crosses a section boundary would otherwise
-        // cycle images every loop — distracting flicker instead of stable bg.
-        const sectionTime = this.data.region_start != null
-          ? this.data.region_start
-          : smoothedTime;
-        this._frameSectionIdx = sections.length > 0
-          ? this.resolveSectionIndex(sections, sectionTime, dur)
-          : -1;
-        const activeMoment = this._resolveCurrentMoment(smoothedTime);
-        this._frameMomentIdx = activeMoment?.index ?? -1;
-        // Palette: only re-resolve if section changed
-        const secIdx = this._frameSectionIdx;
-        if (secIdx !== this._framePaletteTime) {
-          this._framePaletteTime = secIdx;
-          this._framePalette = this._resolveAndCachePalette(secIdx);
-          {
-            const accent = this._currentSectionPalette.accent;
-            if (this._globalBeatVis) this._globalBeatVis.setAccent(accent);
-            if (this._globalWickBar) this._globalWickBar.setAccent(accent);
-          }
+      const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+      const sections = (cd?.sections as any[]) ?? [];
+      const dur = this.getSongDuration() || (this.audio?.duration > 0 ? this.audio.duration : 1);
+      // In region mode, lock section index to the section at region_start.
+      // A 10-second hook that crosses a section boundary would otherwise
+      // cycle images every loop — distracting flicker instead of stable bg.
+      const sectionTime = this.data.region_start != null
+        ? this.data.region_start
+        : smoothedTime;
+      this._frameSectionIdx = sections.length > 0
+        ? this.resolveSectionIndex(sections, sectionTime, dur)
+        : -1;
+      const activeMoment = this._resolveCurrentMoment(smoothedTime);
+      this._frameMomentIdx = activeMoment?.index ?? -1;
+      // Palette: only re-resolve if section changed
+      const secIdx = this._frameSectionIdx;
+      if (secIdx !== this._framePaletteTime) {
+        this._framePaletteTime = secIdx;
+        this._framePalette = this._resolveAndCachePalette(secIdx);
+        {
+          const accent = this._currentSectionPalette.accent;
+          if (this._globalBeatVis) this._globalBeatVis.setAccent(accent);
+          if (this._globalWickBar) this._globalWickBar.setAccent(accent);
         }
       }
 
@@ -3443,9 +3442,6 @@ export class LyricDancePlayer {
 
         // ── Feed section + energy to camera ──
         {
-          const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-          const sections = (cd?.sections as any[]) ?? [];
-          const secIdx = this._frameSectionIdx;
           const currentSection = sections[secIdx];
 
           if (currentSection) {
@@ -5637,13 +5633,9 @@ export class LyricDancePlayer {
     // CameraRig owns text zoom — effectiveZoom neutralized to 1.0
     const effectiveZoom = 1.0;
     // Resolve current chapter for visualMood metadata (no zoom — CameraRig owns that)
-    let currentChapterIdx = 0;
-    for (let i = 0; i < scene.chapters.length; i++) {
-      if (songProgress >= scene.chapters[i].startRatio && songProgress < scene.chapters[i].endRatio) {
-        currentChapterIdx = i;
-        break;
-      }
-    }
+    const currentChapterIdx = this._frameSectionIdx >= 0
+      ? Math.min(this._frameSectionIdx, scene.chapters.length - 1)
+      : 0;
     const chapter = scene.chapters[currentChapterIdx] ?? scene.chapters[0];
 
     const groups = scene.phraseGroups;
@@ -5684,20 +5676,12 @@ export class LyricDancePlayer {
 
     for (const groupIdx of activeGroups) {
       const group = groups[groupIdx];
-      const nextGroupStart = (groupIdx + 1 < groups.length) ? groups[groupIdx + 1].start : Infinity;
-
-      // ── Phrase animation state from PhraseAnimator ──
-      // Mood config is ONLY used as fallback for ai_moment phrases (no presentation mode).
-      // Presentation mode cards are self-contained — they define their own timing + intensity.
-      const prevGroupEnd = (groupIdx > 0) ? groups[groupIdx - 1].end : -Infinity;
-
-      const beatForAnim: AnimBeatState | null = beatState
-        ? { pulse: beatState.pulse ?? 0, phase: beatState.phase ?? 0 }
-        : null;
-
-      const phraseState = computePhraseState(
-        group, nextGroupStart, prevGroupEnd, tSec, beatForAnim, this.width, mp,
-      );
+      // ── Phrase animation state (inlined, no per-frame allocation) ──
+      this._phraseStateCache.groupStart = group.start;
+      this._phraseStateCache.groupEnd = group.end;
+      this._phraseStateCache.heroType = group.heroType ?? 'word';
+      this._phraseStateCache.pushInScale = 1.0;
+      const phraseState = this._phraseStateCache;
 
       if (!this._debugModeLogged && groupIdx === activeGroups[activeGroups.length - 1]) {
         this._debugModeLogged = true;
@@ -5812,7 +5796,7 @@ export class LyricDancePlayer {
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
     frame.chunks = chunks;
-    frame.particles = [];
+    frame.particles = this._emptyParticles;
     return frame;
       }
 
