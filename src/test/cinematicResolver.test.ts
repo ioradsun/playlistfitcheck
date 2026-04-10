@@ -1,35 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeToken, normalizeCinematicDirection } from '@/engine/cinematicResolver';
+import { computeBeatSpine, isExactHeroTokenMatch, resolveCinematicState } from '@/engine/cinematicResolver';
 
 describe('cinematicResolver', () => {
-  it('normalizeToken strips punctuation and lowercases', () => {
-    expect(normalizeToken('Fire!')).toBe('fire');
-    expect(normalizeToken("don't")).toBe('dont');
-    expect(normalizeToken(null)).toBe('');
-  });
-
-  it('normalizeCinematicDirection returns null for invalid input', () => {
-    expect(normalizeCinematicDirection(null)).toBeNull();
-    expect(normalizeCinematicDirection([])).toBeNull();
-    expect(normalizeCinematicDirection({})).toBeNull();
-  });
-
-  it('normalizeCinematicDirection converts chapters to sections', () => {
-    const raw = {
-      chapters: [{ backgroundDirective: 'dark room', mood: 'tense', motion: 'slow' }],
+  it('merges defaults + sections + storyboard + word directives', () => {
+    const direction: any = {
+      songDefaults: { entryStyle: 'fades', typography: 'clean' },
+      typography: 'global',
+      atmosphere: 'haze',
+      sections: [{ sectionIndex: 0, motion: 'rises', texture: 'dust', atmosphere: 'grain', startSec: 0, endSec: 2 }],
+      storyboard: [{ lineIndex: 0, heroWord: 'Fire', entryStyle: 'cuts', exitStyle: 'drops', typography: 'serif' }],
+      wordDirectives: [{ word: 'fire', emphasisLevel: 4, behavior: 'pulse', ghostTrail: true, ghostDirection: 'left', letterSequence: true }],
     };
-    const result = normalizeCinematicDirection(raw);
-    expect(result).not.toBeNull();
-    expect(result!.sections).toHaveLength(1);
-    expect(result!.sections[0].description).toBe('dark room');
+    const lines = [{ start: 0, end: 1, text: 'we fire up' }];
+    const resolved = resolveCinematicState(direction, lines, 4);
+    expect(resolved.lineSettings[0].entryStyle).toBe('cuts');
+    expect(resolved.wordSettings.fire.emphasisLevel).toBeGreaterThanOrEqual(0);
   });
 
-  it('normalizeCinematicDirection passes through valid sections', () => {
-    const raw = {
-      sections: [{ sectionIndex: 0, description: 'intro' }],
-    };
-    const result = normalizeCinematicDirection(raw);
-    expect(result).not.toBeNull();
-    expect(result!.sections[0].description).toBe('intro');
+  it('computes beat pulse around nearest beat', () => {
+    const spine = computeBeatSpine(1.0, { bpm: 120, beats: [0.5, 1.0, 1.5] }, { lookAheadSec: 0, pulseWidth: 0.08 });
+    expect(spine.beatPulse).toBeGreaterThan(0.95);
+    expect(spine.beatPhase).toBeLessThan(0.1);
+  });
+
+  it('hero token matching is exact and normalized', () => {
+    expect(isExactHeroTokenMatch('Fire!', 'fire')).toBe(true);
+    expect(isExactHeroTokenMatch('firelight', 'fire')).toBe(false);
   });
 });

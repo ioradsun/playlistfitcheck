@@ -41,7 +41,7 @@ import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImage, getPreloadedImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
-import { resolveTypographyFromDirection, getFontNamesForPreload, type ResolvedTypography } from "@/lib/fontResolver";
+import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
 import {
   resolveActiveGroup,
@@ -187,8 +187,8 @@ export interface LiveDebugState {
   songProgress: number;
 
   dirThesis: string;
-  
-  
+  dirChapter: string;
+  dirChapterProgress: number;
   dirIntensity: number;
   dirBgDirective: string;
   dirLightBehavior: string;
@@ -196,6 +196,17 @@ export interface LiveDebugState {
   symbolPrimary: string;
   symbolSecondary: string;
   symbolState: string;
+
+  cameraDistance: string;
+  cameraMovement: string;
+
+  wordDirectiveWord: string;
+  wordDirectiveBehavior: string;
+  wordDirectiveEntry: string;
+  wordDirectiveEmphasis: number;
+  wordDirectiveExit: string;
+  wordDirectiveGhostTrail: boolean;
+  wordDirectiveGhostDir: string;
 
   lineHeroWord: string;
   lineEntry: string;
@@ -216,7 +227,7 @@ export interface LiveDebugState {
   imgActiveIdx: number;
   imgNextIdx: number;
   imgCrossfade: number;
-  
+  imgChapterSpan: number;
   imgLocalProgress: number;
   imgOpacity: number;
   imgOverlap: boolean;
@@ -317,8 +328,8 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   songProgress: 0,
 
   dirThesis: "—",
-  
-  
+  dirChapter: "—",
+  dirChapterProgress: 0,
   dirIntensity: 0,
   dirBgDirective: "—",
   dirLightBehavior: "—",
@@ -326,6 +337,17 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   symbolPrimary: "—",
   symbolSecondary: "—",
   symbolState: "—",
+
+  cameraDistance: "Wide",
+  cameraMovement: "—",
+
+  wordDirectiveWord: "",
+  wordDirectiveBehavior: "—",
+  wordDirectiveEntry: "—",
+  wordDirectiveEmphasis: 0,
+  wordDirectiveExit: "—",
+  wordDirectiveGhostTrail: false,
+  wordDirectiveGhostDir: "—",
 
   lineHeroWord: "",
   lineEntry: "fades",
@@ -345,7 +367,7 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   imgActiveIdx: -1,
   imgNextIdx: -1,
   imgCrossfade: 0,
-  
+  imgChapterSpan: 0,
   imgLocalProgress: 0,
   imgOpacity: 0,
   imgOverlap: false,
@@ -411,7 +433,8 @@ type ChunkState = {
 };
 
 type ResolvedPlayerState = {
-  sections: any[];
+  chapters: any[];
+  wordDirectivesMap: Record<string, any>;
   particleConfig: { texture: string; system: string; density: number; speed: number };
 };
 
@@ -1582,7 +1605,8 @@ export class LyricDancePlayer {
   // Public debug surface (React reads this)
   public debugState: LiveDebugState = { ...DEFAULT_DEBUG_STATE };
   public resolvedState: ResolvedPlayerState = {
-    sections: [],
+    chapters: [],
+    wordDirectivesMap: {},
     particleConfig: { texture: 'dust', system: 'dust', density: 0.8, speed: 0.5 },
   };
   
@@ -1601,8 +1625,6 @@ export class LyricDancePlayer {
   private _lastFont = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
-  private _cachedTypography: ResolvedTypography | null = null;
-  private _cachedTypographyDirectionRef: any = null;
 
   // ═══ Compiled Scene (replaces timeline) ═══
   private compiledScene: CompiledScene | null = null;
@@ -1664,12 +1686,12 @@ export class LyricDancePlayer {
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
   private bgCacheCount = 0;
-  public sectionParticleSystems: (string | null)[] = [];
+  public chapterParticleSystems: (string | null)[] = [];
 
   private backgroundSystem = 'default';
-  private sectionSims: Array<{ beatVis?: BeatVisSim }> = [];
+  private chapterSims: Array<{ beatVis?: BeatVisSim }> = [];
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
-  private _barVisStyles: BarVisStyle[] = []; // per-section bar style from AI mood
+  private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
   // ═══ Dynamite Wick Bar (always enabled) ═══
   private _globalWickBar: DynamiteWickBar | null = null;
@@ -1677,10 +1699,10 @@ export class LyricDancePlayer {
   public beatVisEnabled = false;
   public renderMode: "lyric" | "beat" = "lyric";
   public wickBarEnabled = false;
-  private sectionImages: HTMLImageElement[] = [];
+  private chapterImages: HTMLImageElement[] = [];
   private _sectionScrimOpacity: number[] = [];
   // Pre-blurred images removed — background renders sharp
-  // Ken Burns per-section parameters — computed once on image load
+  // Ken Burns per-chapter parameters — computed once on image load
   private _kenBurnsParams: Array<{
     zoomStart: number;
     zoomEnd: number;
@@ -1952,22 +1974,13 @@ export class LyricDancePlayer {
     performance.mark("engine:firstPaint");
   }
 
-  private getTypography(cd: any): ResolvedTypography {
-    if (this._cachedTypography && this._cachedTypographyDirectionRef === cd) {
-      return this._cachedTypography;
-    }
-    this._cachedTypography = resolveTypographyFromDirection(cd);
-    this._cachedTypographyDirectionRef = cd;
-    return this._cachedTypography;
-  }
-
   /**
    * Resolve the primary font family name via the typography resolver.
    * Handles typographyPlan (new), fontProfile, and legacy typography keys.
    * Falls back to Montserrat if no valid font is found.
    */
   private getTargetFontFamily(): string {
-    const resolved = this.getTypography(this.data?.cinematic_direction);
+    const resolved = resolveTypographyFromDirection(this.data?.cinematic_direction);
     const names = getFontNamesForPreload(resolved);
     return names[0] ?? 'Montserrat';
   }
@@ -2048,7 +2061,7 @@ export class LyricDancePlayer {
       //
       // Start loading section images immediately (fire-and-forget).
       // Images are likely already in the preloadImage cache from feed prefetch.
-      // This populates sectionImages so the first rendered frame has a background,
+      // This populates chapterImages so the first rendered frame has a background,
       // instead of waiting for the full mode upgrade delay (100ms + idle + compile).
       this.loadSectionImages().catch(() => {});
       return;
@@ -2275,7 +2288,7 @@ export class LyricDancePlayer {
     if (this.destroyed || this.fullModeEnabled) return;
     this.buildBgCache();
     this.deriveVisualSystems();
-    this.buildSectionSims();
+    this.buildChapterSims();
     this.loadSectionImages().catch(() => {
       // image upgrade best-effort
     });
@@ -2680,6 +2693,14 @@ export class LyricDancePlayer {
       const sections = (cd?.sections as any[]) ?? [];
       const secIdx = this._frameSectionIdx;
       const currentSection = sections[secIdx];
+      if (currentSection) {
+        this.cameraRig.setSectionFromMood(
+          currentSection.atmosphere
+            ?? currentSection.mood
+            ?? currentSection.description
+            ?? ''
+        );
+      }
       this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
 
       const focus: SubjectFocus = {
@@ -2940,7 +2961,7 @@ export class LyricDancePlayer {
     // ═══ V2: timing budgets (placeholder — method removed) ═══
     this.buildBgCache();
     this.deriveVisualSystems();
-    this.buildSectionSims();
+    this.buildChapterSims();
   }
 
   /**
@@ -3116,12 +3137,12 @@ export class LyricDancePlayer {
     }
 
     this.ambientParticleEngine?.clear();
-    this.sectionSims.forEach((sim) => {
+    this.chapterSims.forEach((sim) => {
       this._zeroCanvas(sim.beatVis?.canvas);
     });
     this._zeroCanvas(this._globalBeatVis?.canvas ?? null);
-    this.sectionSims = [];
-    this.sectionImages = [];
+    this.chapterSims = [];
+    this.chapterImages = [];
     this._sectionScrimOpacity = [];
     this._zeroCanvas(this._lightingOverlayCanvas);
     this._lightingOverlayCanvas = null;
@@ -3428,6 +3449,14 @@ export class LyricDancePlayer {
           const secIdx = this._frameSectionIdx;
           const currentSection = sections[secIdx];
 
+          if (currentSection) {
+            this.cameraRig.setSectionFromMood(
+              currentSection.atmosphere
+                ?? currentSection.mood
+                ?? currentSection.description
+                ?? ''
+            );
+          }
           this.cameraRig.setEnergy(beatState?.energy ?? 0.5);
         }
 
@@ -3586,7 +3615,7 @@ export class LyricDancePlayer {
   private _resolveCurrentPalette(secIdx: number): string[] {
     const autoPalettes = this.data?.auto_palettes;
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    const sections = (cd?.sections as any[]) ?? [];
+    const chapters = (cd?.sections as any[]) ?? [];
 
     if (Array.isArray(autoPalettes) && autoPalettes.length > 0) {
       if (secIdx >= 0 && autoPalettes[secIdx]) return autoPalettes[secIdx];
@@ -3599,19 +3628,19 @@ export class LyricDancePlayer {
       return autoPalettes[0];
     }
 
-    const sectionIdx = secIdx >= 0 ? secIdx : 0;
+    const chIdx = secIdx >= 0 ? secIdx : 0;
     const bakedPalettes = (this.data as any)?.resolvedPalettes;
-    if (bakedPalettes && Array.isArray(bakedPalettes) && sectionIdx >= 0 && bakedPalettes[sectionIdx]) {
-      return bakedPalettes[sectionIdx];
+    if (bakedPalettes && Array.isArray(bakedPalettes) && chIdx >= 0 && bakedPalettes[chIdx]) {
+      return bakedPalettes[chIdx];
     }
-    if (sectionIdx >= 0) {
-      const sectionPalette = sections[sectionIdx]?.palette as string | undefined;
-      if (sectionPalette && LyricDancePlayer.PALETTE_COLORS[sectionPalette]) {
-        return LyricDancePlayer.PALETTE_COLORS[sectionPalette];
+    if (chIdx >= 0) {
+      const chapterPalette = chapters[chIdx]?.palette as string | undefined;
+      if (chapterPalette && LyricDancePlayer.PALETTE_COLORS[chapterPalette]) {
+        return LyricDancePlayer.PALETTE_COLORS[chapterPalette];
       }
     }
-    if (sectionIdx >= 0) {
-      const dominantColor = sections[sectionIdx]?.dominantColor as string | undefined;
+    if (chIdx >= 0) {
+      const dominantColor = chapters[chIdx]?.dominantColor as string | undefined;
       if (dominantColor && /^#[0-9a-fA-F]{6}$/.test(dominantColor)) {
         const r = parseInt(dominantColor.slice(1, 3), 16);
         const g = parseInt(dominantColor.slice(3, 5), 16);
@@ -3648,13 +3677,13 @@ export class LyricDancePlayer {
   }
 
   private getResolvedFont(): string {
-    const resolved = this.getTypography(this.payload?.cinematic_direction);
+    const resolved = resolveTypographyFromDirection(this.payload?.cinematic_direction);
     return resolved.fontFamily;
   }
 
 
   private async preloadFonts(): Promise<void> {
-    const resolved = this.getTypography(this.payload?.cinematic_direction);
+    const resolved = resolveTypographyFromDirection(this.payload?.cinematic_direction);
     const fontNames = getFontNamesForPreload(resolved);
     const results = await Promise.all(fontNames.map(name => ensureFontReady(name)));
     const loaded = results.every(Boolean);
@@ -3729,11 +3758,11 @@ export class LyricDancePlayer {
     const duration = this.songEndSec - this.songStartSec;
     const songProgress = duration > 0 ? Math.max(0, Math.min(1, (clamped - this.songStartSec) / duration)) : 0;
     const cd = this.payload?.cinematic_direction;
-    const sections = this.resolvedState.sections;
+    const chapters = this.resolvedState.chapters;
 
     // Use cached section index — already resolved in tick()
     const sectionIndex = this._frameSectionIdx;
-    const section = sectionIndex >= 0 ? sections[sectionIndex] : null;
+    const section = sectionIndex >= 0 ? chapters[sectionIndex] : null;
     if (sectionIndex !== this.activeSectionIndex) {
       this.activeSectionIndex = sectionIndex;
 
@@ -3785,7 +3814,7 @@ export class LyricDancePlayer {
         density: this.resolvedState.particleConfig.density ?? 0.8,
         speed: this.resolvedState.particleConfig.speed ?? 0.5,
         opacity: Math.min(0.7, LEGIBILITY.maxForegroundAlphaOverText / 0.12 * 0.7),
-        beatReactive: true,
+        beatReactive: mapped !== 'glare',
       });
     }
 
@@ -3921,12 +3950,12 @@ export class LyricDancePlayer {
       snapCtx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
       snapCtx.clearRect(0, 0, this.width, this.height);
 
-      // Draw full background stack into snapshot (gradient + section image + sims + lighting)
+      // Draw full background stack into snapshot (gradient + chapter image + sims + lighting)
       this._drawBackgroundToCtx(snapCtx, frame);
-      const imgIdx = Math.min(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0, Math.max(0, this.sectionImages.length - 1));
+      const imgIdx = Math.min(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0, Math.max(0, this.chapterImages.length - 1));
       const nextImgIdx = this.data.region_start != null
         ? imgIdx
-        : Math.min(imgIdx + 1, Math.max(0, this.sectionImages.length - 1));
+        : Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
       const duration = this.audio?.duration || 1;
       const cdForCrossfade = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
       const sectionsForCrossfade = (cdForCrossfade?.sections as any[]) ?? [];
@@ -3941,13 +3970,13 @@ export class LyricDancePlayer {
       }
       if (this.renderMode === "beat" && crossfade > 0 && nextImgIdx !== imgIdx) {
         const nextEnergy = this._resolveCurrentMoment(
-          (nextImgIdx / Math.max(1, this.sectionImages.length)) * (this.audio?.duration ?? 1),
+          (nextImgIdx / Math.max(1, this.chapterImages.length)) * (this.audio?.duration ?? 1),
         )?.energy ?? 0.5;
         if (nextEnergy > 0.7) {
           crossfade = crossfade > 0.05 ? 1 : 0;
         }
       }
-      this._drawSectionImageToCtx(snapCtx, imgIdx, nextImgIdx, crossfade);
+      this._drawChapterImageToCtx(snapCtx, imgIdx, nextImgIdx, crossfade);
       // Grade-aware scrim — reduce scrim when mood grade already darkens the image
       const baseScrim = this.renderMode === "beat"
         ? 0
@@ -4839,38 +4868,77 @@ export class LyricDancePlayer {
     return payload;
   }
 
-  private toRenderSections(direction: CinematicDirection | null | undefined): any[] {
+  private toLegacyChapters(direction: CinematicDirection | null | undefined): any[] {
     if (!direction?.sections?.length) return [];
     const dur = this.data.beat_grid?._duration
       || (this.audio?.duration > 0 ? this.audio.duration : null)
       || (this.songEndSec > 0 ? this.songEndSec : undefined);
     return enrichSections(direction.sections, dur).map((section) => ({
-      sectionIndex: section.sectionIndex,
+      title: section.description ?? `Section ${section.sectionIndex}`,
       startSec: section.startSec,
       endSec: section.endSec,
       startRatio: section.startRatio,
       endRatio: section.endRatio,
+      emotionalArc: section.mood ?? "",
+      motion: section.motion,
       texture: section.texture,
+      atmosphere: section.atmosphere,
+      backgroundDirective: section.description ?? "",
+      sectionIndex: section.sectionIndex,
+      mood: section.mood,
       visualMood: section.visualMood,
+      atmosphereState: section.atmosphereState,
       dominantColor: section.dominantColor,
-      avgEnergy: (section as any).avgEnergy,
+      zoom: 1,
+      driftIntensity: direction.motion === "fluid" ? 0.3 : 0.1,
     }));
   }
 
+  private toWordDirectivesMap(wordDirectives: CinematicDirection['wordDirectives'], words?: Array<{ word: string }> | null): Record<string, any> {
+    const map: Record<string, any> = {};
+    // ── AI directives (highest priority) ──
+    if (wordDirectives) {
+      if (Array.isArray(wordDirectives)) {
+        for (const directive of wordDirectives) {
+          const key = String(directive?.word ?? '').trim().toLowerCase();
+          if (!key) continue;
+          map[key] = directive;
+        }
+      } else {
+        for (const [key, value] of Object.entries(wordDirectives)) {
+          const clean = key.trim().toLowerCase();
+          if (!clean) continue;
+          map[clean] = value;
+        }
+      }
+    }
+
+    return map;
+  }
+
   private resolveParticleTexture(sectionIndex: number, direction: CinematicDirection | null | undefined): string {
-    return direction?.sections?.[sectionIndex]?.texture
-      ?? direction?.particle
-      ?? direction?.texture
-      ?? 'dust';
+    const sectionTexture = direction?.sections?.[sectionIndex]?.texture;
+    return sectionTexture ?? direction?.texture ?? 'dust';
   }
 
   private resolvePlayerState(payload: ScenePayload): void {
     const direction = payload.cinematic_direction;
-    const sections = this.toRenderSections(direction);
-    const sectionIndex = Math.max(0, Math.min(sections.length - 1, this.resolveSectionIndex(sections, this.audio.currentTime, this.audio.duration || 1)));
+    const chapters = this.toLegacyChapters(direction);
+    const wordDirectivesMap = this.toWordDirectivesMap(direction?.wordDirectives, payload.words as any);
+    const durationSec = Math.max(0.01, (payload.songEnd ?? this.audio.duration ?? 1) - (payload.songStart ?? 0));
+    const sectionIndex = Math.max(0, Math.min(chapters.length - 1, this.resolveSectionIndex(chapters, this.audio.currentTime, this.audio.duration || 1)));
+    const currentSection = chapters[sectionIndex];
+    this.cameraRig.setSectionFromMood(
+      currentSection?.atmosphere
+        ?? currentSection?.mood
+        ?? currentSection?.backgroundDirective
+        ?? currentSection?.title
+        ?? 'verse'
+    );
     const texture = this.resolveParticleTexture(sectionIndex >= 0 ? sectionIndex : 0, direction);
     this.resolvedState = {
-      sections,
+      chapters,
+      wordDirectivesMap,
       particleConfig: {
         texture,
         system: texture,
@@ -4890,7 +4958,7 @@ export class LyricDancePlayer {
         density: this.resolvedState.particleConfig.density ?? 0.8,
         speed: this.resolvedState.particleConfig.speed ?? 0.5,
         opacity: 0.7,
-        beatReactive: true,
+        beatReactive: mapped !== 'glare',
       });
       this.ambientParticleEngine.setDensityMultiplier(Math.max(0.5, this.resolvedState.particleConfig.density));
       this.ambientParticleEngine.setSpeedMultiplier(Math.max(0.2, this.resolvedState.particleConfig.speed));
@@ -4977,21 +5045,21 @@ export class LyricDancePlayer {
     const urls = this.data.section_images ?? [];
     this._sectionScrimOpacity = [];
     if (this.options?.preloadedImages?.length) {
-      this.sectionImages = this.options.preloadedImages;
-      this._sectionScrimOpacity = this.sectionImages.map((img) =>
+      this.chapterImages = this.options.preloadedImages;
+      this._sectionScrimOpacity = this.chapterImages.map((img) =>
         this._requiredScrimOpacity(this._sampleRegionLuminance(img, 90))
       );
       this._rebuildKenBurnsParams();
       return;
     }
     if (urls.length === 0) return;
-    this.sectionImages = urls.map(() => new Image());
+    this.chapterImages = urls.map(() => new Image());
 
     const loadPromises = urls.map(async (url: string, i: number) => {
       if (!url) return;
       try {
         const img = await preloadImage(url);
-        this.sectionImages[i] = img;
+        this.chapterImages[i] = img;
         this._sectionScrimOpacity[i] = this._requiredScrimOpacity(
           this._sampleRegionLuminance(img, 90)
         );
@@ -5035,54 +5103,32 @@ export class LyricDancePlayer {
 
   private _rebuildKenBurnsParams(): void {
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
-    this._kenBurnsParams = this.sectionImages.map((_, i) => {
-      const sections = (cd?.sections as any[]) ?? [];
-      const section = sections[i];
-      const energy = section?.avgEnergy ?? 0.3;
-      const peak = section?.peakEnergy ?? 0.5;
-      const slope = section?.slope ?? 0;
-      const delta = section?.deltaFromPrev ?? 0;
-
-      const zoomBase = 1.02 + energy * 0.08;
-      const zoomRange = 0.02 + peak * 0.12;
-      const zoomStart = zoomBase;
-      const zoomEnd = zoomBase + zoomRange;
-
-      const panMagnitude = 0.02 + Math.abs(delta) * 0.15;
-      const direction = i % 2 === 0 ? 1 : -1;
-      const panX = slope > 0.02
-        ? panMagnitude * direction
-        : slope < -0.02
-          ? -panMagnitude * direction * 0.6
-          : panMagnitude * direction * 0.3;
-
-      const panY = slope > 0.03
-        ? -panMagnitude * 0.4
-        : slope < -0.03
-          ? panMagnitude * 0.3
-          : 0;
-
+    const sections = (cd?.sections as any[]) ?? [];
+    this._kenBurnsParams = this.chapterImages.map((_, i) => {
+      // Center-zoom only — no panning. Pulse enlarges, never shows edges.
+      // zoomStart > 1.0 ensures the image is always overscanned.
+      // zoomEnd slightly higher = gentle outward drift over the section.
       return {
-        zoomStart,
-        zoomEnd,
+        zoomStart: 1.08,
+        zoomEnd: 1.12,
         panStartX: 0,
         panStartY: 0,
-        panEndX: panX,
-        panEndY: panY,
+        panEndX: 0,
+        panEndY: 0,
       };
     });
   }
 
-  private drawSectionImage(sectionIdx: number, nextSectionIdx: number, blend: number): void {
-    if (this.sectionImages.length === 0) return;
+  private drawChapterImage(chapterIdx: number, nextChapterIdx: number, blend: number): void {
+    if (this.chapterImages.length === 0) return;
 
-    const current = this.sectionImages[sectionIdx];
-    const next = this.sectionImages[nextSectionIdx];
+    const current = this.chapterImages[chapterIdx];
+    const next = this.chapterImages[nextChapterIdx];
     // ═══ PER-MOMENT GRADE: section mood + moment energy ═══
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const sections = (cd?.sections as any[]) ?? [];
     const currentMoment = this._resolveCurrentMoment(this.audio?.currentTime ?? 0);
-    const sectionMood = sections[sectionIdx]?.visualMood as string | undefined;
+    const sectionMood = sections[chapterIdx]?.visualMood as string | undefined;
     const baseGrade = getMoodGrade(sectionMood);
     let activeGrade = currentMoment
       ? modulateGradeByEnergy(baseGrade, currentMoment.energy, currentMoment.sectionProgress)
@@ -5126,13 +5172,13 @@ export class LyricDancePlayer {
       const ox = (this.width - ow) / 2;
       const oy = (this.height - oh) / 2;
 
-      // Ken Burns: slow zoom + pan over section duration
-      const kb = this._kenBurnsParams[sectionIdx];
-      const sectionCount = this.sectionImages.length || 1;
+      // Ken Burns: slow zoom + pan over chapter duration
+      const kb = this._kenBurnsParams[chapterIdx];
+      const chapterCount = this.chapterImages.length || 1;
       const audioDur = this.audio?.duration || 1;
-      const sectionDur = audioDur / sectionCount;
-      const sectionStart = sectionIdx * sectionDur;
-      const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - sectionStart) / sectionDur));
+      const chapterDur = audioDur / chapterCount;
+      const chapterStart = chapterIdx * chapterDur;
+      const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - chapterStart) / chapterDur));
       const eased = localT * localT * (3 - 2 * localT);
       if (this.renderMode === "beat" && kb) {
         const beatEnergyNow = this._lastBeatState?.energy ?? 0;
@@ -5181,7 +5227,7 @@ export class LyricDancePlayer {
       const onx = (this.width - onw) / 2;
       const ony = (this.height - onh) / 2;
 
-      const kbNext = this._kenBurnsParams[nextSectionIdx];
+      const kbNext = this._kenBurnsParams[nextChapterIdx];
       if (kbNext) {
         const nextLocalT = blend;
         const nextEased = nextLocalT * nextLocalT * (3 - 2 * nextLocalT);
@@ -5293,13 +5339,13 @@ export class LyricDancePlayer {
   private buildBgCache(): void {
     
     try {
-      const sections = this.resolvedState.sections ?? [];
-      const count = Math.max(1, sections.length);
+      const chapters = this.resolvedState.chapters ?? [];
+      const count = Math.max(1, chapters.length);
       this.bgCaches = [];
-      this.sectionParticleSystems = [];
+      this.chapterParticleSystems = [];
 
       for (let ci = 0; ci < count; ci++) {
-        const section = sections[ci] as any;
+        const chapter = chapters[ci] as any;
         const off = document.createElement('canvas');
         off.width = this.width;
         off.height = this.height;
@@ -5308,9 +5354,9 @@ export class LyricDancePlayer {
 
         this.getResolvedPalette(); // ensure _currentSectionPalette is populated
         const bgColor = this._currentSectionPalette.background;
-        const bgDesc = section?.backgroundDirective ?? section?.background ?? '';
+        const bgDesc = chapter?.backgroundDirective ?? chapter?.background ?? '';
         const sectionTexture = this.resolveParticleTexture(ci, this.payload?.cinematic_direction);
-        this.sectionParticleSystems.push(sectionTexture);
+        this.chapterParticleSystems.push(sectionTexture);
 
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, off.width, off.height);
@@ -5325,15 +5371,15 @@ export class LyricDancePlayer {
   }
 
   private deriveVisualSystems(): void {
-    const section0 = this.resolvedState.sections?.[0] as any;
-    const bgDesc = section0?.backgroundDirective ?? section0?.background ?? '';
+    const chapter0 = this.resolvedState.chapters?.[0] as any;
+    const bgDesc = chapter0?.backgroundDirective ?? chapter0?.background ?? '';
     this.backgroundSystem = this.mapBackgroundSystem(bgDesc);
   }
 
-  private buildSectionSims(): void {
+  private buildChapterSims(): void {
     
     try {
-      const sections = this.resolvedState.sections.length > 0 ? this.resolvedState.sections : [{}];
+      const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
       this.getResolvedPalette(); // ensure _currentSectionPalette is populated
       const accentColor = this._currentSectionPalette.accent;
       // ═══ Always-on beat visualizer — present throughout entire song ═══
@@ -5372,17 +5418,17 @@ export class LyricDancePlayer {
         duration,
       );
 
-      this.sectionSims = sections.map(() => ({}));
+      this.chapterSims = chapters.map(() => ({}));
 
       // Bar visualizer style: round-robin by section for variety
       const styleRotation: BarVisStyle[] = ['flame', 'neon', 'smoke', 'light'];
-      this._barVisStyles = sections.map((_: any, ci: number) => {
+      this._barVisStyles = chapters.map((_: any, ci: number) => {
         return styleRotation[ci % styleRotation.length];
       });
 
       
     } catch (err) {
-      console.error('[LyricEngine] buildSectionSims crash:', err);
+      console.error('[LyricEngine] buildChapterSims crash:', err);
     }
   }
 
@@ -5480,9 +5526,9 @@ export class LyricDancePlayer {
       const simFrame = Math.floor(tSec * 24);
       if (simFrame === this.lastSimFrame) return;
       this.lastSimFrame = simFrame;
-      const sections = this.resolvedState.sections.length > 0 ? this.resolvedState.sections : [{}];
-      const sectionIdx = this._frameSectionIdx >= 0 ? Math.min(this._frameSectionIdx, sections.length - 1) : sections.length - 1;
-      const ci = Math.max(0, sectionIdx);
+      const chapters = this.resolvedState.chapters.length > 0 ? this.resolvedState.chapters : [{}];
+      const chapterIdx = this._frameSectionIdx >= 0 ? Math.min(this._frameSectionIdx, chapters.length - 1) : chapters.length - 1;
+      const ci = Math.max(0, chapterIdx);
       if (this.wickBarEnabled && this._globalWickBar) {
         const bs = this._lastBeatState;
         const songDuration = Math.max(0.01, this.songEndSec - this.songStartSec);
@@ -5615,15 +5661,15 @@ export class LyricDancePlayer {
 
     // CameraRig owns text zoom — effectiveZoom neutralized to 1.0
     const effectiveZoom = 1.0;
-    // Resolve current section for atmosphere metadata (no zoom — CameraRig owns that)
-    let currentSectionIdx = 0;
-    for (let i = 0; i < scene.sections.length; i++) {
-      if (songProgress >= scene.sections[i].startRatio && songProgress < scene.sections[i].endRatio) {
-        currentSectionIdx = i;
+    // Resolve current chapter for atmosphere metadata (no zoom — CameraRig owns that)
+    let currentChapterIdx = 0;
+    for (let i = 0; i < scene.chapters.length; i++) {
+      if (songProgress >= scene.chapters[i].startRatio && songProgress < scene.chapters[i].endRatio) {
+        currentChapterIdx = i;
         break;
       }
     }
-    const section = scene.sections[currentSectionIdx] ?? scene.sections[0];
+    const chapter = scene.chapters[currentChapterIdx] ?? scene.chapters[0];
 
     const groups = scene.phraseGroups;
 
@@ -5776,7 +5822,7 @@ export class LyricDancePlayer {
       this._evalFrame = {
         timeMs: 0, beatIndex: 0, sectionIndex: 0,
         cameraX: 0, cameraY: 0, cameraZoom: 1, bgBlend: 0,
-        particleColor: '#ffffff', atmosphere: (section as any)?.atmosphere ?? 'cinematic' as any,
+        particleColor: '#ffffff', atmosphere: chapter?.atmosphere ?? 'cinematic' as any,
         chunks: [], particles: [],
       } as unknown as ScaledKeyframe;
     }
@@ -5784,17 +5830,17 @@ export class LyricDancePlayer {
     const frame = this._evalFrame;
     frame.timeMs = (tSec - scene.songStartSec) * 1000;
     frame.beatIndex = beatIndex;
-    frame.sectionIndex = currentSectionIdx;
+    frame.sectionIndex = currentChapterIdx;
     frame.cameraX = 0;
     frame.cameraY = 0;
     frame.cameraZoom = effectiveZoom;
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
-    (frame as any).atmosphere = ((section as any)?.atmosphere ?? 'cinematic');
+    frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
     frame.chunks = chunks;
     frame.particles = [];
     return frame;
-  }
+      }
 
   /** Draw background gradient to an arbitrary ctx (used for snapshot baking) */
   private _drawBackgroundToCtx(ctx: CanvasRenderingContext2D, frame: ScaledKeyframe): void {
@@ -5804,11 +5850,11 @@ export class LyricDancePlayer {
     (this as any).ctx = saved;
   }
 
-  /** Draw section image to an arbitrary ctx (used for snapshot baking) */
-  private _drawSectionImageToCtx(ctx: CanvasRenderingContext2D, imgIdx: number, nextImgIdx: number, blend: number): void {
+  /** Draw chapter image to an arbitrary ctx (used for snapshot baking) */
+  private _drawChapterImageToCtx(ctx: CanvasRenderingContext2D, imgIdx: number, nextImgIdx: number, blend: number): void {
     const saved = this.ctx;
     (this as any).ctx = ctx;
-    this.drawSectionImage(imgIdx, nextImgIdx, blend);
+    this.drawChapterImage(imgIdx, nextImgIdx, blend);
     (this as any).ctx = saved;
   }
 
@@ -5821,13 +5867,13 @@ export class LyricDancePlayer {
   }
 
   private drawBackground(frame: ScaledKeyframe): void {
-    const sections = this.resolvedState.sections ?? [];
-    const sectionCount = Math.max(1, sections.length);
+    const chapters = this.resolvedState.chapters ?? [];
+    const chapterCount = Math.max(1, chapters.length);
     const songDuration = Math.max(1, this.songEndSec - this.songStartSec);
     const songProgress = Math.max(0, Math.min(1, (this.currentTSec - this.songStartSec) / songDuration));
-    const sectionIdx = Math.min(Math.floor(songProgress * sectionCount), sectionCount - 1);
+    const chapterIdx = Math.min(Math.floor(songProgress * chapterCount), chapterCount - 1);
 
-    const bgCanvas = this.bgCaches[sectionIdx] ?? this.bgCaches[0];
+    const bgCanvas = this.bgCaches[chapterIdx] ?? this.bgCaches[0];
     if (bgCanvas) {
       this.ctx.drawImage(bgCanvas, 0, 0, this.width, this.height);
     } else {

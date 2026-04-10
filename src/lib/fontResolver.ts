@@ -41,7 +41,7 @@ export interface ResolvedTypography {
   letterSpacing: number;
   sectionStrategies: Record<string, string>;
   _meta: {
-    source: 'ai-font' | 'plan' | 'plan-repaired' | 'profile' | 'legacy' | 'fallback';
+    source: 'plan' | 'plan-repaired' | 'profile' | 'legacy' | 'fallback';
     primaryFont: string;
     accentFont: string | null;
     repaired: boolean;
@@ -59,40 +59,6 @@ function pickWeight(font: FontDef, target: string): number {
 function pickHeroWeight(font: FontDef, baseWeight: number): number {
   const heavier = font.weights.filter(w => w > baseWeight).sort((a, b) => a - b);
   return heavier[0] ?? font.weights[font.weights.length - 1];
-}
-
-
-function resolveFromAIFont(cd: any): ResolvedTypography | null {
-  const fontName = typeof cd?.font === 'string' ? cd.font.trim() : '';
-  if (!fontName || fontName.length < 2) return null;
-
-  const sections: any[] = Array.isArray(cd?.sections) ? cd.sections : [];
-  const avgEnergy = sections.length
-    ? sections.reduce((sum: number, s: any) => sum + (s.avgEnergy ?? 0.5), 0) / sections.length
-    : 0.5;
-  const baseWeight = avgEnergy > 0.65 ? 800 : avgEnergy > 0.4 ? 600 : 400;
-  const heroWeight = Math.min(900, baseWeight + 200);
-  const textCase: 'uppercase' | 'none' = avgEnergy > 0.65 ? 'uppercase' : 'none';
-
-  return {
-    system: 'single',
-    fontFamily: `"${fontName}"`,
-    fontWeight: baseWeight,
-    heroWeight,
-    accentFontFamily: null,
-    accentFontWeight: null,
-    heroStyle: 'weight-shift',
-    accentDensity: 'low',
-    textTransform: textCase,
-    letterSpacing: 0.2,
-    sectionStrategies: {},
-    _meta: {
-      source: 'ai-font',
-      primaryFont: fontName,
-      accentFont: null,
-      repaired: false,
-    },
-  };
 }
 
 function resolveFromPlan(cd: any): ResolvedTypography | null {
@@ -226,12 +192,6 @@ function resolveFromLegacy(cd: any): ResolvedTypography {
 }
 
 export function resolveTypographyFromDirection(cd: any): ResolvedTypography {
-  const fromAI = resolveFromAIFont(cd);
-  if (fromAI) {
-    console.info('[typography] resolved from AI font:', fromAI._meta);
-    return fromAI;
-  }
-
   const fromPlan = resolveFromPlan(cd);
   if (fromPlan) {
     console.info('[typography] resolved from plan:', fromPlan._meta);

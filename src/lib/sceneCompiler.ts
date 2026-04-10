@@ -405,8 +405,10 @@ export interface CompiledPhraseGroup {
   isAdlib?: boolean;
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
-export interface CompiledSection { index: number; startRatio: number; endRatio: number; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; sections: CompiledSection[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
+export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; atmosphere: string; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
+
+const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
 function computeEmphasisFromDuration(durationSec: number): number {
   const ms = durationSec * 1000;
@@ -417,10 +419,10 @@ function computeEmphasisFromDuration(durationSec: number): number {
   return 5;
 }
 
-function resolveV3Palette(payload: ScenePayload, sectionProgress?: number): string[] {
+function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): string[] {
   if (payload.auto_palettes?.length) {
-    if (sectionProgress != null && payload.cinematic_direction?.chapters?.length) {
-      const idx = payload.cinematic_direction.chapters.findIndex((c) => sectionProgress >= (c.startRatio ?? 0) && sectionProgress < (c.endRatio ?? 1));
+    if (chapterProgress != null && payload.cinematic_direction?.chapters?.length) {
+      const idx = payload.cinematic_direction.chapters.findIndex((c) => chapterProgress >= (c.startRatio ?? 0) && chapterProgress < (c.endRatio ?? 1));
       if (idx >= 0 && payload.auto_palettes[idx]) return payload.auto_palettes[idx];
     }
     return payload.auto_palettes[0];
@@ -430,8 +432,8 @@ function resolveV3Palette(payload: ScenePayload, sectionProgress?: number): stri
 
 export function compileScene(payload: ScenePayload, options?: { viewportWidth?: number; viewportHeight?: number }): CompiledScene {
   const durationSec = Math.max(0.01, payload.songEnd - payload.songStart);
-  const legacyChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
-  const resolvedSections = legacyChapters.length > 0 ? legacyChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
+  const rawChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
+  const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
   const visualMode: VisualMode = 'cinematic';
   const rawWords = payload.words ?? [];
   // Fix zero-duration tokens: give them a visible duration instead of dropping them.
@@ -815,17 +817,22 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     });
   }
 
+  const chapterBeats = payload.beat_grid?.beats ?? [];
   const bpm = payload.bpm ?? payload.beat_grid?.bpm ?? 120;
 
-  const compiledSections: CompiledSection[] = resolvedSections.map((s: any, index: number) => ({
+  const compiledChapters: CompiledChapter[] = chapters.map((chapter: any, index: number) => ({
     index,
-    startRatio: s.startRatio ?? 0,
-    endRatio: s.endRatio ?? 1,
+    startRatio: chapter.startRatio ?? 0,
+    endRatio: chapter.endRatio ?? 1,
+    targetZoom: distanceToZoom['Medium'] ?? 1.0,
+    emotionalIntensity: chapter.emotionalIntensity ?? 0.5,
+    typography: { fontFamily: baseTypography.fontFamily, fontWeight: baseTypography.fontWeight, heroWeight: baseTypography.heroWeight, textTransform: baseTypography.textTransform },
+    atmosphere: chapter.atmosphere ?? (payload.cinematic_direction as any)?.atmosphere ?? 'cinematic',
   }));
 
   const analysis = (payload.beat_grid as any)?._analysis ?? null;
   const songMotion = deriveSongMotionIdentity(bpm, analysis, beats);
-  const sectionMods = deriveAllSectionMods(analysis, compiledSections, durationSec);
+  const sectionMods = deriveAllSectionMods(analysis, compiledChapters, durationSec);
 
   const allGroups = [...cappedMainGroups, ...adlibGroups];
   // Sort by start time so resolveActiveGroup works correctly
@@ -1045,7 +1052,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
 
 
-  const palettes = compiledSections.map((c) => resolveV3Palette(payload, (c.startRatio + c.endRatio) * 0.5));
+  const palettes = compiledChapters.map((c) => resolveV3Palette(payload, (c.startRatio + c.endRatio) * 0.5));
   return {
     phraseGroups: compiledGroups,
     songStartSec: payload.songStart,
@@ -1053,19 +1060,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     durationSec,
     beatEvents,
     bpm,
-    sections: compiledSections,
-    emotionalArc: (() => {
-      const sections = (payload.cinematic_direction as any)?.sections ?? [];
-      if (sections.length < 2) return 'slow-burn';
-      const firstEnergy = sections[0]?.avgEnergy ?? 0.3;
-      const peakEnergy = Math.max(...sections.map((s: any) => s?.avgEnergy ?? 0));
-      const lastEnergy = sections[sections.length - 1]?.avgEnergy ?? 0.3;
-      if (peakEnergy > firstEnergy * 1.5 && lastEnergy < peakEnergy * 0.7) return 'surge';
-      if (lastEnergy > firstEnergy * 1.3) return 'dawn';
-      if (lastEnergy < firstEnergy * 0.6) return 'collapse';
-      if (peakEnergy > 0.75) return 'eruption';
-      return 'slow-burn';
-    })(),
+    chapters: compiledChapters,
+    emotionalArc: ((payload.cinematic_direction as any)?.emotionalArc as string | undefined) ?? 'slow-burn',
     visualMode,
     baseFontFamily: baseTypography.fontFamily,
     baseFontWeight: baseTypography.fontWeight,

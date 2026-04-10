@@ -3,19 +3,19 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Waves, LayoutList, ExternalLink, Sparkles } from "lucide-react";
+import { User, Mail, Waves, LayoutList, BarChart2, ExternalLink, Sparkles } from "lucide-react";
 import { useDmContext } from "@/hooks/useDmContext";
 
-export type CardMode = "listen" | "moments" | "empowerment" | "truth";
+export type CardMode = "listen" | "moments" | "results" | "empowerment";
 
 const MODE_ICONS: Record<CardMode, ReactNode> = {
   listen: <Waves size={14} />,
   moments: <LayoutList size={14} />,
+  results: <BarChart2 size={14} />,
   empowerment: <Sparkles size={14} />,
-  truth: <Sparkles size={14} />,
 };
 
-const MODES: CardMode[] = ["listen", "moments", "truth"];
+const MODES: CardMode[] = ["listen", "moments", "results", "empowerment"];
 
 function useClickOutside(
   refs: RefObject<Element | null>[],
