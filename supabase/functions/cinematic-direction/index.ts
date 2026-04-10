@@ -117,20 +117,19 @@ RULES FOR "font":
 
 RULES FOR MOMENTS:
 - One moment per timestamp provided. Match the count exactly.
-- Each timestamp includes an energy hint in brackets: [low], [mid], [high], [rising], [falling].
-  Use it to shape the scale of the set:
-  low → tight, close, intimate. One object. One light source.
-  high → wide, open, overwhelming. Scale up.
-  rising → something is building — tension, anticipation in the air.
-  falling → something just ended — the set is emptying, cooling down.
-- Each moment's "see" must feel like it grew from the previous one.
-  The world does not reset. It progresses like a short film.
-- "heroWords" are the words in the lyrics at this moment that carry emotional or narrative weight —
-  the words a singer leans into, the words that make the lines land.
-  All caps. No punctuation. Between 2 and 5 words per moment.
-  Pick from the actual lyrics at that timestamp — not from "see".
-  Avoid: I, A, THE, AND, BUT, SO, MY, ME, YOU, IT, IS, WAS, IN, ON, TO, OF, UP, DOWN, OUT
-  Good: ["ALONE", "FIRE"], ["NEVER", "AGAIN", "BROKEN"], ["MONEY", "REAL", "PAIN", "LOST"]`;
+- Each moment is its own scene. Do NOT chain or build from the previous moment.
+  The world sets the tone. The lyrics set the image.
+- For each moment, listen to what the lyrics are literally saying at that timestamp
+  and let those words drive the visual. If the lyric says "Nissan spinning" — show a car.
+  If the lyric says "flying to our private island" — show open sky and water.
+  The set should feel like a direct visual response to the words, not a continuation of the previous shot.
+- Read the energy hint — [low], [mid], [high], [rising], [falling] — and let it shape the scale.
+  Low energy: tight, close, intimate. One object. One light source.
+  High energy: wide, open, overwhelming. Scale up.
+  Rising: tension building — the set has anticipation in it.
+  Falling: release — the set is opening up or settling.
+- "heroWords" are pulled from the lyrics at that timestamp.
+  They should correspond to the most concrete, imageable words in the lyric — not abstractions.`;
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -485,7 +484,7 @@ serve(async (req) => {
       `Song: "${title}" by ${artist}`,
       body.instrumental ? "This is an instrumental track (no vocals)." : "",
       momentList
-        ? `\nListen to the audio at each timestamp. For each moment, describe the set that fits what the lyrics are saying at that exact point in the song. Each moment should build on the last — the world evolves, it does not reset.\n\nMoments:\n${momentList}`
+        ? `\nFor each moment, listen to the lyrics at that exact timestamp and let them drive the image. Each moment is independent — do not build on the previous one.\n\nMoments:\n${momentList}`
         : "",
     ]
       .filter(Boolean)
