@@ -5754,7 +5754,7 @@ export class LyricDancePlayer {
       this._evalFrame = {
         timeMs: 0, beatIndex: 0, sectionIndex: 0,
         cameraX: 0, cameraY: 0, cameraZoom: 1, bgBlend: 0,
-        particleColor: '#ffffff', atmosphere: chapter?.atmosphere ?? 'cinematic' as any,
+        particleColor: '#ffffff', atmosphere: (chapter as any)?.atmosphere ?? 'cinematic' as any,
         chunks: [], particles: [],
       } as unknown as ScaledKeyframe;
     }
@@ -5768,7 +5768,7 @@ export class LyricDancePlayer {
     frame.cameraZoom = effectiveZoom;
     frame.bgBlend = 0;
     (frame as any).beatPulse = beatPulse;
-    frame.atmosphere = (chapter?.atmosphere ?? 'cinematic') as any;
+    frame.atmosphere = ((chapter as any)?.atmosphere ?? 'cinematic') as any;
     frame.chunks = chunks;
     frame.particles = [];
     return frame;
