@@ -1603,6 +1603,31 @@ export function useLyricPipeline({
   }, [renderData, cinematicDirection]);
 
   const hookDetectionRunRef = useRef(false);
+  const commitCinematicDirection = useCallback((enrichedScene: any) => {
+    setCinematicDirection(enrichedScene);
+    cinematicDirectionRef.current = enrichedScene;
+
+    setRenderData((prev: any) => {
+      const updatedRenderData = {
+        ...(prev || {}),
+        cinematicDirection: enrichedScene,
+        cinematic_direction: enrichedScene,
+        description: enrichedScene.world ?? enrichedScene.description,
+      };
+      if (savedIdRef.current) {
+        persistQueue.enqueue({
+          table: "lyric_projects",
+          id: savedIdRef.current,
+          payload: {
+            cinematic_direction: enrichedScene,
+            render_data: updatedRenderData,
+          },
+        });
+      }
+      return updatedRenderData;
+    });
+  }, [setCinematicDirection, setRenderData]);
+
   const startHookDetection = useCallback(async () => {
     if (hookDetectionRunRef.current) return;
     if (!words?.length || !lines?.length) return;
@@ -1717,30 +1742,7 @@ export function useLyricPipeline({
           _meta: { scene: sceneMeta },
         };
 
-        setCinematicDirection(enrichedScene);
-        cinematicDirectionRef.current = enrichedScene;
-
-        {
-          setRenderData((prev: any) => {
-            const updatedRenderData = {
-              ...(prev || {}),
-              cinematicDirection: enrichedScene,
-              cinematic_direction: enrichedScene,
-              description: enrichedScene.description,
-            };
-            if (savedIdRef.current) {
-              persistQueue.enqueue({
-                table: "lyric_projects",
-                id: savedIdRef.current,
-                payload: {
-                  cinematic_direction: enrichedScene,
-                  render_data: updatedRenderData,
-                },
-              });
-            }
-            return updatedRenderData;
-          });
-        }
+        commitCinematicDirection(enrichedScene);
 
         if (myRunId !== runIdRef.current) return;
 
@@ -1858,6 +1860,7 @@ export function useLyricPipeline({
       initialLyric,
       sceneDescription,
       audioDurationSec,
+      commitCinematicDirection,
     ],
   );
 
@@ -1973,28 +1976,7 @@ export function useLyricPipeline({
           _meta: { scene: sceneMeta },
         };
 
-        setCinematicDirection(enrichedScene);
-        cinematicDirectionRef.current = enrichedScene;
-
-        setRenderData((prev: any) => {
-          const updatedRenderData = {
-            ...(prev || {}),
-            cinematicDirection: enrichedScene,
-            cinematic_direction: enrichedScene,
-            description: enrichedScene.description,
-          };
-          if (savedIdRef.current) {
-            persistQueue.enqueue({
-              table: "lyric_projects",
-              id: savedIdRef.current,
-              payload: {
-                cinematic_direction: enrichedScene,
-                render_data: updatedRenderData,
-              },
-            });
-          }
-          return updatedRenderData;
-        });
+        commitCinematicDirection(enrichedScene);
 
         setGenerationStatus((prev) => ({
           ...prev,
@@ -2035,7 +2017,7 @@ export function useLyricPipeline({
         setGenerationStatus((prev) => ({ ...prev, cinematicDirection: "error" }));
       }
     },
-    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, audioUrl, setSectionImageUrls, setSectionImageProgress],
+    [audioDurationSec, beatGrid, lyricData, renderData, sceneDescription, setGenerationStatus, setPipelineStages, user, audioFile, audioUrl, setSectionImageUrls, setSectionImageProgress, commitCinematicDirection],
   );
 
   useEffect(() => {
