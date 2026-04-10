@@ -4879,18 +4879,15 @@ export class LyricDancePlayer {
       endSec: section.endSec,
       startRatio: section.startRatio,
       endRatio: section.endRatio,
-      emotionalArc: section.mood ?? "",
-      motion: section.motion,
+      emotionalArc: section.visualMood ?? "",
       texture: section.texture,
-      atmosphere: section.atmosphere,
+      atmosphere: section.visualMood ?? "intimate",
       backgroundDirective: section.description ?? "",
       sectionIndex: section.sectionIndex,
-      mood: section.mood,
       visualMood: section.visualMood,
-      atmosphereState: section.atmosphereState,
       dominantColor: section.dominantColor,
       zoom: 1,
-      driftIntensity: direction.motion === "fluid" ? 0.3 : 0.1,
+      driftIntensity: 0.1,
     }));
   }
 

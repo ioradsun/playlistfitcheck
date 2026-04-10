@@ -286,6 +286,19 @@ async function createDanceRowAndGenerateImages({
     {
       project_id: resolvedDanceId,
       force: false,
+      sections_inline: cinematicDirection?.sections?.map((s: any) => ({
+        sectionIndex: s.sectionIndex,
+        description: s.description,
+        visualMood: s.visualMood,
+        texture: s.texture,
+        dominantColor: s.dominantColor,
+        startSec: s.startSec,
+        endSec: s.endSec,
+      })),
+      artist_direction_inline: (cinematicDirection as any)?._artistDirection,
+      lyrics_lines_inline: lyricData?.lines
+        ?.filter((l: any) => l.tag !== "adlib")
+        .map((l: any) => ({ text: l.text, start: l.start, end: l.end })),
     },
     180_000,
   );
@@ -471,7 +484,23 @@ export function usePipelineScheduler({
     // Trigger image generation only (no AI re-call)
     const danceId = savedIdRef.current;
     if (danceId) {
-      invokeWithTimeout("generate-section-images", { project_id: danceId, force: false }, 180_000)
+      invokeWithTimeout(
+        "generate-section-images",
+        {
+          project_id: danceId,
+          force: false,
+          sections_inline: cinematicDirection?.sections?.map((s: any) => ({
+            sectionIndex: s.sectionIndex,
+            description: s.description,
+            visualMood: s.visualMood,
+            texture: s.texture,
+            dominantColor: s.dominantColor,
+            startSec: s.startSec,
+            endSec: s.endSec,
+          })),
+        },
+        180_000,
+      )
         .then(({ data: result, error }) => {
           if (error) throw error;
           const urls: (string | null)[] = result?.urls || result?.section_images || [];
@@ -1558,6 +1587,19 @@ export function useLyricPipeline({
         }
 
         const sceneDirection = sceneResult.cinematicDirection;
+
+        // Merge audio section energy + role into AI output sections
+        // so deriveSectionTypography gets real per-section variation
+        if (Array.isArray(sceneDirection?.sections) && audioSections.length > 0) {
+          for (const section of sceneDirection.sections) {
+            const idx = typeof section.sectionIndex === "number" ? section.sectionIndex : -1;
+            const audioSec = audioSections[idx];
+            if (audioSec) {
+              section.avgEnergy = audioSec.avgEnergy ?? 0.5;
+              section.role = audioSec.role;
+            }
+          }
+        }
         const sceneMeta = sceneResult._meta || null;
 
         if (!mountedRef.current) return;
@@ -1902,8 +1944,20 @@ export function useLyricPipeline({
           throw new Error("Scene direction returned no data");
         }
 
+        const sceneDirection = sceneResult.cinematicDirection;
+        if (Array.isArray(sceneDirection?.sections) && audioSections.length > 0) {
+          for (const section of sceneDirection.sections) {
+            const idx = typeof section.sectionIndex === "number" ? section.sectionIndex : -1;
+            const audioSec = audioSections[idx];
+            if (audioSec) {
+              section.avgEnergy = audioSec.avgEnergy ?? 0.5;
+              section.role = audioSec.role;
+            }
+          }
+        }
+
         const enrichedScene = {
-          ...sceneResult.cinematicDirection,
+          ...sceneDirection,
           beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence },
           phrases: [],
           _artistDirection: sceneDescription?.trim() || undefined,

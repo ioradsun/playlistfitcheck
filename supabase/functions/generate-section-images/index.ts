@@ -12,10 +12,7 @@ interface SectionInput {
   description: string;
   artistDirection?: string;
   visualMood?: string;
-  mood?: string;
-  atmosphere?: string;
   texture?: string;
-  motion?: string;
   lyrics?: string;
   dominantColor?: string;
 }
@@ -23,6 +20,20 @@ interface SectionInput {
 interface RequestBody {
   project_id: string;
   force?: boolean;
+  /** Sections passed directly from client — skips DB read when present */
+  sections_inline?: Array<{
+    sectionIndex: number;
+    description: string;
+    visualMood?: string;
+    texture?: string;
+    dominantColor?: string;
+    startSec?: number;
+    endSec?: number;
+  }>;
+  /** Artist direction passed inline */
+  artist_direction_inline?: string;
+  /** Lyrics text for section lyrics extraction */
+  lyrics_lines_inline?: Array<{ text: string; start: number; end: number }>;
 }
 
 const SECTION_COLOR_SEEDS = [
@@ -76,11 +87,6 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
   const moodStyle = visualMood ? MOOD_IMAGE_STYLE[visualMood] : null;
   if (moodStyle) parts.push(moodStyle);
 
-  const mood = section.mood?.trim();
-  const atmosphere = section.atmosphere?.trim();
-  if (!moodStyle && mood) parts.push(`${mood} mood`);
-  if (atmosphere && atmosphere !== mood) parts.push(`${atmosphere} atmosphere`);
-
   const texture = section.texture?.trim();
   if (texture) parts.push(`${texture} texture`);
 
@@ -90,12 +96,14 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
     parts.push(`evoking the feeling of "${excerpt}"`);
   }
 
-  if (!description && !moodStyle && !mood && !atmosphere && !lyrics) {
+  if (!description && !moodStyle && !lyrics) {
     parts.push("moody cinematic abstract environment");
   }
 
-  const colorSeed = SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
-  parts.push(colorSeed);
+  if (!section.dominantColor) {
+    const colorSeed = SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
+    parts.push(colorSeed);
+  }
 
   if (section.dominantColor) {
     const hex = section.dominantColor.replace("#", "");
@@ -317,42 +325,70 @@ serve(async (req) => {
         : undefined;
     const lines = Array.isArray(danceRow?.lines) ? danceRow.lines : [];
 
-    const rawSections = Array.isArray(cinematicDirection?.sections) ? cinematicDirection.sections : [];
+    let sections: SectionInput[] = [];
 
-    const sections: SectionInput[] = rawSections
-      .map((section: any, idx: number) => {
-        const sectionIndex = Number.isFinite(section?.sectionIndex) ? Number(section.sectionIndex) : idx;
-
+    // Fast path: sections provided inline — skip DB-derived section building
+    if (Array.isArray(body.sections_inline) && body.sections_inline.length > 0) {
+      const inlineSections: SectionInput[] = body.sections_inline.map((s, idx) => {
+        const sectionIndex = s.sectionIndex ?? idx;
+        // Extract lyrics for this section from inline lines
         let sectionLyrics = "";
-        if (section?.startSec != null && section?.endSec != null) {
-          const sectionLines = lines.filter(
-            (l: any) =>
-              l?.start != null && l?.end != null && l.start >= section.startSec - 0.5 && l.start < section.endSec + 0.5,
-          );
-          sectionLyrics = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 120);
+        if (Array.isArray(body.lyrics_lines_inline) && s.startSec != null && s.endSec != null) {
+          sectionLyrics = body.lyrics_lines_inline
+            .filter((l) => l.start >= (s.startSec ?? 0) - 0.5 && l.start < (s.endSec ?? 0) + 0.5)
+            .map((l) => l.text)
+            .join(" ")
+            .slice(0, 120);
         }
-
-        const rawDesc = typeof section?.description === "string" ? section.description.trim() : "";
-        const fallbackDesc =
-          rawDesc ||
-          (sectionLyrics
-            ? `Musical scene inspired by: "${sectionLyrics.slice(0, 80)}"`
-            : `Section ${sectionIndex + 1} of the song`);
-
         return {
           sectionIndex,
-          description: fallbackDesc,
-          artistDirection,
-          visualMood: typeof section?.visualMood === "string" ? section.visualMood : undefined,
-          mood: typeof section?.mood === "string" ? section.mood : undefined,
-          atmosphere: typeof section?.atmosphere === "string" ? section.atmosphere : undefined,
-          texture: typeof section?.texture === "string" ? section.texture : undefined,
-          motion: typeof section?.motion === "string" ? section.motion : undefined,
+          description: s.description || `Section ${sectionIndex + 1}`,
+          artistDirection: body.artist_direction_inline,
+          visualMood: s.visualMood,
+          texture: s.texture,
           lyrics: sectionLyrics || undefined,
-          dominantColor: typeof section?.dominantColor === "string" ? section.dominantColor : undefined,
+          dominantColor: s.dominantColor,
         };
-      })
-      .sort((a: SectionInput, b: SectionInput) => a.sectionIndex - b.sectionIndex);
+      });
+
+      // Use inline sections for generation (rest of flow is identical)
+      // Jump to the generation block below
+      sections = inlineSections;
+    } else {
+      const rawSections = Array.isArray(cinematicDirection?.sections) ? cinematicDirection.sections : [];
+
+      sections = rawSections
+        .map((section: any, idx: number) => {
+          const sectionIndex = Number.isFinite(section?.sectionIndex) ? Number(section.sectionIndex) : idx;
+
+          let sectionLyrics = "";
+          if (section?.startSec != null && section?.endSec != null) {
+            const sectionLines = lines.filter(
+              (l: any) =>
+                l?.start != null && l?.end != null && l.start >= section.startSec - 0.5 && l.start < section.endSec + 0.5,
+            );
+            sectionLyrics = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 120);
+          }
+
+          const rawDesc = typeof section?.description === "string" ? section.description.trim() : "";
+          const fallbackDesc =
+            rawDesc ||
+            (sectionLyrics
+              ? `Musical scene inspired by: "${sectionLyrics.slice(0, 80)}"`
+              : `Section ${sectionIndex + 1} of the song`);
+
+          return {
+            sectionIndex,
+            description: fallbackDesc,
+            artistDirection,
+            visualMood: typeof section?.visualMood === "string" ? section.visualMood : undefined,
+            texture: typeof section?.texture === "string" ? section.texture : undefined,
+            lyrics: sectionLyrics || undefined,
+            dominantColor: typeof section?.dominantColor === "string" ? section.dominantColor : undefined,
+          };
+        })
+        .sort((a: SectionInput, b: SectionInput) => a.sectionIndex - b.sectionIndex);
+    }
 
     if (sections.length === 0) {
       return new Response(
