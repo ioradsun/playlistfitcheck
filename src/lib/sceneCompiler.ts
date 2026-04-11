@@ -507,6 +507,28 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const globalWordIndex = new Map<WordMetaEntry, number>();
   wordMeta.forEach((wm, idx) => globalWordIndex.set(wm, idx));
 
+  // ── Apply AI section-level heroWords to wordMeta ──
+  // The AI picks semantically meaningful words per section (CHAIN, DOOR).
+  // Mark matching words as hero BEFORE phrase grouping, so they influence
+  // the hero scoring downstream. Phrase-level heroWord (duration-based)
+  // can still override or supplement these.
+  const cdSections = payload.cinematic_direction?.sections as CinematicSection[] | undefined;
+  if (cdSections?.length) {
+    for (const wm of wordMeta) {
+      // Find which section this word belongs to by time
+      const sec = cdSections.find(s =>
+        s.startSec != null && s.endSec != null &&
+        wm.start >= s.startSec - 0.5 && wm.start < s.endSec + 0.5
+      );
+      if (!sec || !(sec as any).heroWords?.length) continue;
+      const sectionHeroes: string[] = (sec as any).heroWords;
+      // Match word's clean text against section heroWords (case-insensitive)
+      if (sectionHeroes.some(h => h.toLowerCase().replace(/[^a-z0-9]/g, '') === wm.clean)) {
+        wm.isHeroWord = true;
+      }
+    }
+  }
+
   const aiPhrases = (payload.cinematic_direction as any)?.phrases as CinematicPhrase[] | undefined;
   const phraseGroups = buildPhraseGroups(wordMeta, aiPhrases);
   // ── Separate adlib phrases from main phrases ──
