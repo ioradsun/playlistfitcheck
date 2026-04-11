@@ -8,19 +8,15 @@
 export interface CinematicDirection {
   /** One-sentence world description */
   description?: string;
-  /** Visual arc keyword */
-  emotionalArc?: string;
   /** Typography plan — font, weight, hero style, per-section behaviors */
   typographyPlan?: {
     system: string;
     primary: string;
-    accent: string;
     case: string;
     baseWeight: string;
     heroStyle: string;
     accentDensity: string;
     sectionBehavior?: Record<string, string>;
-    reason?: string;
   };
   /** Per-section visual direction */
   sections?: CinematicSection[];
@@ -71,9 +67,4 @@ export interface CinematicPhrase {
   revealStyle?: "instant" | "stagger_fast" | "stagger_slow";
   holdClass?: "short_hit" | "medium_groove" | "long_emotional";
   presentationMode?: string;
-  entryCharacter?: string;
-  exitCharacter?: string;
-  ghostPreview?: boolean;
-  vibrateOnHold?: boolean;
-  elementalWash?: boolean;
 }
