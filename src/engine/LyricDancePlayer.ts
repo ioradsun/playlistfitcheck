@@ -5668,7 +5668,29 @@ export class LyricDancePlayer {
         chunk.x = word.layoutX + ws.heroOffsetX;
         chunk.y = word.layoutY + ws.heroOffsetY;
 
-        chunk.alpha = ws.soloHeroHidden ? 0 : 1.0;
+        // ── Word stagger entry ──
+        // Quiet sections: words fade in one by one (stagger_slow).
+        // Mid sections: words flow in quickly (stagger_fast).
+        // Loud sections: words hit together (instant → stagger = 0).
+        let wordEntryAlpha = 1.0;
+        if (!ws.soloHeroHidden) {
+          const staggerSec = ((group as any).staggerDelay ?? 0);
+          const entryDur = (group as any).entryDuration ?? 0.15;
+          if (staggerSec > 0 && wi > 0) {
+            const wordEffectiveStart = group.start + (wi * staggerSec);
+            if (tSec < wordEffectiveStart) {
+              wordEntryAlpha = 0;
+            } else if (tSec < wordEffectiveStart + entryDur) {
+              wordEntryAlpha = (tSec - wordEffectiveStart) / entryDur;
+            }
+          } else if (entryDur > 0.01) {
+            // No stagger but still fade in the whole phrase
+            if (tSec < group.start + entryDur) {
+              wordEntryAlpha = Math.max(0, (tSec - group.start) / entryDur);
+            }
+          }
+        }
+        chunk.alpha = ws.soloHeroHidden ? 0 : wordEntryAlpha;
         chunk.scaleX = scale;
         chunk.scaleY = scale;
         chunk.scale = 1;
