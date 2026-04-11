@@ -856,12 +856,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
     const groupSecIdx = getSectionForTime(group.start);
     const groupSecTypo = sectionTypoMap[groupSecIdx] ?? DEFAULT_SECTION_BEHAVIOR;
-    const energyTier: "groove" | "impact" | "intimate" | "lift" | "surprise" =
+    const energyTier: "groove" | "impact" | "intimate" | "lift" =
       groupSecTypo.weight === 'black' ? 'impact' :
       groupSecTypo.weight === 'bold' ? 'lift' :
       groupSecTypo.weight === 'regular' ? 'groove' :
       'intimate';
-    const revealStyle = energyTier === 'impact' || energyTier === 'surprise'
+    const revealStyle: "instant" | "stagger_fast" | "stagger_slow" = energyTier === 'impact'
       ? 'instant'
       : energyTier === 'intimate'
         ? 'stagger_slow'
