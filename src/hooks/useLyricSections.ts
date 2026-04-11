@@ -132,7 +132,7 @@ export function useLyricSections(
     const cdSections = cinematicDirection?.sections;
     if (Array.isArray(cdSections)) {
       for (const s of cdSections) {
-        const label = s.structuralLabel;
+        const label = (s as any).structuralLabel ?? s.description;
         if (typeof label === "string" && label.trim()) {
           aiLabelMap.set(s.sectionIndex, label.trim());
         }
