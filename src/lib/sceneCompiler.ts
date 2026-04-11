@@ -854,9 +854,19 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const matchPhrase = (group as any)._matchPhrase as CinematicPhrase | undefined;
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
-    const revealStyle = (group as any).revealStyle ?? matchPhrase?.revealStyle ?? 'instant';
+    const groupSecIdx = getSectionForTime(group.start);
+    const groupSecTypo = sectionTypoMap[groupSecIdx] ?? DEFAULT_SECTION_BEHAVIOR;
+    const energyTier: "groove" | "impact" | "intimate" | "lift" | "surprise" =
+      groupSecTypo.weight === 'black' ? 'impact' :
+      groupSecTypo.weight === 'bold' ? 'lift' :
+      groupSecTypo.weight === 'regular' ? 'groove' :
+      'intimate';
+    const revealStyle = energyTier === 'impact' || energyTier === 'surprise'
+      ? 'instant'
+      : energyTier === 'intimate'
+        ? 'stagger_slow'
+        : 'stagger_fast';
     const holdClass = (group as any).holdClass ?? matchPhrase?.holdClass ?? 'medium_groove';
-    const energyTier: "groove" | "impact" | "intimate" | "lift" | "surprise" = 'groove';
     const heroType: "phrase" | "word" = 'word';
 
     // Reveal → stagger delay
