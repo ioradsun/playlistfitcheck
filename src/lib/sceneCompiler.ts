@@ -134,7 +134,7 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
   // ── Try AI phrases first ──
   if (aiPhrases && aiPhrases.length > 0) {
     const isGlobalFormat = aiPhrases.some(
-      (phrase) => phrase.lineIndex === undefined || phrase.lineIndex === null,
+      (phrase) => (phrase as any).lineIndex === undefined || (phrase as any).lineIndex === null,
     );
 
     if (isGlobalFormat) {
@@ -217,7 +217,7 @@ function buildPhraseGroups(wordMeta: WordMetaEntry[], aiPhrases?: CinematicPhras
       }
 
       for (const phrase of aiPhrases) {
-        const lineIndex = phrase.lineIndex;
+        const lineIndex = (phrase as any).lineIndex;
         if (typeof lineIndex !== 'number') continue;
 
         const lineWords = lineMap.get(lineIndex);
@@ -418,8 +418,8 @@ function computeEmphasisFromDuration(durationSec: number): number {
 
 function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): string[] {
   if (payload.auto_palettes?.length) {
-    if (chapterProgress != null && payload.cinematic_direction?.chapters?.length) {
-      const idx = payload.cinematic_direction.chapters.findIndex((c) => chapterProgress >= (c.startRatio ?? 0) && chapterProgress < (c.endRatio ?? 1));
+    if (chapterProgress != null && (payload.cinematic_direction as any)?.chapters?.length) {
+      const idx = ((payload.cinematic_direction as any).chapters as any[]).findIndex((c: any) => chapterProgress >= (c.startRatio ?? 0) && chapterProgress < (c.endRatio ?? 1));
       if (idx >= 0 && payload.auto_palettes[idx]) return payload.auto_palettes[idx];
     }
     return payload.auto_palettes[0];
@@ -429,7 +429,7 @@ function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): stri
 
 export function compileScene(payload: ScenePayload, options?: { viewportWidth?: number; viewportHeight?: number }): CompiledScene {
   const durationSec = Math.max(0.01, payload.songEnd - payload.songStart);
-  const rawChapters = (payload.cinematic_direction?.chapters ?? []) as Array<any>;
+  const rawChapters = ((payload.cinematic_direction as any)?.chapters ?? []) as Array<any>;
   const chapters = rawChapters.length > 0 ? rawChapters : enrichSections(payload.cinematic_direction?.sections as CinematicSection[] | undefined);
   const visualMode: VisualMode = 'cinematic';
   const rawWords = payload.words ?? [];

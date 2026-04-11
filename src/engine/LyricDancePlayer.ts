@@ -4837,7 +4837,7 @@ export class LyricDancePlayer {
 
   private resolveParticleTexture(sectionIndex: number, direction: CinematicDirection | null | undefined): string {
     const sectionTexture = direction?.sections?.[sectionIndex]?.texture;
-    return sectionTexture ?? direction?.texture ?? 'dust';
+    return sectionTexture ?? (direction as any)?.texture ?? 'dust';
   }
 
   private resolvePlayerState(payload: ScenePayload): void {

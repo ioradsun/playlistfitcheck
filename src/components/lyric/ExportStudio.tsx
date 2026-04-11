@@ -135,7 +135,7 @@ export function ExportStudio({
       .map((moment, index) => ({ moment, index, fires: fireCounts[index] ?? 0 }))
       .sort((a, b) => b.fires - a.fires);
     const fullVideo: SortedMoment = {
-      moment: { startSec: 0, endSec: durationSec, lines: [], index: -1 },
+      moment: { startSec: 0, endSec: durationSec, lines: [], index: -1, label: null, phraseIndices: [], energy: 0.5, sectionIndex: 0, sectionProgress: 0 },
       index: -1,
       fires: 0,
       isFull: true,
@@ -371,7 +371,7 @@ export function ExportStudio({
     const player = getPlayer();
     if (!player) return;
     if (!prevSizeRef.current) {
-      prevSizeRef.current = { w: player.width, h: player.height };
+      prevSizeRef.current = { w: (player as any).currentWidth ?? 960, h: (player as any).currentHeight ?? 540 };
     }
     const buf = PREVIEW_BUFFERS[platformIdx];
     player.resize(buf.w, buf.h);

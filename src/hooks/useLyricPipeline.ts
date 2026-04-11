@@ -1894,11 +1894,11 @@ export function useLyricPipeline({
             if (dur > MAX_SEC) {
               const mid = (sec.startSec + sec.endSec) / 2;
               const midLines = sec.lyrics?.filter((l: any) => {
-                const lineStart = lyricsForDirection[l.lineIndex]?.start ?? 0;
+                const lineStart = l?.start ?? l?.startSec ?? 0;
                 return lineStart < mid;
               }) ?? [];
               const restLines = sec.lyrics?.filter((l: any) => {
-                const lineStart = lyricsForDirection[l.lineIndex]?.start ?? 0;
+                const lineStart = l?.start ?? l?.startSec ?? 0;
                 return lineStart >= mid;
               }) ?? [];
               next.push({ ...sec, endSec: mid, lyrics: midLines });
