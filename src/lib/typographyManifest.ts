@@ -25,10 +25,6 @@ export interface FontDef {
   roles: ('primary' | 'accent' | 'hero')[];
   /** Prose description for the AI prompt — what this font FEELS like */
   vibe: string;
-  /** Font categories that pair well as accent alongside this as primary */
-  pairingBias: string[];
-  /** Specific fonts to NEVER pair with (too visually similar) */
-  avoidWith: string[];
 }
 
 export const FONT_MANIFEST: FontDef[] = [
@@ -42,8 +38,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['hip-hop', 'rock', 'trap', 'anthem', 'trailer'],
     roles: ['primary', 'accent'],
     vibe: 'Movie posters. Bold declarations. "I AM HERE." All-caps condensed impact.',
-    pairingBias: ['serif', 'mono', 'handwriting'],
-    avoidWith: ['Oswald', 'Barlow Condensed'],
   },
   {
     name: 'Permanent Marker',
@@ -55,8 +49,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['punk', 'rock', 'indie', 'spoken-word'],
     roles: ['primary', 'accent'],
     vibe: 'Sharpie on a mirror. Bathroom wall poetry. Protest sign urgency.',
-    pairingBias: ['sans', 'mono'],
-    avoidWith: ['Caveat'],
   },
   {
     name: 'Unbounded',
@@ -68,8 +60,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['electronic', 'hyperpop', 'futuristic', 'experimental'],
     roles: ['primary', 'accent'],
     vibe: 'Geometric blob display. Album cover energy. Futuristic weight.',
-    pairingBias: ['serif', 'mono'],
-    avoidWith: ['Dela Gothic One'],
   },
   {
     name: 'Dela Gothic One',
@@ -81,8 +71,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['metal', 'dark-trap', 'gothic', 'industrial'],
     roles: ['primary', 'accent'],
     vibe: 'Heavy blackletter energy. Gothic weight. Dark anthems.',
-    pairingBias: ['serif', 'mono', 'sans'],
-    avoidWith: ['Unbounded'],
   },
   {
     name: 'Oswald',
@@ -94,8 +82,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['hip-hop', 'news', 'editorial', 'sport'],
     roles: ['primary'],
     vibe: 'Tall and tight. News tickers. Campaign posters. Authority with edge.',
-    pairingBias: ['serif', 'handwriting'],
-    avoidWith: ['Bebas Neue', 'Barlow Condensed'],
   },
   {
     name: 'Barlow Condensed',
@@ -107,8 +93,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['industrial', 'electronic', 'techno'],
     roles: ['primary'],
     vibe: 'Industrial precision. Blueprint energy. Clean but forceful.',
-    pairingBias: ['serif', 'handwriting'],
-    avoidWith: ['Oswald', 'Bebas Neue'],
   },
   {
     name: 'Archivo',
@@ -120,8 +104,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['rap', 'grime', 'drill', 'tech'],
     roles: ['primary'],
     vibe: 'Geometric muscle. Tech-forward power. Modern impact.',
-    pairingBias: ['serif', 'handwriting'],
-    avoidWith: [],
   },
   {
     name: 'Montserrat',
@@ -133,8 +115,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['pop', 'general'],
     roles: ['primary'],
     vibe: 'The reliable workhorse. Use ONLY when nothing else fits. Safe but forgettable.',
-    pairingBias: ['serif', 'display'],
-    avoidWith: ['Inter', 'Sora'],
   },
   {
     name: 'Inter',
@@ -146,8 +126,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['indie', 'ambient', 'minimal'],
     roles: ['primary'],
     vibe: 'Invisible design. Let the words speak. For when the song IS the typography.',
-    pairingBias: ['serif', 'display'],
-    avoidWith: ['Montserrat', 'Sora'],
   },
   {
     name: 'Sora',
@@ -159,8 +137,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['k-pop', 'j-pop', 'synth-pop', 'new-gen'],
     roles: ['primary'],
     vibe: 'Soft-edged modern. Approachable but intentional. New-gen energy.',
-    pairingBias: ['serif', 'display'],
-    avoidWith: ['Inter', 'Montserrat'],
   },
   {
     name: 'Rubik',
@@ -172,8 +148,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['pop', 'funk', 'afrobeat'],
     roles: ['primary'],
     vibe: 'Rounded corners. Friendly weight. Warmth without softness.',
-    pairingBias: ['serif', 'display', 'condensed'],
-    avoidWith: ['Nunito'],
   },
   {
     name: 'Nunito',
@@ -185,8 +159,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['lullaby', 'children', 'gentle', 'acoustic'],
     roles: ['primary'],
     vibe: 'Pillowy soft. Gentle confessions. Safe spaces.',
-    pairingBias: ['serif'],
-    avoidWith: ['Rubik'],
   },
   {
     name: 'Plus Jakarta Sans',
@@ -198,8 +170,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['r-and-b', 'neo-soul', 'contemporary'],
     roles: ['primary'],
     vibe: 'Contemporary warmth. Approachable sophistication. The new default.',
-    pairingBias: ['serif', 'display'],
-    avoidWith: ['Montserrat'],
   },
   {
     name: 'Bricolage Grotesque',
@@ -211,8 +181,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['indie', 'alternative', 'art-pop'],
     roles: ['primary'],
     vibe: 'Quirky proportions. Indie character. Not trying to be perfect.',
-    pairingBias: ['serif', 'display'],
-    avoidWith: [],
   },
   {
     name: 'Playfair Display',
@@ -224,8 +192,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['r-and-b', 'soul', 'jazz', 'cinematic'],
     roles: ['primary', 'accent'],
     vibe: 'High contrast editorial. Magazine covers. Dramatic entrances.',
-    pairingBias: ['sans', 'condensed'],
-    avoidWith: ['DM Serif Display'],
   },
   {
     name: 'EB Garamond',
@@ -237,8 +203,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['folk', 'classical', 'singer-songwriter', 'poetry'],
     roles: ['primary', 'accent'],
     vibe: 'Classical literary. Letters never sent. Old soul in young body.',
-    pairingBias: ['sans', 'condensed'],
-    avoidWith: ['Cormorant Garamond'],
   },
   {
     name: 'Cormorant Garamond',
@@ -250,8 +214,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['orchestral', 'ambient', 'art-song', 'film-score'],
     roles: ['primary', 'accent'],
     vibe: 'Thin and tall. Whispered elegance. French cinema titles.',
-    pairingBias: ['sans', 'display'],
-    avoidWith: ['EB Garamond'],
   },
   {
     name: 'DM Serif Display',
@@ -263,8 +225,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['soul', 'gospel', 'r-and-b', 'blues'],
     roles: ['primary', 'accent'],
     vibe: 'Warm editorial display. Magazine feature headlines. Confident elegance.',
-    pairingBias: ['sans', 'condensed'],
-    avoidWith: ['Playfair Display'],
   },
   {
     name: 'Instrument Serif',
@@ -276,8 +236,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['classical', 'chamber', 'art-song', 'poetry'],
     roles: ['primary', 'accent'],
     vibe: 'Fine Italian typesetting. Refined. For songs that are poetry.',
-    pairingBias: ['sans', 'mono'],
-    avoidWith: ['Cormorant Garamond'],
   },
   {
     name: 'Bitter',
@@ -289,8 +247,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['country', 'americana', 'folk-rock'],
     roles: ['primary'],
     vibe: 'Slab serif warmth. Grounded. Journalism meets storytelling.',
-    pairingBias: ['sans', 'condensed'],
-    avoidWith: [],
   },
   {
     name: 'JetBrains Mono',
@@ -302,8 +258,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['electronic', 'glitch', 'techno', 'cyberpunk'],
     roles: ['primary', 'accent'],
     vibe: 'Hacker aesthetic. System messages. The machine speaks.',
-    pairingBias: ['serif', 'display'],
-    avoidWith: ['Space Mono'],
   },
   {
     name: 'Space Mono',
@@ -315,8 +269,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['retro-wave', 'synthwave', 'sci-fi', 'analog'],
     roles: ['primary', 'accent'],
     vibe: 'Retro-futuristic. NASA mission control. Analog sci-fi.',
-    pairingBias: ['serif', 'display'],
-    avoidWith: ['JetBrains Mono'],
   },
   {
     name: 'Caveat',
@@ -328,8 +280,6 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['singer-songwriter', 'diary', 'confessional', 'indie-folk'],
     roles: ['primary', 'accent'],
     vibe: 'Journal entry. Diary confessions. Notes passed in class.',
-    pairingBias: ['sans', 'serif'],
-    avoidWith: ['Permanent Marker'],
   },
   {
     name: 'Lexend',
@@ -341,67 +291,10 @@ export const FONT_MANIFEST: FontDef[] = [
     genreFit: ['lo-fi', 'chill', 'ambient', 'meditation'],
     roles: ['primary'],
     vibe: 'Designed for readability. Open and breathing. Calm clarity.',
-    pairingBias: ['serif', 'display'],
-    avoidWith: ['Nunito'],
   },
 ];
 
-export const VALID_FONT_NAMES = FONT_MANIFEST.map(f => f.name);
 
 export function findFont(name: string): FontDef | undefined {
   return FONT_MANIFEST.find(f => f.name.toLowerCase() === name.trim().toLowerCase());
-}
-
-export function generatePromptFontLibrary(): string {
-  const byCategory: Record<string, FontDef[]> = {};
-  for (const f of FONT_MANIFEST) {
-    const cat = f.category.toUpperCase();
-    if (!byCategory[cat]) byCategory[cat] = [];
-    byCategory[cat].push(f);
-  }
-
-  const lines: string[] = ['FONT LIBRARY — pick from these exact names:\n'];
-  const categoryOrder = ['DISPLAY', 'CONDENSED', 'SANS', 'SERIF', 'MONO', 'HANDWRITING'];
-  for (const cat of categoryOrder) {
-    const fonts = byCategory[cat];
-    if (!fonts?.length) continue;
-    lines.push(`${cat}:`);
-    for (const f of fonts) {
-      lines.push(`  ${f.name} — ${f.vibe}`);
-      lines.push(`    genre fit: ${f.genreFit.join(', ')}`);
-      lines.push(`    energy: ${f.energy} | elegance: ${f.elegance} | case: ${f.casePreference.join('/')}`);
-      lines.push(`    avoid pairing with: ${f.avoidWith.length ? f.avoidWith.join(', ') : 'none'}`);
-    }
-    lines.push('');
-  }
-  return lines.join('\n');
-}
-
-export function isValidPair(primary: FontDef, accent: FontDef): boolean {
-  if (primary.name === accent.name) return false;
-  if (primary.category === accent.category && primary.width === accent.width) return false;
-  if (primary.avoidWith.includes(accent.name)) return false;
-  if (accent.avoidWith.includes(primary.name)) return false;
-  return true;
-}
-
-export function pairingContrastScore(primary: FontDef, accent: FontDef): number {
-  let score = 0;
-  if (primary.category !== accent.category) score += 3;
-  if (primary.width !== accent.width) score += 1;
-  if (primary.energy !== accent.energy) score += 1;
-  if (primary.elegance !== accent.elegance) score += 1;
-  if (primary.warmth !== accent.warmth) score += 1;
-  const isCross = (primary.category === 'serif' && ['sans', 'condensed', 'display', 'mono'].includes(accent.category))
-    || (['sans', 'condensed', 'display', 'mono'].includes(primary.category) && accent.category === 'serif');
-  if (isCross) score += 2;
-  return score;
-}
-
-export function findBestAccent(primary: FontDef): FontDef | null {
-  const candidates = FONT_MANIFEST
-    .filter(f => f.roles.includes('accent') && isValidPair(primary, f))
-    .map(f => ({ font: f, score: pairingContrastScore(primary, f) }))
-    .sort((a, b) => b.score - a.score);
-  return candidates[0]?.font ?? null;
 }

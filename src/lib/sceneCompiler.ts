@@ -392,10 +392,6 @@ export interface CompiledPhraseGroup {
   holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
   energyTier: 'intimate' | 'groove' | 'lift' | 'impact' | 'surprise';
   presentationMode?: string;
-  entryCharacter?: string;
-  exitCharacter?: string;
-  vibrateOnHold?: boolean;
-  elementalWash?: boolean;
   /** AI-chosen exit effect — passed to ExitEffect renderer */
   exitEffect?: string;
   /** True if this group contains adlib/background vocal words */
@@ -403,7 +399,7 @@ export interface CompiledPhraseGroup {
 }
 export interface BeatEvent { time: number; springVelocity: number; glowMax: number; }
 export interface CompiledChapter { index: number; startRatio: number; endRatio: number; targetZoom: number; emotionalIntensity: number; typography: { fontFamily: string; fontWeight: number; heroWeight: number; textTransform: string; }; visualMood: string; }
-export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; emotionalArc: string; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
+export interface CompiledScene { phraseGroups: CompiledPhraseGroup[]; songStartSec: number; songEndSec: number; durationSec: number; beatEvents: BeatEvent[]; bpm: number; chapters: CompiledChapter[]; visualMode: VisualMode; baseFontFamily: string; baseFontWeight: number; baseTextTransform: string; palettes: string[][]; animParams: { linger: number; stagger: number; entryDuration: number; exitDuration: number; }; songMotion: SongMotionIdentity; sectionMods: SectionMotionMod[]; }
 
 const distanceToZoom: Record<string, number> = { 'Wide': 0.82, 'Medium': 1.0, 'Close': 1.15, 'CloseUp': 1.2, 'ExtremeClose': 1.35, 'FloatingInWorld': 0.95 };
 
@@ -612,7 +608,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const cd = payload.cinematic_direction as any;
   const sections = cd?.sections ?? [];
   const sectionTypoMap: SectionBehavior[] = sections.map((section: any) =>
-    deriveSectionTypography(section?.role, section?.avgEnergy ?? 0.5, resolvedTypo),
+    deriveSectionTypography(section?.role, section?.avgEnergy ?? 0.5),
   );
   /** Map a timestamp to its section index. Sections come from cinematic direction. */
   function getSectionForTime(timeSec: number): number {
@@ -627,7 +623,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   console.info('[sceneCompiler] typography:', {
     source: resolvedTypo._meta.source,
     primary: resolvedTypo._meta.primaryFont,
-    accent: resolvedTypo._meta.accentFont,
     heroStyle: resolvedTypo.heroStyle,
     system: resolvedTypo.system,
     repaired: resolvedTypo._meta.repaired,
@@ -973,10 +968,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       energyTier,
       // Presentation mode: read from group (set by assignPresentationModes directly)
       presentationMode: (group as any).presentationMode ?? undefined,
-      entryCharacter: (group as any).entryCharacter ?? undefined,
-      exitCharacter: (group as any).exitCharacter ?? undefined,
-      vibrateOnHold: (group as any).vibrateOnHold ?? false,
-      elementalWash: (group as any).elementalWash ?? false,
       // Exit effect from AI
       exitEffect: matchPhrase?.exitEffect ?? undefined,
       isAdlib: group.words.some(w => w.isAdlib),
@@ -996,7 +987,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     beatEvents,
     bpm,
     chapters: compiledChapters,
-    emotionalArc: ((payload.cinematic_direction as any)?.emotionalArc as string | undefined) ?? 'slow-burn',
     visualMode,
     baseFontFamily: baseTypography.fontFamily,
     baseFontWeight: baseTypography.fontWeight,
