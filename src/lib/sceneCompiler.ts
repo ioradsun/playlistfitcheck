@@ -418,8 +418,8 @@ function computeEmphasisFromDuration(durationSec: number): number {
 
 function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): string[] {
   if (payload.auto_palettes?.length) {
-    if (chapterProgress != null && payload.cinematic_direction?.chapters?.length) {
-      const idx = payload.cinematic_direction.chapters.findIndex((c) => chapterProgress >= (c.startRatio ?? 0) && chapterProgress < (c.endRatio ?? 1));
+    if (chapterProgress != null && (payload.cinematic_direction as any)?.chapters?.length) {
+      const idx = ((payload.cinematic_direction as any).chapters as any[]).findIndex((c: any) => chapterProgress >= (c.startRatio ?? 0) && chapterProgress < (c.endRatio ?? 1));
       if (idx >= 0 && payload.auto_palettes[idx]) return payload.auto_palettes[idx];
     }
     return payload.auto_palettes[0];
