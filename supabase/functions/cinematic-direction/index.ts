@@ -327,6 +327,12 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
       dominantColor,
       texture,
       ...(heroWords.length > 0 ? { heroWords } : {}),
+      ...(body.audioSections?.[i]
+        ? {
+            startSec: body.audioSections[i].startSec,
+            endSec: body.audioSections[i].endSec,
+          }
+        : {}),
     });
   }
 

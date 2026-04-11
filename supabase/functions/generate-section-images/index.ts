@@ -74,57 +74,62 @@ const MOOD_IMAGE_STYLE: Record<string, string> = {
 };
 
 function buildImagePrompt(section: SectionInput, totalSections: number): string {
-  const parts: string[] = ["Cinematic background scene"];
+  const parts: string[] = [];
 
+  // ── Layer 1: ARTIST DIRECTION — overrides everything ──
   if (section.artistDirection) {
-    parts.push(`Artist direction: ${section.artistDirection}`);
+    parts.push(`Visual direction: ${section.artistDirection}`);
   }
 
+  // ── Layer 2: SCENE — what the viewer sees RIGHT NOW ──
   const description = section.description?.trim();
-  if (description) parts.push(description);
+  if (description) {
+    parts.push(`Scene: ${description}`);
+  }
 
-  const visualMood = section.visualMood?.trim()?.toLowerCase();
-  const moodStyle = visualMood ? MOOD_IMAGE_STYLE[visualMood] : null;
-  if (moodStyle) parts.push(moodStyle);
-
-  const texture = section.texture?.trim();
-  if (texture) parts.push(`${texture} texture`);
-
+  // ── Layer 3: LYRICS — ground the scene in the actual song ──
   const lyrics = section.lyrics?.trim();
   if (lyrics) {
-    const excerpt = lyrics.length > 60 ? lyrics.slice(0, 60).replace(/\s+\S*$/, "...") : lyrics;
-    parts.push(`evoking the feeling of "${excerpt}"`);
+    const excerpt = lyrics.length > 100 ? lyrics.slice(0, 100).replace(/\s+\S*$/, "...") : lyrics;
+    parts.push(`The lyrics over this image: "${excerpt}"`);
   }
 
+  // ── Layer 4: CINEMATOGRAPHY — how it's shot ──
+  const visualMood = section.visualMood?.trim()?.toLowerCase();
+  const moodStyle = visualMood ? MOOD_IMAGE_STYLE[visualMood] : null;
+  if (moodStyle) {
+    parts.push(moodStyle);
+  }
+
+  // ── Fallback if nothing above provided content ──
   if (!description && !moodStyle && !lyrics) {
     parts.push("moody cinematic abstract environment");
   }
 
-  if (!section.dominantColor) {
+  // ── Color grading ──
+  if (section.dominantColor) {
+    parts.push(`dominant color palette: ${section.dominantColor}`);
+  } else {
     const colorSeed = SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
     parts.push(colorSeed);
   }
 
-  if (section.dominantColor) {
-    const hex = section.dominantColor.replace("#", "");
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    if (luminance > 0.6) parts.push("bright, high-key lighting, lifted exposure");
-    else if (luminance > 0.35) parts.push("balanced cinematic exposure, mid-tone lighting");
-    else parts.push("low-key lighting, shadows present but not total darkness");
-    parts.push(`primary color: ${section.dominantColor}`);
+  // ── Structural position ──
+  if (section.sectionIndex === 0) {
+    parts.push("opening establishing shot");
+  } else if (section.sectionIndex === totalSections - 1) {
+    parts.push("closing finale atmosphere");
   }
 
-  if (section.sectionIndex === 0) parts.push("opening establishing shot");
-  else if (section.sectionIndex === totalSections - 1) parts.push("closing finale atmosphere");
-
+  // ── Technical constraints (always last — lowest priority) ──
   parts.push(
-    "wide cinematic shot, no people, no text, no faces, photorealistic, film grain, 1920x1080 landscape aspect ratio, 16:9, minimum exposure: background detail visible throughout, avoid pure black regions larger than 10% of frame",
+    "Background for a lyric video — text will overlay this image. " +
+      "Wide cinematic composition, no people, no text, no faces, no words. " +
+      "Photorealistic with film grain. 16:9 landscape. " +
+      "Minimum exposure: background detail visible throughout, avoid pure black regions.",
   );
 
-  return parts.join(", ");
+  return parts.join(". ");
 }
 
 async function generateImage(prompt: string, apiKey: string): Promise<string | null> {
