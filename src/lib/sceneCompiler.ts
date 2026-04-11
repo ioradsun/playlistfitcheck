@@ -918,6 +918,9 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const isHero = heroScore >= 0.35 || isLongHold || isDirectiveHero;
 
       const wordWeight = isHero ? Math.max(phraseWeight, resolvedTypo.heroWeight) : phraseWeight;
+      // When weight-shift can't go heavier (single-weight font or already at max),
+      // fall back to a subtle scale boost so heroes are still visually distinct.
+      const heroScaleBoost = isHero && wordWeight <= phraseWeight ? 1.08 : 1.0;
 
       const wordFontFamily = baseTypography.fontFamily;
 
@@ -932,7 +935,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         wordIndex: wi,
         layoutX: pos.x,
         layoutY: pos.y,
-        baseFontSize: groupFontSize,
+        baseFontSize: Math.round(groupFontSize * heroScaleBoost),
         layoutWidth: pos.width,
         wordStart: snapToBeat(wm.start, beats),
         fontWeight: wordWeight,
