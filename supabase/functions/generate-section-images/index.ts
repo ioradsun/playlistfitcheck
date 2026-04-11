@@ -12,7 +12,6 @@ interface SectionInput {
   description: string;
   artistDirection?: string;
   visualMood?: string;
-  texture?: string;
   lyrics?: string;
   dominantColor?: string;
 }
@@ -52,25 +51,47 @@ const SECTION_COLOR_SEEDS = [
 ];
 
 const MOOD_IMAGE_STYLE: Record<string, string> = {
-  intimate: "ultra dark exposure, warm amber lighting, shallow depth of field, soft shadows",
+  intimate: "low-key warm exposure, amber lighting, shallow depth of field, soft shadows, visible detail in shadows",
   anthemic: "vivid colors, dramatic lighting, wide cinematic shot, high contrast",
   dreamy: "soft focus, warm golden light, ethereal glow, hazy atmosphere, blown highlights",
-  aggressive: "cold blue steel tones, harsh contrast, gritty, sharp shadows, dark",
-  melancholy: "muted desaturated colors, overcast cool light, rain-soaked, foggy",
+  aggressive: "cold blue steel tones, harsh contrast, gritty, sharp shadows, moody low-key lighting",
+  melancholy: "muted desaturated colors, overcast cool light, rain-soaked, foggy, grey-blue tones",
   euphoric: "bright warm light, golden hour, lens flare, vivid saturated colors, radiant",
-  eerie: "dark teal green tint, cold fluorescent light, unsettling shadows, fog",
-  vulnerable: "warm soft light, intimate close framing, gentle shadows, dusty film grain",
+  eerie: "teal green tint, cold fluorescent light, unsettling shadows, thin fog, visible environment detail",
+  vulnerable: "warm soft light, intimate close framing, gentle shadows, dusty grain",
   triumphant: "golden dramatic light, bold contrast, wide heroic framing, rich warm tones",
-  nostalgic: "warm sepia tones, vintage film grain, soft sunlight, faded memories",
+  nostalgic: "warm sepia tones, vintage grain, soft sunlight, faded warmth",
   defiant: "cold high contrast, dramatic side lighting, sharp edges, bold shadows",
   hopeful: "dawn light, warm gradient sky, soft bright exposure, gentle rays",
-  raw: "ungraded neutral, harsh direct light, gritty documentary feel, high grain",
+  raw: "neutral tones, harsh direct light, gritty documentary feel, high grain, unpolished",
   hypnotic: "deep saturated colors, slow gradient, mysterious lighting, tilt-shift bokeh",
-  noir: "high-contrast with single warm light source, deep shadows, wet surfaces reflecting light, cinematic night scene, visible detail in shadow regions",
+  noir: "high-contrast with single warm light source, deep shadows with visible detail, wet surfaces reflecting light, cinematic night scene",
   rebellious: "raw energy, bold primary colors against dark ground, high contrast, street-level grit, saturated accents cutting through shadow",
-  ethereal: "soft luminous haze, diffused light, pale warm tones, weightless atmosphere, blown-out highlights, heavenly texture",
-  celestial: "vast dark sky with brilliant light source, cosmic scale, radiant rays, deep contrast between dark void and intense brightness",
+  ethereal: "soft luminous haze, diffused light, pale warm tones, weightless atmosphere, heavenly glow",
+  celestial: "vast sky with brilliant light source, cosmic scale, radiant rays, contrast between dark void and intense brightness",
   haunted: "cold desaturated palette, lone light source, long shadows, abandoned space, still and uneasy atmosphere",
+};
+
+const MOOD_COLOR_VERBAL: Record<string, string> = {
+  intimate: "warm amber gold",
+  anthemic: "burnt orange fire",
+  dreamy: "soft lavender purple",
+  aggressive: "cold steel blue",
+  melancholy: "deep ocean blue",
+  euphoric: "bright gold",
+  eerie: "deep teal green",
+  vulnerable: "dusty rose pink",
+  triumphant: "bright gold",
+  nostalgic: "warm weathered bronze",
+  defiant: "cold steel blue",
+  hopeful: "fresh spring green",
+  raw: "neutral silver grey",
+  hypnotic: "deep violet purple",
+  ethereal: "pale ice blue",
+  haunted: "cold slate grey",
+  celestial: "muted twilight blue",
+  noir: "dark charcoal blue-grey",
+  rebellious: "burnt rust red",
 };
 
 function buildImagePrompt(section: SectionInput, totalSections: number): string {
@@ -107,8 +128,11 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
   }
 
   // ── Color grading ──
-  if (section.dominantColor) {
-    parts.push(`dominant color palette: ${section.dominantColor}`);
+  if (section.dominantColor && section.visualMood) {
+    const colorName = MOOD_COLOR_VERBAL[section.visualMood.toLowerCase()] || section.dominantColor;
+    parts.push(`Color palette dominated by ${colorName}`);
+  } else if (section.dominantColor) {
+    parts.push(`Color palette: ${section.dominantColor}`);
   } else {
     const colorSeed = SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
     parts.push(colorSeed);
@@ -123,42 +147,58 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
 
   // ── Technical constraints (always last — lowest priority) ──
   parts.push(
-    "Background for a lyric video — text will overlay this image. " +
-      "Wide cinematic composition, no people, no text, no faces, no words. " +
-      "Photorealistic with film grain. 16:9 landscape. " +
-      "Minimum exposure: background detail visible throughout, avoid pure black regions.",
+    "Background for a lyric video — white text will overlay this image, so keep the center area darker or less busy. " +
+      "Cinematic composition. No faces, no readable text, no writing. " +
+      "Silhouettes, hands, and body outlines are fine — no detailed facial features. " +
+      "Photorealistic, 35mm film grain, shallow depth of field. " +
+      "16:9 landscape aspect ratio. Ensure background detail is visible — avoid large pure black regions.",
   );
 
-  return parts.join(". ");
+  return parts.map((p) => p.replace(/[.\s]+$/, "")).join(". ") + ".";
 }
 
 async function generateImage(prompt: string, apiKey: string): Promise<string | null> {
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [{ role: "user", content: prompt }],
-      modalities: ["image", "text"],
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    console.error(`[section-images] AI gateway error ${resp.status}: ${text}`);
-    return null;
-  }
+  try {
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-image",
+        messages: [{ role: "user", content: prompt }],
+        modalities: ["image", "text"],
+      }),
+      signal: controller.signal,
+    });
 
-  const data = await resp.json();
-  const imageUrl = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  if (!imageUrl) {
-    console.error("[section-images] No image in response");
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error(`[section-images] AI gateway error ${resp.status}: ${text}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    const imageUrl = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!imageUrl) {
+      console.error("[section-images] No image in response");
+      return null;
+    }
+    return imageUrl;
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      console.error("[section-images] Image generation timed out (30s)");
+    } else {
+      console.error("[section-images] Image generation error:", err);
+    }
     return null;
+  } finally {
+    clearTimeout(timer);
   }
-  return imageUrl;
 }
 
 async function triggerPreviewPrecompute(sbUrl: string, sbKey: string, lyricDanceId: string): Promise<void> {
@@ -257,6 +297,7 @@ async function processOneSection(
   projectId: string,
 ): Promise<string | null> {
   const prompt = buildImagePrompt(section, totalSections);
+  console.log(`[section-images] Section ${section.sectionIndex} prompt (${prompt.length} chars): ${prompt.slice(0, 200)}...`);
 
   // Try up to 2 attempts per image
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -350,7 +391,6 @@ serve(async (req) => {
           description: s.description || `Section ${sectionIndex + 1}`,
           artistDirection: body.artist_direction_inline,
           visualMood: s.visualMood,
-          texture: s.texture,
           lyrics: sectionLyrics || undefined,
           dominantColor: s.dominantColor,
         };
@@ -387,7 +427,6 @@ serve(async (req) => {
             description: fallbackDesc,
             artistDirection,
             visualMood: typeof section?.visualMood === "string" ? section.visualMood : undefined,
-            texture: typeof section?.texture === "string" ? section.texture : undefined,
             lyrics: sectionLyrics || undefined,
             dominantColor: typeof section?.dominantColor === "string" ? section.dominantColor : undefined,
           };
