@@ -87,7 +87,7 @@ export function useLyricDanceCore({
     };
   }, [lyricDanceId, prefetchedData]);
 
-  const { player, playerReady, data } = useLyricDancePlayer(
+  const { player, playerReady, data, lastFrameUrl } = useLyricDancePlayer(
     fetchedData,
     canvasRef,
     textCanvasRef,
@@ -345,5 +345,6 @@ export function useLyricDanceCore({
     fireUserMap,
     fireAnonCount,
     handleReplay,
+    lastFrameUrl,
   };
 }
