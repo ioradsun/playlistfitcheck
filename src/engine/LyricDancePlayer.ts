@@ -1898,7 +1898,9 @@ export class LyricDancePlayer {
       // Disable native loop for region-based players — tick() handles region looping manually
       this.audio.loop = !(data.region_start != null && data.region_end != null);
       this.audio.muted = true;
-      this.audio.preload = "none";
+      // Start downloading immediately — HTTP cache is warm from prefetch.ts fetch().
+      // No reason to defer: the engine WILL play this audio.
+      this.audio.preload = "auto";
     }
     const onMetadata = () => {
       this.audio.removeEventListener("loadedmetadata", onMetadata);
