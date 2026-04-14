@@ -213,6 +213,9 @@ export function useLyricDancePlayer(
       }
 
       await p.init();
+      // Reveal the bg canvas now that the player can draw.
+      // It was hidden on release to let the poster image show through.
+      if (bgCanvas) bgCanvas.style.opacity = "1";
       // Pre-load audio metadata so songEndSec/duration is valid for
       // section resolution before user taps play.
       if (p.audio && p.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
@@ -237,6 +240,8 @@ export function useLyricDancePlayer(
       destroyed = true;
       ro?.disconnect();
       if (slot && postId) {
+        // Hide canvas immediately so poster shows through during slot transition
+        if (bgCanvas) bgCanvas.style.opacity = "0";
         const container = containerRef.current;
         if (container) {
           if (container.contains(bgCanvas!)) container.removeChild(bgCanvas!);
