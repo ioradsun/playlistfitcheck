@@ -296,6 +296,7 @@ async function createDanceRowAndGenerateImages({
         endSec: s.endSec,
       })),
       artist_direction_inline: (cinematicDirection as any)?._artistDirection,
+      world_inline: cinematicDirection?.description,
       lyrics_lines_inline: lyricData?.lines
         ?.filter((l: any) => l.tag !== "adlib")
         .map((l: any) => ({ text: l.text, start: l.start, end: l.end })),
