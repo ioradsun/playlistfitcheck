@@ -206,11 +206,6 @@ export function useFeedPosts(): FeedState {
     const filtered = allPosts.filter((p) => matchesView(p, feedView));
     const normalized = filtered.map(hydrateDefaults);
 
-    // Preload album art for Spotify posts
-    filtered
-      .filter((p) => !p.project_id && p.lyric_projects?.album_art_url)
-      .forEach((p) => preloadImage(p.lyric_projects!.album_art_url!));
-
     // ── Render cards IMMEDIATELY — don't wait for lyric data ──
     setPosts(normalized);
     try {
@@ -255,20 +250,8 @@ export function useFeedPosts(): FeedState {
       setLyricDataMap(newMap);
     }
 
-    import("@/lib/fontResolver").then(({ resolveTypographyFromDirection, getFontNamesForPreload }) => {
-      import("@/lib/fontReadinessCache").then(({ ensureFontReady }) => {
-        for (const post of filtered) {
-          const cd = (post as any).lyric_projects?.cinematic_direction;
-          if (!cd) continue;
-          try {
-            const typo = resolveTypographyFromDirection(cd);
-            getFontNamesForPreload(typo).forEach((name) => {
-              void ensureFontReady(name);
-            });
-          } catch {}
-        }
-      });
-    }).catch(() => {});
+    // Font preloading handled by prefetch.ts (module eval) and engine (kickFontStabilizationLoad).
+    // ensureFontReady deduplicates, so this was a no-op burning dynamic import overhead.
   }, [feedView, billboardMode]);
 
   // ── loadMore: cursor-based pagination ─────────────────────────────────

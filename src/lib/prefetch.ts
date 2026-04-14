@@ -27,9 +27,22 @@ const _preloadedAudio = new Set<string>();
 function preloadAudio(url: string) {
   if (!url || _preloadedAudio.has(url)) return;
   _preloadedAudio.add(url);
-  const audio = new Audio();
-  audio.preload = "auto";
-  audio.src = url;
+  // Warm the HTTP cache — the engine's Audio element will hit it.
+  // No orphan Audio element: fetch() is lighter and cache-equivalent.
+  fetch(url, { priority: "high" } as RequestInit).catch(() => {});
+}
+
+/** Kick font loading from cinematic_direction — runs parallel with DB/audio/image prefetch. */
+function _preloadFontsFromDirection(cd: unknown): void {
+  if (!cd || typeof cd !== "object") return;
+  import("@/lib/fontResolver").then(({ resolveTypographyFromDirection, getFontNamesForPreload }) => {
+    import("@/lib/fontReadinessCache").then(({ ensureFontReady }) => {
+      try {
+        const typo = resolveTypographyFromDirection(cd);
+        getFontNamesForPreload(typo).forEach((name) => ensureFontReady(name));
+      } catch {}
+    });
+  }).catch(() => {});
 }
 
 interface CacheEntry<T> {
@@ -155,6 +168,8 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
             sectionImages.filter(Boolean).forEach((url: string, imgIdx: number) => {
               preloadImage(url, pi === 0 && imgIdx === 0 ? { priority: "high" } : undefined);
             });
+            // Parallel font preload — font ready before engine init()
+            _preloadFontsFromDirection(lp.cinematic_direction);
 
             if (lp.album_art_url) {
               const img = new Image();
@@ -166,18 +181,6 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
             cacheWrite("lyric_data", lyricCache);
           }
 
-          import("@/lib/fontResolver").then(({ resolveTypographyFromDirection, getFontNamesForPreload }) => {
-            import("@/lib/fontReadinessCache").then(({ ensureFontReady }) => {
-              for (const post of result.data as any[]) {
-                const cd = post.lyric_projects?.cinematic_direction;
-                if (!cd) continue;
-                try {
-                  const typo = resolveTypographyFromDirection(cd);
-                  getFontNamesForPreload(typo).forEach((name) => ensureFontReady(name));
-                } catch {}
-              }
-            });
-          });
         }
         return result;
       });
@@ -254,6 +257,8 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
       }
       const sectionImages = result.data.section_images ?? [];
       sectionImages.filter(Boolean).forEach((url: string) => preloadImage(url));
+      // Parallel font preload — font ready before engine init()
+      _preloadFontsFromDirection(result.data.cinematic_direction);
     }
     return result;
   });
@@ -264,6 +269,10 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
 
   if (cached?.audio_url) {
     preloadAudio(cached.audio_url);
+  }
+  // Parallel font preload from cache — font ready before engine init()
+  if (cached?.cinematic_direction) {
+    _preloadFontsFromDirection(cached.cinematic_direction);
   }
 
   if (cached) {
