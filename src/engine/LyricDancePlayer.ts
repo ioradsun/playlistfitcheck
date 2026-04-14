@@ -5601,10 +5601,15 @@ export class LyricDancePlayer {
     // so we detect "in the gap" by checking tSec >= group.end.
     if (activeGroupIdx >= 0 && this._exitTriggeredForGroup !== activeGroupIdx) {
       const activeGroup = groups[activeGroupIdx];
-      if (tSec >= activeGroup.end) {
+      // lingerDuration: delay exit effect for emotional phrases
+      const lingerSec = (activeGroup as any).lingerDuration ?? 0;
+      const exitTriggerTime = activeGroup.end + lingerSec;
+      // Don't linger past the next group's start — prevent overlap
+      const nextGroupStart = (activeGroupIdx + 1 < groups.length)
+        ? groups[activeGroupIdx + 1].start : Infinity;
+      const clampedExitTime = Math.min(exitTriggerTime, nextGroupStart - 0.05);
+      if (tSec >= clampedExitTime) {
         this._exitTriggeredForGroup = activeGroupIdx;
-        const nextGroupStart = (activeGroupIdx + 1 < groups.length)
-          ? groups[activeGroupIdx + 1].start : Infinity;
         this._exitEffect.onGroupChange(
           activeGroup as any, nextGroupStart, tSec,
           this.ctx, this.width, this.height,

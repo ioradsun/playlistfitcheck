@@ -374,8 +374,6 @@ function snapToBeat(timeSec: number, beats: number[]): number {
   return minDist <= 0.08 ? best : timeSec;
 }
 
-type PresentationMode = 'horiz_center';
-
 export interface CompiledWord { id: string; text: string; clean: string; wordIndex: number; layoutX: number; layoutY: number; baseFontSize: number; layoutWidth: number; wordStart: number; fontWeight: number; fontFamily: string; letterSpacing?: number; color: string; isHeroWord?: boolean; isAdlib?: boolean; isAnchor: boolean; isFiller: boolean; emphasisLevel: number; wordDuration: number; heroScore?: number; }
 export interface CompiledPhraseGroup {
   lineIndex: number;
@@ -388,14 +386,12 @@ export interface CompiledPhraseGroup {
   entryDuration: number;
   exitDuration: number;
   lingerDuration: number;
-  behaviorIntensity: number;
   composition: 'stack' | 'line' | 'center_word';
   bias: 'left' | 'center' | 'right';
   heroType: 'word' | 'phrase';
   revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
   holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
   energyTier: 'intimate' | 'groove' | 'lift' | 'impact' | 'surprise';
-  presentationMode?: string;
   /** AI-chosen exit effect — passed to ExitEffect renderer */
   exitEffect?: string;
   /** True if this group contains adlib/background vocal words */
@@ -598,9 +594,24 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   }
   for (const group of cappedMainGroups) {
     const g = group as any;
-    g._resolvedMaxLines = group.words.length < 4 ? 1 : undefined;
-    // presentationMode now derived from composition + bias (set by phraseEngine)
-    // No longer hardcoded to horiz_center
+    // Composition drives maxLines: center_word always 1 line, stack allows wrapping, line uses word-count heuristic
+    const matchedPhrase = ((payload.cinematic_direction as any)?.phrases as CinematicPhrase[] | undefined)?.find((ap: any) => {
+      const [ps, pe] = ap.wordRange ?? [0, 0];
+      const gs = group.words[0]?.wordIndex ?? 0;
+      const ge = group.words[group.words.length - 1]?.wordIndex ?? 0;
+      return ps <= gs && pe >= ge;
+    });
+    const phraseComposition = matchedPhrase?.composition ?? 'line';
+    const phraseBias = matchedPhrase?.bias ?? 'center';
+    (g as any)._composition = phraseComposition;
+    (g as any)._bias = phraseBias;
+    if (phraseComposition === 'center_word') {
+      g._resolvedMaxLines = 1;
+    } else if (phraseComposition === 'stack') {
+      g._resolvedMaxLines = undefined; // allow wrapping
+    } else {
+      g._resolvedMaxLines = group.words.length < 4 ? 1 : undefined;
+    }
   }
   const globalPhraseDur = phraseAnimDurations(Math.max(1, cappedMainGroups[0]?.words.length ?? 1), Math.max(250, Math.round(durationSec * 250)));
   const animParams = {
@@ -764,7 +775,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     (group as any)._secIdx = secIdx;
 
     const sectionScaleMult = secTypo.scale === 'large' ? 1.12 : secTypo.scale === 'small' ? 0.82 : 1.0;
-    const targetFill = 0.88 * sectionScaleMult * effectiveScaleMult;
+    // Composition adjusts fill: center_word uses less width (bigger font, more breathing room)
+    // stack uses tighter fill (more vertical space needed)
+    const compositionFill = (group as any)._composition === 'center_word' ? 0.55
+      : (group as any)._composition === 'stack' ? 0.78
+      : 0.88;
+    const targetFill = compositionFill * sectionScaleMult * effectiveScaleMult;
 
     const layout = fitTextToViewport(
       measureCtx as MeasureContext,
@@ -781,10 +797,16 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       },
     );
 
+    // Apply bias: shift word x-positions for left/right alignment
+    const biasDir = (group as any)._bias ?? 'center';
+    const biasOffset = biasDir === 'left' ? -REF_W * 0.12
+      : biasDir === 'right' ? REF_W * 0.12
+      : 0;
+
     groupLayouts.set(key, {
       fontSize: layout.fontSize,
       positions: layout.wordPositions.map(wp => ({
-        x: wp.x,
+        x: wp.x + biasOffset,
         y: wp.y,
         width: wp.width,
       })),
@@ -941,7 +963,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const holdDuration = Math.max(0, wm.end - wm.start);
       const isLongHold = holdDuration >= 0.5;
       const isDirectiveHero = wm.isHeroWord === true;
-      const isHookWord = Boolean(matchPhrase?.isChorus);
+      const isHookWord = false; // isChorus was never written by any code
       const heroScore =
         (isDirectiveHero ? 0.4 : 0) +
         (Math.min(1, holdDuration / 0.8) * 0.3) +
@@ -996,15 +1018,12 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       entryDuration: entryVal,
       exitDuration: exitVal,
       lingerDuration: lingerVal,
-      behaviorIntensity: 1,
       composition,
       bias,
       heroType,
       revealStyle,
       holdClass,
       energyTier,
-      // Presentation mode: read from group (set by assignPresentationModes directly)
-      presentationMode: (group as any).presentationMode ?? undefined,
       // Exit effect from AI
       exitEffect: matchPhrase?.exitEffect ?? undefined,
       isAdlib: group.words.some(w => w.isAdlib),
