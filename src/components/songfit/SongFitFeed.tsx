@@ -206,14 +206,37 @@ function FeedList({
   const postsRef = useRef(posts);
   postsRef.current = posts;
 
-  const pickBestCandidate = useCallback((): string | null => {
-    const set = centerSetRef.current;
-    if (set.size === 0) return null;
-    if (set.size === 1) return set.values().next().value!;
+  const lastPrimaryRef = useRef<string | null>(null);
+  const lastPrimaryAtRef = useRef(0);
+  const hysteresisRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * reconcilePrimary — the single source of truth for feed activation.
+   *
+   * Eligible = centered (in tight observer zone) AND registered (player ready).
+   * Hysteresis = if no eligible candidate exists, keep the current primary for
+   * 300ms as long as it's still registered and still mounted. This rides out
+   * transient observer churn from spacer↔card height mismatches and scroll
+   * direction changes.
+   *
+   * Viewport center is used for geometric comparison. Verified: all
+   * IntersectionObservers in this file use root: undefined (viewport).
+   * getBoundingClientRect() returns viewport-relative coordinates. Both are
+   * in the same coordinate frame, so window.innerHeight / 2 is the correct
+   * center. If a future change adds a custom observer root (e.g. the scroll
+   * container), this must switch to that container's bounding rect center.
+   */
+  const reconcilePrimary = useCallback(() => {
+    if (hysteresisRef.current) {
+      clearTimeout(hysteresisRef.current);
+      hysteresisRef.current = null;
+    }
+
     const vpCenter = window.innerHeight / 2;
     let bestId: string | null = null;
     let bestDist = Infinity;
-    for (const id of set) {
+    for (const id of centerSetRef.current) {
+      if (!audioController.isRegistered(id)) continue;
       const el = cardRefsMap.current.get(id);
       if (!el) continue;
       const rect = el.getBoundingClientRect();
@@ -223,39 +246,75 @@ function FeedList({
         bestId = id;
       }
     }
-    return bestId;
+
+    if (bestId) {
+      lastPrimaryRef.current = bestId;
+      lastPrimaryAtRef.current = Date.now();
+      audioController.setAutoPrimary(bestId);
+      return;
+    }
+
+    const grace = 300;
+    const current = lastPrimaryRef.current;
+    const keepCurrent =
+      current !== null &&
+      audioController.isRegistered(current) &&
+      cardRefsMap.current.has(current) &&
+      Date.now() - lastPrimaryAtRef.current < grace;
+
+    if (keepCurrent) {
+      hysteresisRef.current = setTimeout(() => {
+        hysteresisRef.current = null;
+        reconcilePrimary();
+      }, grace);
+      return;
+    }
+
+    lastPrimaryRef.current = null;
+    audioController.setAutoPrimary(null);
   }, []);
 
-  const scheduleSettle = useCallback(() => {
+  const scheduleReconcile = useCallback(() => {
     if (settleRef.current) clearTimeout(settleRef.current);
-    if (reelsMode) {
-      // Reels: snap scroll guarantees one card at center — no debounce needed.
-      // Use microtask for instant handoff (0ms would still yield to the event loop).
-      settleRef.current = setTimeout(() => {
-        settleRef.current = null;
-        audioController.setAutoPrimary(pickBestCandidate());
-      }, 0);
-    } else {
-      // Standard mode: debounce for free-scroll where multiple cards cross center
-      settleRef.current = setTimeout(() => {
-        settleRef.current = null;
-        audioController.setAutoPrimary(pickBestCandidate());
-      }, 120);
+    const delay = reelsMode ? 0 : 80;
+    settleRef.current = setTimeout(() => {
+      settleRef.current = null;
+      reconcilePrimary();
+    }, delay);
+  }, [reelsMode, reconcilePrimary]);
+
+  // Purge stale centerSet entries from cards that left the virtual window.
+  // Their observers disconnected on unmount without firing onCenterLeave.
+  useEffect(() => {
+    const renderedIds = new Set(posts.slice(windowStart, windowEnd + 1).map((p) => p.id));
+    let purged = false;
+    for (const id of centerSetRef.current) {
+      if (!renderedIds.has(id)) {
+        centerSetRef.current.delete(id);
+        purged = true;
+      }
     }
-  }, [pickBestCandidate, reelsMode]);
+    if (purged) scheduleReconcile();
+  }, [windowStart, windowEnd, posts, scheduleReconcile]);
 
   const onCenterEnter = useCallback((postId: string) => {
     const idx = postsRef.current.findIndex((p) => p.id === postId);
     if (idx >= 0) setActiveIndex(idx);
     centerSetRef.current.add(postId);
-    scheduleSettle();
-  }, [scheduleSettle]);
+    scheduleReconcile();
+  }, [scheduleReconcile]);
 
   const onCenterLeave = useCallback((postId: string) => {
     centerSetRef.current.delete(postId);
     audioController.clearExplicitIf(postId);
-    scheduleSettle();
-  }, [scheduleSettle]);
+    scheduleReconcile();
+  }, [scheduleReconcile]);
+
+  // Re-reconcile when any player registers or unregisters.
+  // This closes the race where reconcile ran before a card's player was ready.
+  useEffect(() => {
+    return audioController.onRegistryChange(() => scheduleReconcile());
+  }, [scheduleReconcile]);
 
   const onMeasure = useCallback((postId: string, height: number) => {
     if (height > 0) measuredHeightsRef.current.set(postId, height);
@@ -269,7 +328,7 @@ function FeedList({
   }, [reelsMode]);
 
   useEffect(() => {
-    if (!reelsMode || windowStart <= 0) return;
+    if (windowStart <= 0) return;
     const el = topSpacerRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -278,14 +337,14 @@ function FeedList({
           setActiveIndex((idx) => Math.max(0, idx - 1));
         }
       },
-      { rootMargin: "-40% 0px -40% 0px" },
+      { rootMargin: reelsMode ? "-40% 0px -40% 0px" : "50px 0px -50% 0px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, [reelsMode, windowStart]);
 
   useEffect(() => {
-    if (!reelsMode || windowEnd >= posts.length - 1) return;
+    if (windowEnd >= posts.length - 1) return;
     const el = bottomSpacerRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -294,7 +353,7 @@ function FeedList({
           setActiveIndex((idx) => Math.min(posts.length - 1, idx + 1));
         }
       },
-      { rootMargin: "-40% 0px -40% 0px" },
+      { rootMargin: reelsMode ? "-40% 0px -40% 0px" : "-50% 0px 50px 0px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -303,6 +362,7 @@ function FeedList({
   useEffect(() => {
     return () => {
       if (settleRef.current) clearTimeout(settleRef.current);
+      if (hysteresisRef.current) clearTimeout(hysteresisRef.current);
       audioController.setAutoPrimary(null);
     };
   }, []);
@@ -327,7 +387,15 @@ function FeedList({
     if (reelsMode) return viewportHeight || 0;
     const post = postsRef.current[idx];
     if (!post) return 420;
-    return measuredHeightsRef.current.get(post.id) ?? 420;
+    const measured = measuredHeightsRef.current.get(post.id);
+    if (measured) return measured;
+    // Use median of all measured heights — much closer to reality than 420px
+    const all = Array.from(measuredHeightsRef.current.values());
+    if (all.length > 0) {
+      all.sort((a, b) => a - b);
+      return all[Math.floor(all.length / 2)];
+    }
+    return 420;
   }, [reelsMode, viewportHeight]);
 
   const topSpacerHeight = useMemo(() => {
