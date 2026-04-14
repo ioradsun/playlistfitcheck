@@ -15,10 +15,13 @@ class AudioController {
   private _explicitPrimaryId: string | null = null;
   private _effectivePrimaryId: string | null = null;
   private _listeners = new Set<Listener>();
+  private _registryListeners = new Set<Listener>();
   private _snapshot: AudioSnapshot = { effectivePrimaryId: null, muted: true };
 
   register(postId: string, player: LyricDancePlayer): void {
+    const changed = this._registry.get(postId) !== player;
     this._registry.set(postId, player);
+    if (changed) this._registryListeners.forEach((l) => l());
     this._reconcile();
   }
 
@@ -36,9 +39,10 @@ class AudioController {
         player.audio.pause();
       }
     }
-    this._registry.delete(postId);
+    const existed = this._registry.delete(postId);
     if (this._explicitPrimaryId === postId) this._explicitPrimaryId = null;
     if (this._autoPrimaryId === postId) this._autoPrimaryId = null;
+    if (existed) this._registryListeners.forEach((l) => l());
     this._reconcile();
   }
 
@@ -58,6 +62,17 @@ class AudioController {
       this._explicitPrimaryId = null;
       this._reconcile();
     }
+  }
+
+  /** Check if a player is registered. Used by the feed to gate eligibility. */
+  isRegistered(postId: string): boolean {
+    return this._registry.has(postId);
+  }
+
+  /** Subscribe to registry additions/removals. Returns unsubscribe function. */
+  onRegistryChange(listener: Listener): () => void {
+    this._registryListeners.add(listener);
+    return () => this._registryListeners.delete(listener);
   }
 
   toggleMute(): void {
