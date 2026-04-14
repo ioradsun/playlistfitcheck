@@ -136,11 +136,15 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
   }
 
   // ── Color grading ──
-  if (section.dominantColor && section.visualMood) {
-    const colorName = MOOD_COLOR_VERBAL[section.visualMood.toLowerCase()] || section.dominantColor;
-    parts.push(`Color palette dominated by ${colorName}`);
-  } else if (section.dominantColor) {
-    parts.push(`Color palette: ${section.dominantColor}`);
+  // Prefer the model's actual color choice. Fall back to mood verbal, then color seed.
+  if (section.dominantColor) {
+    const moodHint = section.visualMood ? MOOD_COLOR_VERBAL[section.visualMood.toLowerCase()] : null;
+    // Use hex for precision + mood verbal for warmth/coolness context
+    parts.push(moodHint
+      ? `Color palette: ${section.dominantColor}, ${moodHint} tones`
+      : `Color palette: ${section.dominantColor}`);
+  } else if (section.visualMood && MOOD_COLOR_VERBAL[section.visualMood.toLowerCase()]) {
+    parts.push(`Color palette dominated by ${MOOD_COLOR_VERBAL[section.visualMood.toLowerCase()]}`);
   } else {
     const colorSeed = SECTION_COLOR_SEEDS[section.sectionIndex % SECTION_COLOR_SEEDS.length];
     parts.push(colorSeed);
