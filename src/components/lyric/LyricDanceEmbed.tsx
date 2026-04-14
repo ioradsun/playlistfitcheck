@@ -86,6 +86,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     activeLine,
     fireUserMap,
     fireAnonCount,
+    lastFrameUrl,
   } = useLyricDanceCore({ lyricDanceId, prefetchedData, postId, usePool: isFeedEmbed, evicted });
 
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
@@ -436,12 +437,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         }}
         onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
-        {/* Poster image: always rendered at z-index 0, behind pool canvases (z-1, z-2).
-            Shows through when no canvas slot is acquired (pool exhausted, still initializing,
-            or card is evicted). Prevents black squares. */}
-        {previewImageUrl && (
+        {/* Shows the last rendered frame (via snapshot) when evicted, or the initial section image when first loading. Prevents black squares. */}
+        {(lastFrameUrl || previewImageUrl) && (
           <img
-            src={previewImageUrl}
+            src={lastFrameUrl || previewImageUrl!}
             alt=""
             aria-hidden
             className="absolute inset-0 w-full h-full pointer-events-none"

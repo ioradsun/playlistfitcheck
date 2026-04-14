@@ -1,15 +1,28 @@
 /**
  * useLyricDancePlayer — canonical player lifecycle hook.
  *
- * Owns: instantiation, init, destroy, ResizeObserver, section-image
- * hot-patch, auto-palette computation + DB write, scene-context hot-patch.
+ * Architecture: PERSIST-PLAYER (v3)
  *
- * Used by InlineLyricDance and ShareableLyricDance — neither instantiates
- * LyricDancePlayer directly anymore.
+ * The player instance survives eviction. Only canvas/audio pool slots
+ * are acquired and released as the card scrolls in/out of the viewport.
+ *
+ * Three effects, strict separation:
+ *   Effect 0 (unmount):    Destroys warm players. Empty deps. Runs ONCE on unmount.
+ *   Effect 1 (COLD→WARM):  Creates player + init. Cleanup destroys PARTIAL players
+ *                           (failed/in-progress init). Warm players are untouched.
+ *   Effect 2 (WARM↔HOT):   Manages canvas/audio pool slots. Never creates/destroys player.
+ *
+ * Ownership invariants:
+ *   - Player identity is tracked by playerDataIdRef. If data.id changes, the
+ *     warm player is destroyed and a new one is created (not hot-patched).
+ *   - A card is only HOT (playerReady=true) when it owns BOTH canvas AND audio slots.
+ *     If audio reacquisition fails, the card stays WARM.
+ *   - On audio release, p.audio is replaced with an inert element so no player
+ *     method can accidentally operate on a released pool resource.
+ *   - seekListenerRef is cleaned up in ALL release paths: eviction, context-loss, unmount.
  */
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit, withPriorityInitLimit } from "@/engine/initQueue";
 import { acquireCanvasSlot, releaseCanvasSlot } from "@/engine/canvasPool";
@@ -17,28 +30,64 @@ import { acquireAudio, evictLeastImportant, releaseAudio } from "@/lib/audioPool
 
 interface Options {
   bootMode?: "minimal" | "full";
-  /** Start full-mode compilation immediately after minimal boot (shareable pages). */
   eagerUpgrade?: boolean;
   onReady?: (player: LyricDancePlayer) => void;
   preloadedImages?: HTMLImageElement[];
-  /** If true, use the global canvas pool instead of the DOM canvases.
-   *  The caller's canvasRef/textCanvasRef are ignored when pooled. */
   usePool?: boolean;
-  /** The postId used to track pool slot ownership. */
   postId?: string;
-  /** Whether the host card has been evicted from active feed windowing. */
   evicted?: boolean;
-  /** Prioritize this init ahead of normal FIFO jobs when queue is saturated. */
   priority?: boolean;
 }
 
 export interface UseLyricDancePlayerReturn {
   player: LyricDancePlayer | null;
   playerReady: boolean;
-  /** Local copy of data — reflects hot-patched auto_palettes etc. */
   data: LyricDanceData | null;
   setData: React.Dispatch<React.SetStateAction<LyricDanceData | null>>;
   playerRef: React.MutableRefObject<LyricDancePlayer | null>;
+  lastFrameUrl: string | null;
+}
+
+// ── Shared slot release helper ──────────────────────────────────────────────
+// Used by eviction (Effect 2), context-loss, and unmount (Effect 0).
+// Single path prevents DOM/pool desync.
+function releaseSlots(
+  postId: string | undefined,
+  slotRef: React.MutableRefObject<ReturnType<typeof acquireCanvasSlot> | null>,
+  containerRef: React.RefObject<HTMLDivElement>,
+  usePool: boolean,
+) {
+  if (slotRef.current && postId) {
+    const bg = slotRef.current.bg;
+    const text = slotRef.current.text;
+    if (bg) bg.style.opacity = "0";
+    const container = containerRef.current;
+    if (container) {
+      if (bg && container.contains(bg)) container.removeChild(bg);
+      if (text && container.contains(text)) container.removeChild(text);
+    }
+    releaseCanvasSlot(postId);
+    slotRef.current = null;
+  }
+  if (usePool && postId) releaseAudio(postId);
+}
+
+// ── Shared listener + audio detach helper ───────────────────────────────────
+// Cleans hook-level seek listener, then calls the engine's own detachAudio()
+// to remove engine-owned listeners (canplay handlers), then replaces p.audio
+// with a fresh inert element so no stale method can touch a released pool resource.
+function detachAudio(
+  p: LyricDancePlayer | null,
+  seekListenerRef: React.MutableRefObject<(() => void) | null>,
+) {
+  if (seekListenerRef.current && p) {
+    p.audio?.removeEventListener("loadedmetadata", seekListenerRef.current);
+    seekListenerRef.current = null;
+  }
+  if (p) {
+    p.detachAudio(); // Engine cleans _pendingCanPlayHandler from the current element
+    p.audio = new Audio();
+  }
 }
 
 export function useLyricDancePlayer(
@@ -62,35 +111,65 @@ export function useLyricDancePlayer(
   const [data, setData] = useState<LyricDanceData | null>(initialData);
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
+  const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(null);
 
   const playerRef = useRef<LyricDancePlayer | null>(null);
-  const initRef = useRef(false);
   const onReadyRef = useRef(onReady);
+  const lastFrameUrlRef = useRef<string | null>(null);
+  const savedTimeRef = useRef<number>(0);
+  const warmRef = useRef(false);
+  const playerDataIdRef = useRef<string | null>(null);
   const slotRef = useRef<ReturnType<typeof acquireCanvasSlot> | null>(null);
-  // Bumped when a pool slot frees and this card hasn't inited yet — triggers init retry.
+  const seekListenerRef = useRef<(() => void) | null>(null);
+  const snapshotGenRef = useRef(0);
   const [retryTick, setRetryTick] = useState(0);
   onReadyRef.current = onReady;
 
-  // Keep local data in sync when parent passes new initialData
+  // ── Stable refs for values needed in unmount cleanup ────────────────────
+  const postIdRef = useRef(postId);
+  const usePoolRef = useRef(usePool);
+  postIdRef.current = postId;
+  usePoolRef.current = usePool;
+
+  // ── Full teardown helper (used by identity change + unmount) ────────────
+  function teardownPlayer() {
+    ++snapshotGenRef.current; // Invalidate any in-flight toBlob callbacks
+    detachAudio(playerRef.current, seekListenerRef);
+    releaseSlots(postIdRef.current, slotRef, containerRef, usePoolRef.current);
+    if (lastFrameUrlRef.current) {
+      URL.revokeObjectURL(lastFrameUrlRef.current);
+      lastFrameUrlRef.current = null;
+    }
+    playerRef.current?.destroy();
+    playerRef.current = null;
+    warmRef.current = false;
+    playerDataIdRef.current = null;
+    setPlayer(null);
+    setPlayerReady(false);
+    setLastFrameUrl(null);
+  }
+
+  // ── Keep local data in sync + identity change detection ────────────────
   useEffect(() => {
     if (initialData) {
+      const incomingId = (initialData as any)?.id ?? null;
+      // Identity changed while warm — full teardown, not hot-patch
+      if (warmRef.current && playerDataIdRef.current && playerDataIdRef.current !== incomingId) {
+        teardownPlayer();
+      }
       setData(initialData);
       return;
     }
-
     setData(null);
-    initRef.current = false;
-  }, [initialData]);
+    if (playerRef.current) teardownPlayer();
+  }, [initialData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Init / destroy ────────────────────────────────────────────────────
-  // words are optional — player falls back to line-level timing if absent.
-  // Only cinematic_direction is required (drives the entire visual system).
   const dataReady = !!(data?.cinematic_direction);
 
+  // ── Listen for freed pool slots ────────────────────────────────────────
   useEffect(() => {
     const handler = () => {
-      // Only wake this card if it's still waiting (not inited, not evicted, data ready)
-      if (!initRef.current && !evicted && dataReady) {
+      if (!evicted && dataReady && (!warmRef.current || !slotRef.current)) {
         setRetryTick((t) => t + 1);
       }
     };
@@ -98,31 +177,48 @@ export function useLyricDancePlayer(
     return () => window.removeEventListener("crowdfit:pool-slot-freed", handler);
   }, [evicted, dataReady]);
 
+  // ── Context lost — detach audio, use shared release path, retry ────────
   useEffect(() => {
     if (!postId) return;
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.postId === postId) {
-        // Context was lost — release slots and retry init
-        if (slotRef.current) {
-          releaseCanvasSlot(postId);
-          slotRef.current = null;
-        }
-        releaseAudio(postId);
-        playerRef.current = null;
-        initRef.current = false;
-        setPlayer(null);
-        setPlayerReady(false);
-        setRetryTick((t) => t + 1);
+      if ((e as CustomEvent).detail?.postId !== postId) return;
+      const p = playerRef.current;
+      if (p) {
+        savedTimeRef.current = p.audio?.currentTime ?? 0;
+        p.pause();
       }
+      // Snapshot before releasing — guarded against stale async delivery
+      const bg = slotRef.current?.bg;
+      if (bg && bg.width > 0 && bg.height > 0) {
+        const gen = ++snapshotGenRef.current;
+        try {
+          bg.toBlob((blob) => {
+            if (!blob || snapshotGenRef.current !== gen) return;
+            if (lastFrameUrlRef.current) URL.revokeObjectURL(lastFrameUrlRef.current);
+            const url = URL.createObjectURL(blob);
+            lastFrameUrlRef.current = url;
+            setLastFrameUrl(url);
+          }, "image/jpeg", 0.65);
+        } catch { /* tainted */ }
+      }
+      detachAudio(p, seekListenerRef);
+      releaseSlots(postId, slotRef, containerRef, usePool);
+      setPlayerReady(false);
+      setRetryTick((t) => t + 1);
     };
     window.addEventListener("crowdfit:context-lost", handler);
     return () => window.removeEventListener("crowdfit:context-lost", handler);
-  }, [postId]);
+  }, [postId, usePool]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── EFFECT 0: Unmount cleanup ─────────────────────────────────────────
   useEffect(() => {
-    if (initRef.current || !dataReady) return;
-    if (evicted) return;
+    return () => { teardownPlayer(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── EFFECT 1: Player creation (COLD → WARM) ──────────────────────────
+  useEffect(() => {
+    if (warmRef.current || !dataReady || evicted) return;
 
     let slot: ReturnType<typeof acquireCanvasSlot> | null = null;
     let bgCanvas: HTMLCanvasElement | null = null;
@@ -131,21 +227,13 @@ export function useLyricDancePlayer(
 
     if (usePool && postId) {
       slot = acquireCanvasSlot(postId);
-      if (!slot) {
-        // Pool exhausted — defer init until a slot frees up
-        // (this card stays in cold state)
-        return;
-      }
+      if (!slot) return;
       bgCanvas = slot.bg;
       textCanvas = slot.text;
       slotRef.current = slot;
       if (containerRef.current) {
-        if (!containerRef.current.contains(bgCanvas)) {
-          containerRef.current.appendChild(bgCanvas);
-        }
-        if (!containerRef.current.contains(textCanvas)) {
-          containerRef.current.appendChild(textCanvas);
-        }
+        if (!containerRef.current.contains(bgCanvas)) containerRef.current.appendChild(bgCanvas);
+        if (!containerRef.current.contains(textCanvas)) containerRef.current.appendChild(textCanvas);
         bgCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
         bgCanvas.style.zIndex = "1";
         textCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
@@ -157,10 +245,7 @@ export function useLyricDancePlayer(
     }
 
     if (!bgCanvas || !textCanvas || !containerRef.current) {
-      if (slot && postId) {
-        releaseCanvasSlot(postId);
-        slotRef.current = null;
-      }
+      if (slot && postId) { releaseCanvasSlot(postId); slotRef.current = null; }
       return;
     }
 
@@ -171,17 +256,14 @@ export function useLyricDancePlayer(
         pooledAudio = acquireAudio(postId, data.audio_url);
       }
       if (!pooledAudio) {
-        if (slot) {
-          releaseCanvasSlot(postId);
-          slotRef.current = null;
-        }
+        if (slot) { releaseCanvasSlot(postId); slotRef.current = null; }
         return;
       }
     }
 
-    initRef.current = true;
     let destroyed = false;
     let ro: ResizeObserver | null = null;
+    let localPlayer: LyricDancePlayer | null = null;
 
     const initFn = priority ? withPriorityInitLimit : withInitLimit;
     initFn(async () => {
@@ -191,10 +273,9 @@ export function useLyricDancePlayer(
         preloadedImages,
         externalAudio: pooledAudio ?? undefined,
       });
+      localPlayer = p;
       playerRef.current = p;
-      // DEBUG: expose player for console inspection
       (window as any).__ldp = p;
-      setPlayer(p);
 
       ro = new ResizeObserver((entries) => {
         const entry = entries[0];
@@ -204,43 +285,49 @@ export function useLyricDancePlayer(
       });
       ro.observe(containerRef.current!);
 
-      // Force correct viewport dimensions before first frame render.
-      // On mobile, canvas.offsetWidth may be 0 before CSS layout completes,
-      // causing init() to fall back to 960×540 and produce tiny fonts.
       const rect = containerRef.current!.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        p.resize(rect.width, rect.height);
-      }
+      if (rect.width > 0 && rect.height > 0) p.resize(rect.width, rect.height);
 
       await p.init();
-      // Reveal the bg canvas now that the player can draw.
-      // It was hidden on release to let the poster image show through.
+      if (destroyed) return;
+
       if (bgCanvas) bgCanvas.style.opacity = "1";
-      // Pre-load audio metadata so songEndSec/duration is valid for
-      // section resolution before user taps play.
+      if (lastFrameUrlRef.current) {
+        URL.revokeObjectURL(lastFrameUrlRef.current);
+        lastFrameUrlRef.current = null;
+        setLastFrameUrl(null);
+      }
       if (p.audio && p.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
         p.audio.preload = "metadata";
         p.audio.load();
       }
-      // Shareable pages: compile scene NOW while user reads the cover.
-      // By the time they tap "Listen Now", the scene is fully baked.
       if (eagerUpgrade && bootMode === "minimal") {
         p.scheduleFullModeUpgrade();
       }
-      if (!destroyed) {
-        p.audio.muted = true;
-        // Do NOT auto-play on init. Feed activation controls when playback starts,
-        // ensuring only one card runs RAF/audio at a time.
-        setPlayerReady(true);
-        onReadyRef.current?.(p);
-      }
+      p.audio.muted = true;
+      warmRef.current = true;
+      playerDataIdRef.current = (data as any)?.id ?? null;
+      setPlayer(p);
+      setPlayerReady(true);
+      onReadyRef.current?.(p);
     }).catch((err) => console.error("[useLyricDancePlayer] init failed:", err));
 
     return () => {
       destroyed = true;
       ro?.disconnect();
+      // Only tear down PARTIAL init state. Warm player survives.
+      if (warmRef.current) return;
+
+      // Player was constructed but never reached warm (init in progress or failed).
+      // Destroy the specific instance this effect created — not playerRef.current,
+      // which could point to a different player under async churn.
+      if (localPlayer) {
+        localPlayer.destroy();
+        if (playerRef.current === localPlayer) playerRef.current = null;
+        localPlayer = null;
+      }
+
       if (slot && postId) {
-        // Hide canvas immediately so poster shows through during slot transition
         if (bgCanvas) bgCanvas.style.opacity = "0";
         const container = containerRef.current;
         if (container) {
@@ -249,18 +336,121 @@ export function useLyricDancePlayer(
         }
         releaseCanvasSlot(postId);
       }
-      if (usePool && postId) {
-        releaseAudio(postId);
-      }
+      if (usePool && postId) releaseAudio(postId);
       slotRef.current = null;
-      playerRef.current?.destroy();
-      playerRef.current = null;
-      initRef.current = false;
-      setPlayer(null);
-      setPlayerReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataReady, data?.id, usePool, postId, evicted, retryTick, priority]);
+  }, [dataReady, data?.id, usePool, postId, evicted, retryTick]);
+
+  // ── EFFECT 2: Slot management (WARM ↔ HOT) ───────────────────────────
+  useEffect(() => {
+    if (!warmRef.current || !playerRef.current || !usePool || !postId) return;
+    const p = playerRef.current;
+
+    if (evicted) {
+      // ── HOT → WARM ─────────────────────────────────────────────────
+      savedTimeRef.current = p.audio?.currentTime ?? 0;
+      p.pause();
+
+      // Snapshot canvas before releasing — guarded against stale async delivery
+      const bg = slotRef.current?.bg;
+      if (bg && bg.width > 0 && bg.height > 0) {
+        const gen = ++snapshotGenRef.current;
+        try {
+          bg.toBlob((blob) => {
+            if (!blob || snapshotGenRef.current !== gen) return;
+            if (lastFrameUrlRef.current) URL.revokeObjectURL(lastFrameUrlRef.current);
+            const url = URL.createObjectURL(blob);
+            lastFrameUrlRef.current = url;
+            setLastFrameUrl(url);
+          }, "image/jpeg", 0.65);
+        } catch { /* tainted canvas */ }
+      }
+
+      detachAudio(p, seekListenerRef);
+      releaseSlots(postId, slotRef, containerRef, usePool);
+      setPlayerReady(false);
+      return;
+    }
+
+    // ── WARM → HOT ───────────────────────────────────────────────────
+    if (slotRef.current) return; // Already HOT
+
+    const slot = acquireCanvasSlot(postId);
+    if (!slot) return; // Pool exhausted — retry via crowdfit:pool-slot-freed
+
+    // Acquire audio BEFORE committing canvas — card is only HOT with both
+    let pooledAudio: HTMLAudioElement | null = null;
+    if (data?.audio_url) {
+      pooledAudio = acquireAudio(postId, data.audio_url);
+      if (!pooledAudio) {
+        evictLeastImportant(postId);
+        pooledAudio = acquireAudio(postId, data.audio_url);
+      }
+    }
+    if (!pooledAudio && data?.audio_url) {
+      // Audio required but unavailable — release canvas, stay WARM
+      releaseCanvasSlot(postId);
+      return;
+    }
+
+    slotRef.current = slot;
+    const container = containerRef.current;
+    if (container) {
+      if (!container.contains(slot.bg)) container.appendChild(slot.bg);
+      if (!container.contains(slot.text)) container.appendChild(slot.text);
+      slot.bg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+      slot.bg.style.zIndex = "1";
+      slot.text.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+      slot.text.style.zIndex = "2";
+    }
+
+    // Swap render target — preserves compiled scene
+    p.setRenderTarget(slot.bg, slot.text, container ?? undefined);
+
+    // Swap audio — detach engine listeners from old element, then attach new
+    if (pooledAudio) {
+      if (seekListenerRef.current) {
+        p.audio?.removeEventListener("loadedmetadata", seekListenerRef.current);
+        seekListenerRef.current = null;
+      }
+      p.detachAudio(); // Clean engine-owned listeners before swap
+      p.audio = pooledAudio;
+      p.audio.muted = true;
+      p.audio.preload = "auto";
+      p.audio.load();
+      if (savedTimeRef.current > 0) {
+        const savedTime = savedTimeRef.current;
+        if (p.audio.readyState >= 1) {
+          p.audio.currentTime = savedTime;
+        } else {
+          const onMeta = () => {
+            pooledAudio!.removeEventListener("loadedmetadata", onMeta);
+            if (seekListenerRef.current === onMeta) seekListenerRef.current = null;
+            pooledAudio!.currentTime = savedTime;
+          };
+          seekListenerRef.current = onMeta;
+          pooledAudio.addEventListener("loadedmetadata", onMeta);
+        }
+      }
+    }
+
+    // Show canvas, clear snapshot + invalidate any in-flight blob
+    slot.bg.style.opacity = "1";
+    ++snapshotGenRef.current;
+    if (lastFrameUrlRef.current) {
+      URL.revokeObjectURL(lastFrameUrlRef.current);
+      lastFrameUrlRef.current = null;
+      setLastFrameUrl(null);
+    }
+
+    if (!p.isFullModeEnabled) {
+      p.scheduleFullModeUpgrade();
+    }
+    p.primeAudio();
+    setPlayerReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evicted, usePool, postId, data?.audio_url, retryTick]);
 
   // ── Hot-patch player when data changes ────────────────────────────────
   useEffect(() => {
@@ -271,5 +461,5 @@ export function useLyricDancePlayer(
     if (data?.cinematic_direction) p.updateCinematicDirection(data.cinematic_direction as any);
   }, [data?.section_images, data?.scene_context, data?.cinematic_direction]);
 
-  return { player, playerReady, data, setData, playerRef };
+  return { player, playerReady, data, setData, playerRef, lastFrameUrl };
 }

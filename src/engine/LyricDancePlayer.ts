@@ -1830,6 +1830,7 @@ export class LyricDancePlayer {
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
   private bootMode: "minimal" | "full" = "full";
   private fullModeEnabled = false;
+  get isFullModeEnabled(): boolean { return this.fullModeEnabled; }
   private perfMarks: {
     tInitStart: number;
     tFirstFrameDrawn: number | null;
@@ -2832,6 +2833,19 @@ export class LyricDancePlayer {
   }
 
   /**
+   * Detach from the current audio element before a pool swap.
+   * Removes all engine-owned listeners from the current audio so they
+   * cannot fire on a reused pool element owned by another player.
+   * Call this BEFORE replacing `this.audio`.
+   */
+  detachAudio(): void {
+    if (this._pendingCanPlayHandler) {
+      this.audio.removeEventListener("canplay", this._pendingCanPlayHandler);
+      this._pendingCanPlayHandler = null;
+    }
+  }
+
+  /**
    * Switch the playback region (hook window) without destroying the engine.
    * Seeks audio to the new region start and resets beat tracking.
    */
@@ -2844,10 +2858,16 @@ export class LyricDancePlayer {
     if (regionStart != null && this.audio.readyState >= 2) {
       this.audio.currentTime = regionStart;
     } else if (regionStart != null) {
+      // Clean any previous pending handler before adding a new one
+      if (this._pendingCanPlayHandler) {
+        this.audio.removeEventListener("canplay", this._pendingCanPlayHandler);
+      }
       const onReady = () => {
         this.audio.removeEventListener("canplay", onReady);
+        if (this._pendingCanPlayHandler === onReady) this._pendingCanPlayHandler = null;
         if (!this.destroyed) this.audio.currentTime = regionStart;
       };
+      this._pendingCanPlayHandler = onReady;
       this.audio.addEventListener("canplay", onReady);
     }
 
