@@ -50,6 +50,9 @@ export function releaseCanvasSlot(postId: string): void {
   bgCtx?.clearRect(0, 0, slot.bg.width, slot.bg.height);
   const tCtx = slot.text.getContext("2d", { alpha: true });
   tCtx?.clearRect(0, 0, slot.text.width, slot.text.height);
+  // Hide bg canvas so it doesn't cover the poster image as a black rectangle.
+  // useLyricDancePlayer will show it after the player draws its first frame.
+  slot.bg.style.opacity = "0";
   slot.inUse = false;
   slot.heldBy = null;
   // Wake any cards that were waiting for a free slot
