@@ -888,10 +888,13 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       groupSecTypo.weight === 'bold' ? 'lift' :
       groupSecTypo.weight === 'regular' ? 'groove' :
       'intimate';
-    const revealStyle: "instant" | "stagger_fast" | "stagger_slow" = energyTier === 'impact'
-      ? 'instant'
-      : energyTier === 'intimate'
-        ? 'stagger_slow'
+    // Prefer AI's per-phrase revealStyle when available, fall back to energy-derived
+    const aiReveal = matchPhrase?.revealStyle;
+    const revealStyle: "instant" | "stagger_fast" | "stagger_slow" =
+      (aiReveal === 'instant' || aiReveal === 'stagger_fast' || aiReveal === 'stagger_slow')
+        ? aiReveal
+        : energyTier === 'impact' ? 'instant'
+        : energyTier === 'intimate' ? 'stagger_slow'
         : 'stagger_fast';
     const holdClass = (group as any).holdClass ?? matchPhrase?.holdClass ?? 'medium_groove';
     const heroType: "phrase" | "word" = 'word';
@@ -951,12 +954,16 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       return sectionWeightNum;
     })();
 
-    // ── Tracking: density as weak influence, ±12% max, damped by section ──
-    const sectionTracking = TRACKING_MAP[secTypo.tracking] ?? resolvedTypo.letterSpacing;
-    const densityNorm = Math.max(-1, Math.min(1, (wordDensity - 2.5) / 2.5));
-    const rawTrackingShift = densityNorm * 0.12; // ±12% max
-    const trackingMult = 1.0 - rawTrackingShift * sectionDamper;
-    const phraseTracking = sectionTracking * trackingMult;
+    // ── Letter spacing: holdClass sets base, energyTier modifies ──
+    // Values in em — scales with font size. Range: -0.04em (tight slam) to +0.06em (wide emotional)
+    const holdSpacing = holdClass === 'short_hit' ? -0.02
+      : holdClass === 'long_emotional' ? 0.04
+      : 0; // medium_groove
+    const energySpacing = energyTier === 'intimate' ? 0.02
+      : energyTier === 'impact' ? -0.02
+      : energyTier === 'lift' ? -0.01
+      : 0; // groove
+    const phraseLetterSpacing = holdSpacing + energySpacing;
 
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };
@@ -972,9 +979,11 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const isHero = heroScore >= 0.35 || isLongHold || isDirectiveHero;
 
       const wordWeight = isHero ? Math.max(phraseWeight, resolvedTypo.heroWeight) : phraseWeight;
-      // When weight-shift can't go heavier (single-weight font or already at max),
-      // fall back to a subtle scale boost so heroes are still visually distinct.
-      const heroScaleBoost = isHero && wordWeight <= phraseWeight ? 1.08 : 1.0;
+      // Heroes always scale up — weight shift alone is too subtle
+      // center_word composition: even bigger (single word filling the screen)
+      const heroScaleBoost = isHero
+        ? (composition === 'center_word' ? 1.18 : 1.10)
+        : 1.0;
 
       const wordFontFamily = baseTypography.fontFamily;
 
@@ -994,7 +1003,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         wordStart: snapToBeat(wm.start, beats),
         fontWeight: wordWeight,
         fontFamily: wordFontFamily,
-        letterSpacing: phraseTracking,
+        letterSpacing: phraseLetterSpacing,
         isHeroWord: isHero,
         isAdlib: wm.isAdlib === true,
         isAnchor: wi === group.anchorWordIdx,

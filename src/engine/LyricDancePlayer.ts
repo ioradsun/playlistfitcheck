@@ -1616,6 +1616,7 @@ export class LyricDancePlayer {
   // Runtime chunks
   private chunks: Map<string, ChunkState> = new Map();
   private _lastFont = '';
+  private _lastLetterSpacing = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
   private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
 
@@ -4188,6 +4189,13 @@ export class LyricDancePlayer {
 
       const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
       if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
+      // Per-phrase letter spacing — tight for impact, wide for emotional
+      const lsEm = (chunk as any)._letterSpacing ?? 0;
+      const lsStr = lsEm === 0 ? '0px' : `${lsEm}em`;
+      if (lsStr !== this._lastLetterSpacing) {
+        (this.ctx as any).letterSpacing = lsStr;
+        this._lastLetterSpacing = lsStr;
+      }
       const isAdlib = (chunk as any).isAdlib === true;
       // Adlib fade envelope: fade in over 150ms, hold, fade out over 200ms.
       // Makes ghost words breathe in/out instead of hard-popping.
@@ -4206,7 +4214,10 @@ export class LyricDancePlayer {
           adlibAlpha = 0.35 * Math.max(0, (wEnd - tNow) / fadeOut);
         }
       }
-      this.ctx.globalAlpha = isAdlib ? drawAlpha * adlibAlpha : drawAlpha;
+      // Visual hierarchy: fillers recede, heroes pop
+      const isFiller = (chunk as any)._isFiller === true && !isAdlib;
+      const fillerDim = isFiller ? 0.72 : 1.0;
+      this.ctx.globalAlpha = isAdlib ? drawAlpha * adlibAlpha : drawAlpha * fillerDim;
       this.ctx.fillStyle = isAdlib ? 'rgba(255,255,255,0.6)' : (chunk.color ?? '#ffffff');
 
       const dpr = this._effectiveDpr;
@@ -4225,7 +4236,18 @@ export class LyricDancePlayer {
       );
       this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
-      // Main text draw — single fillText, no stroke, no glow
+      // Hero glow: subtle white bloom behind hero words (quality tier >= 2 only)
+      const isHero = (chunk as any).isHeroWord === true && !isAdlib;
+      if (isHero && this._qualityTier >= 2) {
+        const heroAlpha = Math.min(0.3, ((chunk as any)._heroScore ?? 0.4) * 0.5);
+        this.ctx.shadowColor = `rgba(255, 255, 255, ${heroAlpha})`;
+        this.ctx.shadowBlur = 6;
+        this.ctx.fillText(text, 0, 0);
+        // Reset shadow immediately — don't bleed into next word
+        this.ctx.shadowColor = 'transparent';
+        this.ctx.shadowBlur = 0;
+      }
+      // Main text draw
       this.ctx.fillText(text, 0, 0);
 
       // Inline elemental textures removed — single color doctrine (all text bright white)
@@ -4261,6 +4283,11 @@ export class LyricDancePlayer {
     this.ctx.globalAlpha = 1;
     this._lastShadowBlur = 0;
     this._lastShadowColor = 'transparent';
+    // Reset letter spacing so it doesn't bleed into watermark/debug text
+    if (this._lastLetterSpacing !== '0px') {
+      (this.ctx as any).letterSpacing = '0px';
+      this._lastLetterSpacing = '0px';
+    }
     this.ctx.restore();
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     this.ctx.globalAlpha = 1;
@@ -5717,6 +5744,10 @@ export class LyricDancePlayer {
         chunk._wordStart = word.wordStart;
         chunk.emphasisLevel = word.emphasisLevel;
         chunk.wordDuration = word.wordDuration;
+        // Typography fields for per-phrase visual character
+        (chunk as any)._letterSpacing = (word as any).letterSpacing ?? 0;
+        (chunk as any)._isFiller = (word as any).isFiller === true;
+        (chunk as any)._heroScore = (word as any).heroScore ?? 0;
 
         ci++;
       }
