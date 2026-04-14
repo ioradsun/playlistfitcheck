@@ -8,6 +8,10 @@
 export interface CinematicDirection {
   /** One-sentence world description */
   description?: string;
+  /** Short noun phrase — the governing image or setting (v4) */
+  centralMetaphor?: string;
+  /** Ordered emotional beats across the song (v4) */
+  emotionalArc?: string[];
   /** Typography plan — font, weight, hero style, per-section behaviors */
   typographyPlan?: {
     system: string;
@@ -25,6 +29,8 @@ export interface CinematicDirection {
   phrases?: CinematicPhrase[];
   /** Client-detected hook phrase text */
   hookPhrase?: string;
+  /** Client-detected signature/thesis phrase text (v4) */
+  signaturePhrase?: string;
 
   /** Beat grid summary attached by client */
   beat_grid?: { bpm: number; confidence: number };
@@ -36,8 +42,10 @@ export interface CinematicSection {
   description: string;
   /** Visual mood from fixed vocabulary — drives camera, color grading, image style */
   visualMood?: string;
-  /** Hex color — drives palette generation */
+  /** Hex color — primary emotional color, proposed by model (v4) */
   dominantColor?: string;
+  /** Hex color — secondary highlight color (v4) */
+  accentColor?: string;
   /** Particle system type */
   texture?: string;
   /** Time boundaries (from audio sections) */
@@ -48,8 +56,16 @@ export interface CinematicSection {
   endRatio?: number;
   /** Audio energy level (merged from audio analysis) */
   avgEnergy?: number;
+  /** Peak energy in section */
+  peakEnergy?: number;
   /** Section role from audio analysis (intro/main/outro) */
   role?: string;
+  /** AI-suggested hero words for this section (v4 — advisory input to phraseEngine) */
+  heroWords?: string[];
+  /** Lyric text at this timestamp (v4) */
+  lyricSpan?: string;
+  /** Emotional arc beat this moment belongs to (v4) */
+  arcBeat?: string;
 }
 
 export interface CinematicPhrase {
@@ -57,6 +73,8 @@ export interface CinematicPhrase {
   wordRange: [number, number];
   /** Most impactful word — UPPERCASE */
   heroWord?: string;
+  /** Multiple hero words from section-level AI suggestion */
+  heroWords?: string[];
   /** Exit animation for this phrase */
   exitEffect?: 'fade' | 'drift_up' | 'shrink' | 'dissolve' | 'cascade' | 'scatter' | 'slam' | 'glitch' | 'burn';
   /** True if this phrase contains chorus lyrics */
@@ -67,4 +85,12 @@ export interface CinematicPhrase {
   revealStyle?: "instant" | "stagger_fast" | "stagger_slow";
   holdClass?: "short_hit" | "medium_groove" | "long_emotional";
   presentationMode?: string;
+  /** Phrase text */
+  text?: string;
+  /** Word count */
+  wordCount?: number;
+  /** Timing */
+  start?: number;
+  end?: number;
+  durationMs?: number;
 }

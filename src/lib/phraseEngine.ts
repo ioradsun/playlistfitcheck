@@ -14,7 +14,15 @@ export interface PhraseBlock {
 export interface PhraseEngineResult {
   phrases: PhraseBlock[];
   hookPhrase: string;
+  signaturePhrase: string;
   adlibIndices: Set<number>;
+}
+
+export interface SectionContext {
+  startSec: number;
+  endSec: number;
+  heroWords: string[];
+  avgEnergy?: number;
 }
 
 type WordMeta = RawWord & {
@@ -179,24 +187,49 @@ export function applySoloSplits(blocks: PhraseDraft[]): PhraseDraft[] {
   return output;
 }
 
-export function selectHeroWord(block: PhraseDraft): { heroWord: string; heroMs: number } {
-  let best = block.words[0];
-  for (const word of block.words) {
-    const usable = word.clean.length > 1;
-    const bestUsable = best.clean.length > 1;
-    if (usable && !bestUsable) {
-      best = word;
-      continue;
-    }
-    if (usable === bestUsable && word.d > best.d) best = word;
+const STOP_WORDS = new Set([
+  'i','me','my','we','our','the','a','an','it','its','is','are','was',
+  'that','this','how','some','they','you','your','he','she','to','of',
+  'in','on','for','so','do','no','and','but','or','just','with','can',
+  'im','aint','thats','dont','wont','lets',
+]);
+
+export function selectHeroWord(
+  block: PhraseDraft,
+  sectionHeroWords?: string[],
+): { heroWord: string; heroMs: number } {
+  const candidates = block.words.filter(w => w.clean.length > 1);
+  if (candidates.length === 0) {
+    const w = block.words[0];
+    return { heroWord: w.clean.toUpperCase().replace(/[^A-Z0-9]/g, ""), heroMs: w.d };
   }
+
+  const scored = candidates.map(w => {
+    let score = 0;
+    // Section hero match — strongest signal
+    if (sectionHeroWords?.some(h => h.toLowerCase().replace(/[^a-z0-9]/g, '') === w.clean)) {
+      score += 50;
+    }
+    // Duration bonus, capped
+    score += Math.min(w.d / 100, 8);
+    // Phrase-final position
+    if (w === block.words[block.words.length - 1]) score += 5;
+    // Word length proxy (longer words tend to be more meaningful)
+    score += Math.min(w.clean.length / 2, 4);
+    // Stop-word penalty (not hard block)
+    if (STOP_WORDS.has(w.clean)) score -= 15;
+    return { word: w, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0].word;
   return {
     heroWord: best.clean.toUpperCase().replace(/[^A-Z0-9]/g, ""),
     heroMs: best.d,
   };
 }
 
-export function calcExitEffect(
+export function _calcExitEffectTiming(
   block: PhraseDraft,
   nextBlock: PhraseDraft | null,
   prevEffect: string | null,
@@ -240,6 +273,67 @@ export function calcExitEffect(
   return VALID_EXIT_EFFECTS.has(effect) ? effect : "fade";
 }
 
+const PHRASE_SEMANTIC_PATTERNS: [RegExp, string][] = [
+  [/\b(rise|fly|soar|heaven|heavens|sky|ascend|above|higher|up|float|clouds)\b/i, 'drift_up'],
+  [/\b(fall|drop|crash|down|decline|descend|collapse|knees|goliath|smash|hit|slam|strike)\b/i, 'slam'],
+  [/\b(fire|flame|burn|blaze|gold|platinum|diamond|shine|glow|ignite|inspired)\b/i, 'burn'],
+  [/\b(scatter|shatter|break|burst|butterfly|butterflies|pieces|explode|confetti)\b/i, 'scatter'],
+  [/\b(fade|ghost|vanish|disappear|dream|sleep|memory|memories|surrender|gone)\b/i, 'dissolve'],
+  [/\b(glitch|static|system|digital|corrupt|hack|wire|signal)\b/i, 'glitch'],
+];
+
+function phraseSemanticEffect(text: string): string | null {
+  for (const [pattern, effect] of PHRASE_SEMANTIC_PATTERNS) {
+    if (pattern.test(text)) return effect;
+  }
+  return null;
+}
+
+function energyModifyEffect(effect: string, sectionEnergy: number | undefined): string {
+  if (sectionEnergy == null) return effect;
+  if (sectionEnergy > 0.7 && (effect === 'fade' || effect === 'dissolve')) return 'burn';
+  if (sectionEnergy < 0.3 && (effect === 'slam' || effect === 'glitch')) return 'fade';
+  return effect;
+}
+
+export function calcExitEffectV2(
+  block: PhraseDraft,
+  nextBlock: PhraseDraft | null,
+  prevEffect: string | null,
+  sectionEnergy?: number,
+): string {
+  // Layer 1: phrase-text semantic scan
+  let effect = phraseSemanticEffect(block.text);
+
+  // Layer 2: heroWord semantic scan (if phrase text didn't match)
+  if (!effect) {
+    const heroClean = block.words.reduce((best, w) =>
+      w.d > best.d ? w : best, block.words[0]).clean;
+    effect = phraseSemanticEffect(heroClean);
+  }
+
+  // Layer 3: energy modifier
+  if (effect) {
+    effect = energyModifyEffect(effect, sectionEnergy);
+  }
+
+  // Layer 4: timing fallback
+  if (!effect) {
+    effect = _calcExitEffectTiming(block, nextBlock, prevEffect);
+  }
+
+  // Layer 5: anti-repeat
+  if (effect === prevEffect) {
+    const fallback: Record<string, string> = {
+      slam: "burn", burn: "slam", dissolve: "fade", fade: "dissolve",
+      drift_up: "fade", glitch: "scatter", scatter: "glitch",
+    };
+    effect = fallback[effect] ?? "fade";
+  }
+
+  return VALID_EXIT_EFFECTS.has(effect) ? effect : "fade";
+}
+
 export function normalizeHookKey(text: string): string {
   return text
     .toLowerCase()
@@ -279,11 +373,58 @@ export function inferHookPhrase(
   return bestText;
 }
 
-export function buildPhrases(words: RawWord[]): PhraseEngineResult {
-  if (!words.length) return { hookPhrase: "", phrases: [], adlibIndices: new Set<number>() };
+export function inferSignaturePhrase(
+  phrases: Array<{ text: string; wordCount: number; start: number; end: number }>,
+  sections?: Array<{ startSec: number; endSec: number; peakEnergy?: number; role?: string }>,
+): string {
+  if (!phrases.length) return "";
+
+  const counts = new Map<string, number>();
+  for (const phrase of phrases) {
+    const key = normalizeHookKey(phrase.text);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const scored = phrases
+    .filter(p => p.text.length > 10 && p.wordCount >= 3)
+    .map(p => {
+      let score = 0;
+      // Identity markers
+      if (/[A-Z]-[A-Z]/.test(p.text) || /\b(name|remember|I am|we are|call me|that's a name)\b/i.test(p.text)) {
+        score += 15;
+      }
+      // Uniqueness
+      const freq = counts.get(normalizeHookKey(p.text)) || 1;
+      if (freq <= 2) score += 12;
+      if (freq === 1) score += 5;
+      // Emotional intensity
+      const section = sections?.find(s => p.start >= s.startSec && p.start < s.endSec);
+      score += (section?.peakEnergy ?? 0.5) * 10;
+      // Declarative structure
+      if (/\b(watch us|we will|we'll|gonna|we are|let's|remember|inspired)\b/i.test(p.text)) {
+        score += 8;
+      }
+      // Verse position
+      const role = (section?.role ?? '').toLowerCase();
+      if (role.includes('verse') || role.includes('main')) score += 5;
+      // Word count sweet spot
+      if (p.wordCount >= 5 && p.wordCount <= 10) score += 3;
+      return { text: p.text, score };
+    });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0]?.text ?? phrases[0]?.text ?? "";
+}
+
+export function buildPhrases(
+  words: RawWord[],
+  sectionContext?: SectionContext[],
+): PhraseEngineResult {
+  if (!words.length) return { hookPhrase: "", signaturePhrase: "", phrases: [], adlibIndices: new Set<number>() };
 
   const { mainWords, adlibIndices } = detectCollapsedRuns(words);
-  if (!mainWords.length) return { hookPhrase: "", phrases: [], adlibIndices };
+  if (!mainWords.length) return { hookPhrase: "", signaturePhrase: "", phrases: [], adlibIndices };
 
   const wordMeta: WordMeta[] = mainWords.map((w, idx) => {
     const next = mainWords[idx + 1];
@@ -312,8 +453,16 @@ export function buildPhrases(words: RawWord[]): PhraseEngineResult {
   for (let i = 0; i < finalBlocks.length; i++) {
     const block = finalBlocks[i];
     const next = i < finalBlocks.length - 1 ? finalBlocks[i + 1] : null;
-    const { heroWord } = selectHeroWord(block);
-    const exitEffect = calcExitEffect(block, next, prevEffect);
+
+    // Find which section this phrase belongs to
+    const section = sectionContext?.find(s =>
+      block.startTime >= s.startSec && block.startTime < s.endSec
+    );
+    const sectionHeroes = section?.heroWords ?? [];
+    const sectionEnergy = section?.avgEnergy;
+
+    const { heroWord } = selectHeroWord(block, sectionHeroes);
+    const exitEffect = calcExitEffectV2(block, next, prevEffect, sectionEnergy);
     prevEffect = exitEffect;
     const startIndex = block.words[0].index;
     const endIndex = block.words[block.words.length - 1].index;
@@ -330,5 +479,14 @@ export function buildPhrases(words: RawWord[]): PhraseEngineResult {
   }
 
   const hookPhrase = inferHookPhrase(phrases);
-  return { hookPhrase, phrases, adlibIndices };
+  const signaturePhrase = inferSignaturePhrase(
+    phrases,
+    sectionContext?.map(s => ({
+      startSec: s.startSec,
+      endSec: s.endSec,
+      peakEnergy: s.avgEnergy,
+      role: undefined,
+    })),
+  );
+  return { hookPhrase, signaturePhrase, phrases, adlibIndices };
 }

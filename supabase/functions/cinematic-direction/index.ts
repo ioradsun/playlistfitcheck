@@ -62,34 +62,51 @@ const MOOD_TEXTURE: Record<string, string> = {
 
 // ── The prompt ───────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a music video director. You receive the audio file and a list of timestamped moments.
+const SYSTEM_PROMPT = `You are a music video director. You receive the full lyrics and a list of timestamped moments for a song.
 
-For each moment, you will:
-1. TRANSCRIBE — Write down the lyrics you hear at that timestamp. If vocals are unclear or it is instrumental, describe the sound ("heavy 808s", "acoustic guitar picking", "muffled vocals over trap beat").
-2. DESIGN — Based on what you just transcribed, direct the scene.
+Your job has 3 phases:
 
-Process the moments IN ORDER. Each moment is its OWN vignette.
-Do not plan ahead. Do not connect moments into one story.
-Listen to what the lyrics say RIGHT NOW and build a scene from those specific words.
+PHASE 1 — WORLD INFERENCE
+Read ALL the lyrics first. Before designing any moment, answer:
+- What is this song about?
+- What is the central metaphor, setting, or visual world?
+- What is the emotional arc from start to finish?
 
-AFTER all moments are complete, step back and:
-- Define the cinematic world that ties these vignettes together.
-- Pick ONE font for the entire lyric video, now that you've heard the full song.
+PHASE 2 — MOMENT DESIGN
+For each timestamped moment, design a scene that:
+- Lives INSIDE the world you inferred in Phase 1
+- Anchors to at least one concrete image, action, or symbol from the lyrics at that timestamp
+- Matches its position in the emotional arc
+
+PHASE 3 — SELF-CHECK
+Before returning, verify:
+- Does every moment belong to the same world?
+- Does every moment connect visibly to the lyric?
+- Does the sequence follow the emotional arc?
+- Are any heroWords filler words (I, the, some, how)?
+- Are any descriptions abstract commentary instead of visual scenes?
+- Are colors monotone without purpose?
+If any check fails, revise before returning.
 
 Return ONLY valid JSON:
 
 {
+  "world": "one sentence describing the cinematic universe, max 15 words",
+  "centralMetaphor": "short noun phrase naming the governing image or setting",
+  "emotionalArc": ["3 to 6 emotional beats in song order"],
+  "font": "one font name from the FONT LIST",
   "moments": [
     {
-      "transcribedLyrics": "The exact words you hear, or describe the sound if unclear",
-      "description": "One sentence: what the viewer SEES — a specific scene, not a mood",
-      "visualMood": "one of: intimate, anthemic, dreamy, aggressive, melancholy, euphoric, eerie, vulnerable, triumphant, nostalgic, defiant, hopeful, raw, hypnotic, ethereal, haunted, celestial, noir, rebellious",
-      "texture": "one of: dust, embers, smoke, rain, snow, stars, fireflies, petals, ash, crystals, confetti, lightning, bubbles, moths, glare, glitch, fire",
-      "heroWords": ["2-5 words from your transcribedLyrics that carry the MEANING of this moment, ALL CAPS"]
+      "lyricSpan": "the lyric text at this timestamp (from the provided lyrics)",
+      "arcBeat": "which emotionalArc beat this moment belongs to",
+      "description": "one sentence — what the viewer SEES",
+      "heroWords": ["1 to 3 ALL CAPS words that carry visual or emotional weight"],
+      "visualMood": "one of: ${VALID_MOODS.join(', ')}",
+      "texture": "one of: ${VALID_TEXTURES.join(', ')}",
+      "dominantColor": "#RRGGBB — this moment's primary emotional color",
+      "accentColor": "#RRGGBB — secondary highlight color"
     }
-  ],
-  "world": "The cinematic universe these vignettes live inside — one evocative sentence, 15 words max",
-  "font": "One font name from the FONT LIST"
+  ]
 }
 
 FONT LIST:
@@ -118,43 +135,65 @@ FONT LIST:
   Space Mono — Retro-futuristic mission-control voice.
   Caveat — Diary confessions and handwritten intimacy.
 
-RULES FOR "transcribedLyrics":
-- Write what you ACTUALLY HEAR. Do not invent lyrics.
-- This is your anchor. The description must respond to these words.
+RULES (in priority order):
 
-RULES FOR "description":
-- One sentence. What the viewer SEES. A specific scene grounded in the lyrics.
-- Must be a physical image — people, objects, actions, light, weather.
-  Good: "Rain streaks across a bus window as city lights blur into long smears of gold"
-  Good: "A hand reaches up from dark water, fingers splaying wide"
-  Bad: "emotional intimate atmosphere"
-  Bad: "dark moody urban environment"
+RULE 1 — WORLD COHERENCE
+All moments must belong to the same world.
+The world is a governing universe, not a mandatory prop.
+Not every frame must show the main object.
+But no frame may belong to a different universe.
+
+RULE 2 — LYRIC ANCHORING
+Each moment must include at least one concrete lyric-derived image, action, or symbol.
+The scene may be symbolic. It may not ignore the lyric.
+Good: lyrics say "butterflies" → glass butterflies scatter off a coaster car
+Bad: lyrics say "butterflies" → chrome headphones vibrate on velvet
+
+RULE 3 — EMOTIONAL PROGRESSION
+The sequence must follow the emotional arc.
+Early moments = setup. Middle = intensification. Late = resolution or transformation.
+
+RULE 4 — VISUAL CLARITY
+Descriptions must say what the viewer literally sees.
+Good: "A chrome car climbs through low clouds, track curving into open sky"
+Bad: "A feeling of tension builds in the atmosphere"
+
+RULE 5 — HERO DISCIPLINE
+heroWords must be meaningful — nouns and strong verbs, not pronouns or filler.
+"I put a chain on the door" → ["CHAIN", "DOOR"], not ["I", "PUT"]
+
+RULE 6 — COLOR SUPPORTS ARC
+Colors should reinforce emotional progression across the song.
+Different emotional beats should have perceptibly different color temperatures.
 
 RULES FOR "world":
-- Written AFTER all moments. A summary, not a plan.
-  Good: "A locked bedroom where intrusive thoughts rattle the door like uninvited guests"
-  Good: "The last night of summer, told through hands that can't hold on"
-  Bad: "dark emotional landscape"
+Written in Phase 1 before any moments. Summary of the cinematic universe.
+Good: "A futuristic roller coaster ascending through storm clouds and memory"
+Bad: "Dark emotional landscape"
 
-RULES FOR "font":
-- Chosen AFTER all moments. You have heard the full song.
-- The font is the voice of the text. It will appear over every scene.
-- Think: genre culture, vocal delivery, emotional weight.
+RULES FOR "centralMetaphor":
+Short noun phrase. The governing image.
+Good: "futuristic roller coaster" / "collapsing boxing arena" / "underwater cathedral"
+Bad: "emotional journey through memories" / "this song is about life"
+
+RULES FOR "description":
+One sentence. Physical image — people, objects, actions, light.
+Must be grounded in the lyric at this timestamp.
+Must live inside the world.
 
 RULES FOR "heroWords":
-- Pulled directly from your transcribedLyrics for this moment.
-- The words that carry the MEANING — nouns and strong verbs, not pronouns or filler.
-- "I put a chain on the door" → ["CHAIN", "DOOR"], not ["I", "PUT"]
-- ALL CAPS. 2-5 words per moment.
+From the lyric at this timestamp.
+Words that carry MEANING — nouns and strong verbs.
+ALL CAPS. 1-3 words per moment.
 
 RULES FOR MOMENTS:
-- One moment per timestamp provided. Match the count exactly.
-- Each moment is its OWN vignette. Do not chain or connect.
-- Energy hint shapes scale. Examples: [low], [mid], [high], [mid+rising], [high+falling].
+One moment per timestamp provided. Match the count exactly.
+Each moment lives inside the world. Scenes vary but the universe is consistent.
+Energy hint shapes scale:
   Low: tight, close, intimate. One object, one light source.
   High: wide, open, overwhelming. Scale up.
-  Rising: tension building — leaning forward, gripping tighter, anticipation.
-  Falling: release — shoulders dropping, letting go, settling.`;
+  Rising: tension building, leaning forward.
+  Falling: release, settling, letting go.`;
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -248,19 +287,44 @@ function extractJson(raw: string): Record<string, any> | null {
 
 // ── Validate + transform to client contract ──────────────────
 
+function validateColor(hex: string, fallbackMood: string): string {
+  if (typeof hex !== "string" || !/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    return MOOD_COLOR[fallbackMood] || "#C9A96E";
+  }
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (r * 299 + g * 587 + b * 114) / 1000 / 255;
+  if (luminance < 0.12 || luminance > 0.85) {
+    return MOOD_COLOR[fallbackMood] || "#C9A96E";
+  }
+  return hex;
+}
+
 function validate(raw: Record<string, any>, sectionCount: number, body: RequestBody): Record<string, any> {
-  // World
+  // ── World-level fields (new in v4) ──
   const description =
     typeof raw.world === "string" && raw.world.trim()
       ? raw.world.trim().slice(0, 150)
       : "cinematic scene";
 
-  // Font → build backward-compatible typographyPlan
+  const centralMetaphor =
+    typeof raw.centralMetaphor === "string" && raw.centralMetaphor.trim()
+      ? raw.centralMetaphor.trim().slice(0, 100)
+      : null;
+
+  const emotionalArc = Array.isArray(raw.emotionalArc)
+    ? raw.emotionalArc
+        .filter((b: any) => typeof b === "string" && b.trim())
+        .map((b: any) => b.trim().toLowerCase())
+        .slice(0, 6)
+    : [];
+
+  // ── Font → typographyPlan ──
   let fontName = typeof raw.font === "string" ? raw.font.trim() : "";
   if (!fontName || !VALID_FONTS.some((f) => f.toLowerCase() === fontName.toLowerCase())) {
     fontName = "Montserrat";
   }
-  // Normalize casing to match manifest
   const matched = VALID_FONTS.find((f) => f.toLowerCase() === fontName.toLowerCase());
   if (matched) fontName = matched;
 
@@ -275,7 +339,7 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
     sectionBehavior: {},
   };
 
-  // Sections
+  // ── Sections (from model "moments") ──
   let sections: any[] = [];
   const moments = Array.isArray(raw.moments) ? raw.moments : [];
 
@@ -292,8 +356,11 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
       texture = MOOD_TEXTURE[visualMood] || "dust";
     }
 
-    // dominantColor — derived from mood, not AI
-    const dominantColor = MOOD_COLOR[visualMood] || "#C9A96E";
+    // dominantColor — MODEL proposes, validator constrains (no more static override)
+    const dominantColor = validateColor(m?.dominantColor, visualMood);
+
+    // accentColor — new field
+    const accentColor = validateColor(m?.accentColor, visualMood);
 
     // heroWords
     const heroWords = Array.isArray(m?.heroWords)
@@ -309,7 +376,6 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
       ? m.description.trim().slice(0, 200)
       : "";
     if (!sectionDescription) {
-      // Fallback: use lyrics from body if available
       const sectionLines = (body.lines || []).filter((l: any) => {
         if (typeof l?.start !== "number") return false;
         const sec = body.audioSections?.[i];
@@ -320,12 +386,26 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
       sectionDescription = excerpt ? `${visualMood} scene: ${excerpt}` : `${visualMood} cinematic landscape`;
     }
 
+    // lyricSpan — new field
+    const lyricSpan = typeof m?.lyricSpan === "string" ? m.lyricSpan.trim().slice(0, 300) : "";
+
+    // arcBeat — new field, must be from emotionalArc
+    let arcBeat = typeof m?.arcBeat === "string" ? m.arcBeat.trim().toLowerCase() : "";
+    if (emotionalArc.length > 0 && !emotionalArc.includes(arcBeat)) {
+      // Assign based on position in sequence
+      const arcIdx = Math.min(Math.floor((i / Math.max(1, moments.length)) * emotionalArc.length), emotionalArc.length - 1);
+      arcBeat = emotionalArc[arcIdx] || "";
+    }
+
     sections.push({
       sectionIndex: i,
       description: sectionDescription,
       visualMood,
       dominantColor,
+      accentColor,
       texture,
+      lyricSpan,
+      arcBeat,
       ...(heroWords.length > 0 ? { heroWords } : {}),
       ...(body.audioSections?.[i]
         ? {
@@ -346,7 +426,10 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
         description: `Cinematic scene for section ${idx + 1}`,
         visualMood: "intimate",
         dominantColor: FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+        accentColor: FALLBACK_COLORS[(idx + 1) % FALLBACK_COLORS.length],
         texture: "dust",
+        lyricSpan: "",
+        arcBeat: emotionalArc.length > 0 ? emotionalArc[Math.min(idx, emotionalArc.length - 1)] : "",
       });
     }
     if (sections.length > sectionCount) {
@@ -354,12 +437,11 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
     }
   }
 
-  // Renumber sectionIndex sequentially
   sections.forEach((s: any, i: number) => {
     s.sectionIndex = i;
   });
 
-  return { description, typographyPlan, sections };
+  return { description, centralMetaphor, emotionalArc, typographyPlan, sections };
 }
 
 // ── AI call ──────────────────────────────────────────────────
