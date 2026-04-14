@@ -436,6 +436,20 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         }}
         onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
+        {/* Poster image: always rendered at z-index 0, behind pool canvases (z-1, z-2).
+            Shows through when no canvas slot is acquired (pool exhausted, still initializing,
+            or card is evicted). Prevents black squares. */}
+        {previewImageUrl && (
+          <img
+            src={previewImageUrl}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ objectFit: "cover", zIndex: 0, opacity: 0.85 }}
+            loading="lazy"
+          />
+        )}
+
         {cardMode === "listen" && (
           <>
             {!isFeedEmbed && (
