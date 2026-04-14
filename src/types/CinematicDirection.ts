@@ -8,10 +8,6 @@
 export interface CinematicDirection {
   /** One-sentence world description */
   description?: string;
-  /** Short noun phrase — the governing image or setting (v4) */
-  centralMetaphor?: string;
-  /** Ordered emotional beats across the song (v4) */
-  emotionalArc?: string[];
   /** Typography plan — font, weight, hero style, per-section behaviors */
   typographyPlan?: {
     system: string;
@@ -29,7 +25,7 @@ export interface CinematicDirection {
   phrases?: CinematicPhrase[];
   /** Client-detected hook phrase text */
   hookPhrase?: string;
-  /** Client-detected signature/thesis phrase text (v4) */
+  /** Client-detected signature/thesis phrase text */
   signaturePhrase?: string;
 
   /** Beat grid summary attached by client */
@@ -40,32 +36,26 @@ export interface CinematicSection {
   sectionIndex: number;
   /** One evocative sentence — what the viewer sees */
   description: string;
-  /** Visual mood from fixed vocabulary — drives camera, color grading, image style */
+  /** Visual mood — drives camera, color grading, image style */
   visualMood?: string;
-  /** Hex color — primary emotional color, proposed by model (v4) */
+  /** Hex color — primary emotional color, proposed by model */
   dominantColor?: string;
-  /** Hex color — secondary highlight color (v4) */
-  accentColor?: string;
   /** Particle system type */
   texture?: string;
-  /** Time boundaries (from audio sections) */
+  /** Time boundaries */
   startSec?: number;
   endSec?: number;
   /** Computed ratios (from enrichSections) */
   startRatio?: number;
   endRatio?: number;
-  /** Audio energy level (merged from audio analysis) */
+  /** Audio energy level */
   avgEnergy?: number;
   /** Peak energy in section */
   peakEnergy?: number;
-  /** Section role from audio analysis (intro/main/outro) */
+  /** Section role (intro/main/outro) */
   role?: string;
-  /** AI-suggested hero words for this section (v4 — advisory input to phraseEngine) */
+  /** AI-suggested hero words for this section */
   heroWords?: string[];
-  /** Lyric text at this timestamp (v4) */
-  lyricSpan?: string;
-  /** Emotional arc beat this moment belongs to (v4) */
-  arcBeat?: string;
 }
 
 export interface CinematicPhrase {
@@ -77,14 +67,14 @@ export interface CinematicPhrase {
   heroWords?: string[];
   /** Exit animation for this phrase */
   exitEffect?: 'fade' | 'drift_up' | 'shrink' | 'dissolve' | 'cascade' | 'scatter' | 'slam' | 'glitch' | 'burn';
-  /** True if this phrase contains chorus lyrics */
-  isChorus?: boolean;
-  /** Layout — assigned by client */
-  composition?: "stack" | "line" | "center_word";
-  bias?: "left" | "center" | "right";
-  revealStyle?: "instant" | "stagger_fast" | "stagger_slow";
-  holdClass?: "short_hit" | "medium_groove" | "long_emotional";
-  presentationMode?: string;
+  /** Layout composition */
+  composition?: 'stack' | 'line' | 'center_word';
+  /** Horizontal bias */
+  bias?: 'left' | 'center' | 'right';
+  /** Word reveal timing */
+  revealStyle?: 'instant' | 'stagger_fast' | 'stagger_slow';
+  /** Hold timing class */
+  holdClass?: 'short_hit' | 'medium_groove' | 'long_emotional';
   /** Phrase text */
   text?: string;
   /** Word count */
