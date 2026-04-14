@@ -599,7 +599,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   for (const group of cappedMainGroups) {
     const g = group as any;
     g._resolvedMaxLines = group.words.length < 4 ? 1 : undefined;
-    g.presentationMode = 'horiz_center';
+    // presentationMode now derived from composition + bias (set by phraseEngine)
+    // No longer hardcoded to horiz_center
   }
   const globalPhraseDur = phraseAnimDurations(Math.max(1, cappedMainGroups[0]?.words.length ?? 1), Math.max(250, Math.round(durationSec * 250)));
   const animParams = {

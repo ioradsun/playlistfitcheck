@@ -9,6 +9,10 @@ export interface PhraseBlock {
   durationMs: number;
   heroWord: string;
   exitEffect: string;
+  composition: 'stack' | 'line' | 'center_word';
+  bias: 'left' | 'center' | 'right';
+  revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
+  holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
 }
 
 export interface PhraseEngineResult {
@@ -417,6 +421,69 @@ export function inferSignaturePhrase(
   return scored[0]?.text ?? phrases[0]?.text ?? "";
 }
 
+function assignComposition(block: PhraseDraft): 'stack' | 'line' | 'center_word' {
+  // Solo word or 2-word phrase with a long hold → center_word (big, centered, impactful)
+  if (block.wordCount === 1) return 'center_word';
+  if (block.wordCount === 2 && block.durationMs >= 1500) return 'center_word';
+  // Long phrases → stack (vertical, intimate, multi-line)
+  if (block.wordCount >= 7) return 'stack';
+  // Medium-long phrases occasionally stack for variety
+  if (block.wordCount >= 5 && block.durationMs >= 2000) return 'stack';
+  // Default: line (horizontal, clean)
+  return 'line';
+}
+
+function assignBias(
+  block: PhraseDraft,
+  phraseIndex: number,
+  composition: string,
+): 'left' | 'center' | 'right' {
+  // Solo/center_word compositions → always center
+  if (composition === 'center_word') return 'center';
+  // Stacked compositions → alternate left/right for visual movement
+  if (composition === 'stack') {
+    return phraseIndex % 2 === 0 ? 'left' : 'right';
+  }
+  // Line compositions: cycle through center/left/right
+  // with center weighted heavier (appears ~50% of the time)
+  const cycle = phraseIndex % 5;
+  if (cycle === 1) return 'left';
+  if (cycle === 3) return 'right';
+  return 'center';
+}
+
+function assignRevealStyle(block: PhraseDraft): 'instant' | 'stagger_fast' | 'stagger_slow' {
+  // Solo words slam in instantly
+  if (block.wordCount === 1) return 'instant';
+  // Very fast phrases (high words-per-second) → instant
+  const wps = block.wordCount / Math.max(0.1, block.durationMs / 1000);
+  if (wps >= 5) return 'instant';
+  // Short phrases → instant
+  if (block.durationMs < 600) return 'instant';
+  // Long, slow phrases → stagger_slow (deliberate reveal)
+  if (block.durationMs >= 2500 && wps < 2.5) return 'stagger_slow';
+  // Medium phrases with breathing room → stagger_slow
+  if (block.durationMs >= 1500 && block.wordCount <= 4) return 'stagger_slow';
+  // Default: stagger_fast
+  return 'stagger_fast';
+}
+
+function assignHoldClass(block: PhraseDraft): 'short_hit' | 'medium_groove' | 'long_emotional' {
+  // Very fast → short_hit (punch and go)
+  if (block.durationMs < 500) return 'short_hit';
+  // Rapid multi-word → short_hit
+  const wps = block.wordCount / Math.max(0.1, block.durationMs / 1000);
+  if (wps >= 5 && block.durationMs < 1000) return 'short_hit';
+  // Solo word with long hold → long_emotional (let it breathe)
+  if (block.wordCount === 1 && block.durationMs >= 800) return 'long_emotional';
+  // Long phrase → long_emotional
+  if (block.durationMs >= 3000) return 'long_emotional';
+  // Slow deliberate phrases → long_emotional
+  if (block.durationMs >= 1500 && wps < 2) return 'long_emotional';
+  // Default: medium_groove
+  return 'medium_groove';
+}
+
 export function buildPhrases(
   words: RawWord[],
   sectionContext?: SectionContext[],
@@ -466,10 +533,18 @@ export function buildPhrases(
     prevEffect = exitEffect;
     const startIndex = block.words[0].index;
     const endIndex = block.words[block.words.length - 1].index;
+    const composition = assignComposition(block);
+    const bias = assignBias(block, i, composition);
+    const revealStyle = assignRevealStyle(block);
+    const holdClass = assignHoldClass(block);
     phrases.push({
       wordRange: [startIndex, endIndex],
       heroWord,
       exitEffect,
+      composition,
+      bias,
+      revealStyle,
+      holdClass,
       text: block.text,
       wordCount: block.wordCount,
       start: block.startTime,
