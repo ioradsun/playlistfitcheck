@@ -960,16 +960,29 @@ export function useLyricPipeline({
       return;
     }
 
-    const phraseResult = buildPhrases(words);
+    // Build section context from cinematic direction for hero/exitEffect scoring
+    const cdSections = (cinematicDirection?.sections ?? []) as Array<{
+      startSec?: number; endSec?: number; heroWords?: string[]; avgEnergy?: number;
+    }>;
+    const sectionCtx = cdSections
+      .filter(s => s.startSec != null && s.endSec != null)
+      .map(s => ({
+        startSec: s.startSec!,
+        endSec: s.endSec!,
+        heroWords: s.heroWords ?? [],
+        avgEnergy: s.avgEnergy,
+      }));
+    const phraseResult = buildPhrases(words, sectionCtx.length > 0 ? sectionCtx : undefined);
     phraseResultRef.current = phraseResult;
 
     setCinematicDirection((prev: any) => ({
       ...(prev || {}),
       phrases: phraseResult.phrases,
       hookPhrase: phraseResult.hookPhrase,
+      signaturePhrase: phraseResult.signaturePhrase,
       _phraseSource: "client_v1",
     }));
-  }, [words]);
+  }, [words, cinematicDirection]);
 
   useEffect(() => {
     if (audioBuffer) return;
@@ -1604,13 +1617,27 @@ export function useLyricPipeline({
 
         if (!mountedRef.current) return;
 
-        const phraseResult = phraseResultRef.current ?? (words?.length ? buildPhrases(words) : null);
+        const cdSections = (sceneDirection?.sections ?? []) as Array<{
+          startSec?: number; endSec?: number; heroWords?: string[]; avgEnergy?: number;
+        }>;
+        const sectionCtx = cdSections
+          .filter(s => s.startSec != null && s.endSec != null)
+          .map(s => ({
+            startSec: s.startSec!,
+            endSec: s.endSec!,
+            heroWords: s.heroWords ?? [],
+            avgEnergy: s.avgEnergy,
+          }));
+        const phraseResult = phraseResultRef.current ?? (words?.length
+          ? buildPhrases(words, sectionCtx.length > 0 ? sectionCtx : undefined)
+          : null);
         const enrichedScene = {
           ...(beatGrid
             ? { ...sceneDirection, beat_grid: { bpm: beatGrid.bpm, confidence: beatGrid.confidence } }
             : { ...sceneDirection }),
           phrases: phraseResult?.phrases ?? [],
           hookPhrase: phraseResult?.hookPhrase || undefined,
+          signaturePhrase: phraseResult?.signaturePhrase || undefined,
           _phraseSource: "client_v1",
           _artistDirection: sceneDescription?.trim() || undefined,
           _meta: { scene: sceneMeta },

@@ -95,6 +95,10 @@ const WEIGHT_STEPS = [300, 400, 700, 800];
 function isFillerWord(word: string): boolean { return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase()); }
 
 function findAnchorWord(words: WordMetaEntry[]): number {
+  // Prefer words marked as hero by section-level AI or phrase-level scorer
+  const heroIdx = words.findIndex(w => w.isHeroWord);
+  if (heroIdx >= 0) return heroIdx;
+  // Fallback: existing word-length + filler logic
   let maxScore = -1;
   let maxIdx = words.length - 1;
   for (let i = 0; i < words.length; i += 1) {
