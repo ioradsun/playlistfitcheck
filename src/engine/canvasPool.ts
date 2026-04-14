@@ -6,7 +6,7 @@
  * This keeps GPU memory and draw-call overhead constant at O(POOL_SIZE).
  */
 
-const POOL_SIZE = 3;
+const POOL_SIZE = 4;
 
 interface CanvasSlot {
   id: number;
