@@ -142,7 +142,8 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
           cacheWrite("feed_posts", result.data);
 
           const lyricCache: Record<string, any> = getCachedLyricData() ?? {};
-          for (const post of result.data as any[]) {
+          for (let pi = 0; pi < (result.data as any[]).length; pi++) {
+            const post = (result.data as any[])[pi];
             const lp = post.lyric_projects;
             if (!lp?.id) continue;
 
@@ -151,7 +152,9 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
             }
 
             const sectionImages = lp.section_images ?? [];
-            sectionImages.filter(Boolean).forEach((url: string) => preloadImage(url));
+            sectionImages.filter(Boolean).forEach((url: string, imgIdx: number) => {
+              preloadImage(url, pi === 0 && imgIdx === 0 ? { priority: "high" } : undefined);
+            });
 
             if (lp.album_art_url) {
               const img = new Image();
