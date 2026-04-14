@@ -86,3 +86,9 @@ verify_jwt = false
 
 [functions.precompute-dance-preview]
 verify_jwt = false
+
+[functions.get-dm-threads]
+verify_jwt = false
+
+[functions.get-thread-activity]
+verify_jwt = false
