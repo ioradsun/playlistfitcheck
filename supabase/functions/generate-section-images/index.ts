@@ -11,6 +11,7 @@ interface SectionInput {
   sectionIndex: number;
   description: string;
   artistDirection?: string;
+  world?: string;
   visualMood?: string;
   lyrics?: string;
   dominantColor?: string;
@@ -31,6 +32,8 @@ interface RequestBody {
   }>;
   /** Artist direction passed inline */
   artist_direction_inline?: string;
+  /** World description from cinematic direction — anchors all images to one universe */
+  world_inline?: string;
   /** Lyrics text for section lyrics extraction */
   lyrics_lines_inline?: Array<{ text: string; start: number; end: number }>;
 }
@@ -96,6 +99,11 @@ const MOOD_COLOR_VERBAL: Record<string, string> = {
 
 function buildImagePrompt(section: SectionInput, totalSections: number): string {
   const parts: string[] = [];
+
+  // ── Layer 0: WORLD — cinematic universe that all images belong to ──
+  if (section.world) {
+    parts.push(`Cinematic world: ${section.world}`);
+  }
 
   // ── Layer 1: ARTIST DIRECTION — overrides everything ──
   if (section.artistDirection) {
@@ -390,6 +398,7 @@ serve(async (req) => {
           sectionIndex,
           description: s.description || `Section ${sectionIndex + 1}`,
           artistDirection: body.artist_direction_inline,
+          world: body.world_inline,
           visualMood: s.visualMood,
           lyrics: sectionLyrics || undefined,
           dominantColor: s.dominantColor,
@@ -422,10 +431,14 @@ serve(async (req) => {
               ? `Musical scene inspired by: "${sectionLyrics.slice(0, 80)}"`
               : `Section ${sectionIndex + 1} of the song`);
 
+          const world = typeof cinematicDirection?.description === "string"
+            ? cinematicDirection.description.trim() || undefined
+            : undefined;
           return {
             sectionIndex,
             description: fallbackDesc,
             artistDirection,
+            world,
             visualMood: typeof section?.visualMood === "string" ? section.visualMood : undefined,
             lyrics: sectionLyrics || undefined,
             dominantColor: typeof section?.dominantColor === "string" ? section.dominantColor : undefined,

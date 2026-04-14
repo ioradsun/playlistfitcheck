@@ -1,14 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // ═══════════════════════════════════════════════════════════════
-// Cinematic Direction v3
+// Cinematic Direction v4
 //
-// Moment-first chain of thought.
+// World-first scaffold. Flash-optimized.
 //
-// AI receives: audio file + section timestamps + optional lyrics + artist direction
-// AI processes each moment: transcribe → design → next
-// AI picks: description, visualMood, texture per moment. Font + world last.
-// Code derives: dominantColor, typographyPlan details, all render enums.
+// Model generates: world, font, description, heroWords, visualMood, texture, dominantColor.
+// Code derives: typographyPlan (from font), accentColor (from palette pipeline).
+// Model THINKS about emotional arc but does not output it — zero downstream consumers.
 // ═══════════════════════════════════════════════════════════════
 
 const corsHeaders = {
@@ -62,138 +61,36 @@ const MOOD_TEXTURE: Record<string, string> = {
 
 // ── The prompt ───────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a music video director. You receive the full lyrics and a list of timestamped moments for a song.
+const SYSTEM_PROMPT = `You are a music video director.
 
-Your job has 3 phases:
+STEP 1: Read all the lyrics. Identify the song's central visual world — one setting, metaphor, or universe that every scene will live inside. Think about the emotional arc (setup → tension → resolution) but do not output it separately.
 
-PHASE 1 — WORLD INFERENCE
-Read ALL the lyrics first. Before designing any moment, answer:
-- What is this song about?
-- What is the central metaphor, setting, or visual world?
-- What is the emotional arc from start to finish?
-
-PHASE 2 — MOMENT DESIGN
-For each timestamped moment, design a scene that:
-- Lives INSIDE the world you inferred in Phase 1
-- Anchors to at least one concrete image, action, or symbol from the lyrics at that timestamp
-- Matches its position in the emotional arc
-
-PHASE 3 — SELF-CHECK
-Before returning, verify:
-- Does every moment belong to the same world?
-- Does every moment connect visibly to the lyric?
-- Does the sequence follow the emotional arc?
-- Are any heroWords filler words (I, the, some, how)?
-- Are any descriptions abstract commentary instead of visual scenes?
-- Are colors monotone without purpose?
-If any check fails, revise before returning.
+STEP 2: For each timestamped moment, write one scene description inside that world, grounded in the lyrics at that timestamp.
 
 Return ONLY valid JSON:
 
 {
-  "world": "one sentence describing the cinematic universe, max 15 words",
-  "centralMetaphor": "short noun phrase naming the governing image or setting",
-  "emotionalArc": ["3 to 6 emotional beats in song order"],
-  "font": "one font name from the FONT LIST",
+  "world": "one sentence, the cinematic universe of the song, max 15 words",
+  "font": "one font from: ${VALID_FONTS.join(', ')}",
   "moments": [
     {
-      "lyricSpan": "the lyric text at this timestamp (from the provided lyrics)",
-      "arcBeat": "which emotionalArc beat this moment belongs to",
-      "description": "one sentence — what the viewer SEES",
-      "heroWords": ["1 to 3 ALL CAPS words that carry visual or emotional weight"],
+      "description": "one sentence — what the viewer SEES. Concrete, physical, grounded in the lyric.",
+      "heroWords": ["1-3 ALL CAPS words from the lyric that carry visual or emotional weight. No filler (I, the, some, how, we, they)."],
       "visualMood": "one of: ${VALID_MOODS.join(', ')}",
       "texture": "one of: ${VALID_TEXTURES.join(', ')}",
-      "dominantColor": "#RRGGBB — this moment's primary emotional color",
-      "accentColor": "#RRGGBB — secondary highlight color"
+      "dominantColor": "#RRGGBB — emotional color for this moment"
     }
   ]
 }
 
-FONT LIST:
-  Bebas Neue — Movie posters. Bold declarations. All-caps condensed impact.
-  Permanent Marker — Sharpie on a mirror. Bathroom wall poetry.
-  Unbounded — Geometric blob display. Album cover energy.
-  Dela Gothic One — Heavy blackletter. Gothic weight. Dark anthems.
-  Oswald — Tall and tight. Campaign posters. Authority with edge.
-  Barlow Condensed — Industrial precision. Blueprint energy.
-  Archivo — Geometric muscle. Tech-forward power.
-  Montserrat — Reliable workhorse. Use only when nothing else fits.
-  Inter — Invisible design. Let the words speak.
-  Sora — Soft-edged modern. New-gen energy.
-  Rubik — Rounded corners. Friendly weight.
-  Nunito — Pillowy soft. Gentle confessions.
-  Plus Jakarta Sans — Contemporary warmth and sophistication.
-  Bricolage Grotesque — Quirky proportions. Indie character.
-  Lexend — Calm clarity. Readability-first.
-  Playfair Display — High-contrast editorial drama.
-  EB Garamond — Classical literary warmth.
-  Cormorant Garamond — Whispered elegance.
-  DM Serif Display — Warm editorial confidence.
-  Instrument Serif — Refined poetry-forward elegance.
-  Bitter — Slab-serif storytelling warmth.
-  JetBrains Mono — Hacker/system voice.
-  Space Mono — Retro-futuristic mission-control voice.
-  Caveat — Diary confessions and handwritten intimacy.
+RULES:
+1. WORLD COHERENCE — Every moment belongs to the same world. The world is a universe, not a single prop. Scenes vary but the universe is consistent. No frame may belong to a different universe.
+2. LYRIC ANCHORING — Every scene includes at least one image, action, or symbol from the lyrics at that timestamp. Symbolic is fine. Ignoring the lyric is not.
+3. VISUAL CLARITY — Describe what the viewer literally sees. No abstract commentary. "A chrome car climbs through low clouds" not "a feeling of tension."
+4. COLOR ARC — Colors should progress across the song. Different emotional beats need different color temperatures.
 
-RULES (in priority order):
-
-RULE 1 — WORLD COHERENCE
-All moments must belong to the same world.
-The world is a governing universe, not a mandatory prop.
-Not every frame must show the main object.
-But no frame may belong to a different universe.
-
-RULE 2 — LYRIC ANCHORING
-Each moment must include at least one concrete lyric-derived image, action, or symbol.
-The scene may be symbolic. It may not ignore the lyric.
-Good: lyrics say "butterflies" → glass butterflies scatter off a coaster car
-Bad: lyrics say "butterflies" → chrome headphones vibrate on velvet
-
-RULE 3 — EMOTIONAL PROGRESSION
-The sequence must follow the emotional arc.
-Early moments = setup. Middle = intensification. Late = resolution or transformation.
-
-RULE 4 — VISUAL CLARITY
-Descriptions must say what the viewer literally sees.
-Good: "A chrome car climbs through low clouds, track curving into open sky"
-Bad: "A feeling of tension builds in the atmosphere"
-
-RULE 5 — HERO DISCIPLINE
-heroWords must be meaningful — nouns and strong verbs, not pronouns or filler.
-"I put a chain on the door" → ["CHAIN", "DOOR"], not ["I", "PUT"]
-
-RULE 6 — COLOR SUPPORTS ARC
-Colors should reinforce emotional progression across the song.
-Different emotional beats should have perceptibly different color temperatures.
-
-RULES FOR "world":
-Written in Phase 1 before any moments. Summary of the cinematic universe.
-Good: "A futuristic roller coaster ascending through storm clouds and memory"
-Bad: "Dark emotional landscape"
-
-RULES FOR "centralMetaphor":
-Short noun phrase. The governing image.
-Good: "futuristic roller coaster" / "collapsing boxing arena" / "underwater cathedral"
-Bad: "emotional journey through memories" / "this song is about life"
-
-RULES FOR "description":
-One sentence. Physical image — people, objects, actions, light.
-Must be grounded in the lyric at this timestamp.
-Must live inside the world.
-
-RULES FOR "heroWords":
-From the lyric at this timestamp.
-Words that carry MEANING — nouns and strong verbs.
-ALL CAPS. 1-3 words per moment.
-
-RULES FOR MOMENTS:
-One moment per timestamp provided. Match the count exactly.
-Each moment lives inside the world. Scenes vary but the universe is consistent.
-Energy hint shapes scale:
-  Low: tight, close, intimate. One object, one light source.
-  High: wide, open, overwhelming. Scale up.
-  Rising: tension building, leaning forward.
-  Falling: release, settling, letting go.`;
+One moment per timestamp. Match the count exactly.
+Energy hints: low = tight/close, high = wide/overwhelming, rising = leaning forward, falling = letting go.`;
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -302,23 +199,11 @@ function validateColor(hex: string, fallbackMood: string): string {
 }
 
 function validate(raw: Record<string, any>, sectionCount: number, body: RequestBody): Record<string, any> {
-  // ── World-level fields (new in v4) ──
+  // ── World ──
   const description =
     typeof raw.world === "string" && raw.world.trim()
       ? raw.world.trim().slice(0, 150)
       : "cinematic scene";
-
-  const centralMetaphor =
-    typeof raw.centralMetaphor === "string" && raw.centralMetaphor.trim()
-      ? raw.centralMetaphor.trim().slice(0, 100)
-      : null;
-
-  const emotionalArc = Array.isArray(raw.emotionalArc)
-    ? raw.emotionalArc
-        .filter((b: any) => typeof b === "string" && b.trim())
-        .map((b: any) => b.trim().toLowerCase())
-        .slice(0, 6)
-    : [];
 
   // ── Font → typographyPlan ──
   let fontName = typeof raw.font === "string" ? raw.font.trim() : "";
@@ -339,7 +224,7 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
     sectionBehavior: {},
   };
 
-  // ── Sections (from model "moments") ──
+  // ── Sections ──
   let sections: any[] = [];
   const moments = Array.isArray(raw.moments) ? raw.moments : [];
 
@@ -350,17 +235,14 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
     let visualMood = typeof m?.visualMood === "string" ? m.visualMood.toLowerCase().trim() : "";
     if (!(VALID_MOODS as readonly string[]).includes(visualMood)) visualMood = "intimate";
 
-    // texture
+    // texture — model proposes, fallback to mood lookup
     let texture = typeof m?.texture === "string" ? m.texture.toLowerCase().trim() : "";
     if (!(VALID_TEXTURES as readonly string[]).includes(texture)) {
       texture = MOOD_TEXTURE[visualMood] || "dust";
     }
 
-    // dominantColor — MODEL proposes, validator constrains (no more static override)
+    // dominantColor — model proposes, validator constrains
     const dominantColor = validateColor(m?.dominantColor, visualMood);
-
-    // accentColor — new field
-    const accentColor = validateColor(m?.accentColor, visualMood);
 
     // heroWords
     const heroWords = Array.isArray(m?.heroWords)
@@ -386,26 +268,12 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
       sectionDescription = excerpt ? `${visualMood} scene: ${excerpt}` : `${visualMood} cinematic landscape`;
     }
 
-    // lyricSpan — new field
-    const lyricSpan = typeof m?.lyricSpan === "string" ? m.lyricSpan.trim().slice(0, 300) : "";
-
-    // arcBeat — new field, must be from emotionalArc
-    let arcBeat = typeof m?.arcBeat === "string" ? m.arcBeat.trim().toLowerCase() : "";
-    if (emotionalArc.length > 0 && !emotionalArc.includes(arcBeat)) {
-      // Assign based on position in sequence
-      const arcIdx = Math.min(Math.floor((i / Math.max(1, moments.length)) * emotionalArc.length), emotionalArc.length - 1);
-      arcBeat = emotionalArc[arcIdx] || "";
-    }
-
     sections.push({
       sectionIndex: i,
       description: sectionDescription,
       visualMood,
       dominantColor,
-      accentColor,
       texture,
-      lyricSpan,
-      arcBeat,
       ...(heroWords.length > 0 ? { heroWords } : {}),
       ...(body.audioSections?.[i]
         ? {
@@ -421,15 +289,13 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
     const FALLBACK_COLORS = ["#C9A96E", "#4FA4D4", "#D4618C", "#228844", "#B088F9", "#E8632B", "#FFD700", "#00BFA5"];
     while (sections.length < sectionCount) {
       const idx = sections.length;
+      const mood = "intimate";
       sections.push({
         sectionIndex: idx,
         description: `Cinematic scene for section ${idx + 1}`,
-        visualMood: "intimate",
+        visualMood: mood,
         dominantColor: FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
-        accentColor: FALLBACK_COLORS[(idx + 1) % FALLBACK_COLORS.length],
-        texture: "dust",
-        lyricSpan: "",
-        arcBeat: emotionalArc.length > 0 ? emotionalArc[Math.min(idx, emotionalArc.length - 1)] : "",
+        texture: MOOD_TEXTURE[mood] || "dust",
       });
     }
     if (sections.length > sectionCount) {
@@ -441,7 +307,7 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
     s.sectionIndex = i;
   });
 
-  return { description, centralMetaphor, emotionalArc, typographyPlan, sections };
+  return { description, typographyPlan, sections };
 }
 
 // ── AI call ──────────────────────────────────────────────────
@@ -618,14 +484,14 @@ serve(async (req) => {
     const cinematicDirection = validate(rawResult, sections.length, body);
 
     console.log(
-      `[cinematic-direction] v3 complete: font=${cinematicDirection.typographyPlan.primary}, world="${cinematicDirection.description}", sections=${cinematicDirection.sections.length}`,
+      `[cinematic-direction] v4 complete: font=${cinematicDirection.typographyPlan.primary}, world="${cinematicDirection.description}", sections=${cinematicDirection.sections.length}`,
     );
 
     return new Response(
       JSON.stringify({
         cinematicDirection,
         _meta: {
-          version: "v3",
+          version: "v4",
           model: PRIMARY_MODEL,
           momentCount: cinematicDirection.sections.length,
         },
