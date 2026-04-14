@@ -44,7 +44,7 @@ function mkGroup(overrides: Partial<CompiledPhraseGroup>): CompiledPhraseGroup {
     entryDuration: 0.2,
     exitDuration: 0.2,
     lingerDuration: 0.2,
-    behaviorIntensity: 1,
+    
     composition: 'line',
     bias: 'center',
     heroType: 'word',
