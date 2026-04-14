@@ -71,7 +71,7 @@ Return ONLY valid JSON:
 
 {
   "world": "one sentence, the cinematic universe of the song, max 15 words",
-  "font": "one font from: ${VALID_FONTS.join(', ')}",
+  "font": "one font from the FONT LIST below",
   "moments": [
     {
       "description": "one sentence — what the viewer SEES. Concrete, physical, grounded in the lyric.",
@@ -82,6 +82,16 @@ Return ONLY valid JSON:
     }
   ]
 }
+
+FONT LIST (pick the one that matches the song's energy):
+  Bebas Neue — bold movie poster | Permanent Marker — raw sharpie | Unbounded — album cover display
+  Dela Gothic One — dark gothic weight | Oswald — tall authority | Barlow Condensed — industrial precision
+  Archivo — tech muscle | Montserrat — clean default | Inter — invisible, words only
+  Sora — soft modern | Rubik — rounded friendly | Nunito — pillowy soft
+  Plus Jakarta Sans — warm contemporary | Bricolage Grotesque — indie quirky | Lexend — calm clarity
+  Playfair Display — editorial drama | EB Garamond — literary warmth | Cormorant Garamond — whispered elegance
+  DM Serif Display — editorial confidence | Instrument Serif — poetry elegance | Bitter — slab storytelling
+  JetBrains Mono — hacker voice | Space Mono — retro-futuristic | Caveat — handwritten diary
 
 RULES:
 1. WORLD COHERENCE — Every moment belongs to the same world. The world is a universe, not a single prop. Scenes vary but the universe is consistent. No frame may belong to a different universe.
@@ -457,14 +467,22 @@ serve(async (req) => {
       .map((s, i) => {
         const energy = s.avgEnergy ?? 0;
         let hint = energy < 0.35 ? "low" : energy > 0.65 ? "high" : "mid";
-        // Compute delta from previous section for rising/falling
         const prev = i > 0 ? (sections[i - 1].avgEnergy ?? 0) : energy;
         const delta = energy - prev;
         if (delta > 0.08) hint += "+rising";
         else if (delta < -0.08) hint += "+falling";
-        return `  Moment ${i + 1} [${hint}]: ${fmt(s.startSec)}–${fmt(s.endSec)}`;
+
+        const role = s.role ? ` (${s.role})` : "";
+        const sectionLyrics = Array.isArray(s.lyrics) && s.lyrics.length > 0
+          ? s.lyrics.map((l) => l.text).join(" ").slice(0, 200)
+          : "";
+        const lyricLine = sectionLyrics
+          ? `\n    Lyrics: "${sectionLyrics}"`
+          : "\n    [instrumental]";
+
+        return `  Moment ${i + 1} [${hint}]${role}: ${fmt(s.startSec)}–${fmt(s.endSec)}${lyricLine}`;
       })
-      .join("\n");
+      .join("\n\n");
 
     const userMessage = [
       body.artist_direction
@@ -473,8 +491,8 @@ serve(async (req) => {
       `Song: "${title}" by ${artist}`,
       bpm ? `BPM: ${bpm}` : "",
       isInstrumental ? "This is an instrumental track (no vocals)." : "",
-      lines.length > 0 ? `\nLyrics:\n${lines.map((l) => l.text).join("\n")}` : "",
-      sectionList ? `\nMoments:\n${sectionList}` : "",
+      lines.length > 0 ? `\nFull lyrics (read first to understand the whole song):\n${lines.map((l) => l.text).join("\n")}` : "",
+      sectionList ? `\nMoments to design:\n${sectionList}` : "",
     ]
       .filter(Boolean)
       .join("\n");
