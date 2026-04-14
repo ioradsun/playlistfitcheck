@@ -225,6 +225,16 @@ export default function ShareableLyricDance() {
             userId={(data as any)?.user_id ?? null}
             postId={data.post_id ?? data.id}
             lyricDanceUrl={artistSlug && songSlug ? `/${artistSlug}/${songSlug}/lyric-dance` : null}
+            previewPaletteColor={
+              (data as any)?.auto_palettes?.[0]?.[0]
+              ?? (data as any)?.palette?.[0]
+              ?? null
+            }
+            previewImageUrl={
+              (data as any)?.section_images?.[0]
+              ?? (data as any)?.album_art_url
+              ?? null
+            }
           />
         )}
       </div>

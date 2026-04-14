@@ -16,6 +16,7 @@ import { primeAudioPool } from "@/lib/audioPool";
 import { isGlobalMuted } from "@/lib/globalMute";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { preloadImage } from "@/lib/imagePreloadCache";
 
 interface LyricDanceEmbedProps {
   lyricDanceId: string;
@@ -31,6 +32,10 @@ interface LyricDanceEmbedProps {
   isVerified?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
+  /** Hex color from palette — renders instantly as background, zero network */
+  previewPaletteColor?: string | null;
+  /** Section image URL — used by drawMinimalFirstFrame via preload cache, NOT CSS background */
+  previewImageUrl?: string | null;
 }
 
 export interface LyricDanceEmbedHandle {
@@ -59,6 +64,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   isVerified,
   userId,
   onProfileClick,
+  previewPaletteColor,
+  previewImageUrl,
 }, ref) {
   const isFeedEmbed = visible !== undefined;
   const evicted = isFeedEmbed ? !visible : false;
@@ -378,6 +385,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     return () => { cancelled = true; };
   }, [player, danceId]);
 
+  useEffect(() => {
+    if (!previewImageUrl) return;
+    void preloadImage(previewImageUrl);
+  }, [previewImageUrl]);
+
   useEffect(() => () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); }, []);
 
   const pulseStyle = `
@@ -417,7 +429,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
-        style={{ background: "#0a0a0a" }}
+        style={{
+          background: previewPaletteColor
+            ? `radial-gradient(ellipse at 50% 40%, ${previewPaletteColor}33 0%, #0a0a0a 70%)`
+            : "#0a0a0a",
+        }}
         onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
         {cardMode === "listen" && (

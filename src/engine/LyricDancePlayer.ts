@@ -2058,7 +2058,12 @@ export class LyricDancePlayer {
       // Images are likely already in the preloadImage cache from feed prefetch.
       // This populates chapterImages so the first rendered frame has a background,
       // instead of waiting for the full mode upgrade delay (100ms + idle + compile).
-      this.loadSectionImages().catch(() => {});
+      this.loadSectionImages().then(() => {
+        // Redraw first frame with the loaded image if still in minimal mode
+        if (!this.destroyed && !this.fullModeEnabled && !this.playing) {
+          this.drawMinimalFirstFrame();
+        }
+      }).catch(() => {});
       return;
     }
 

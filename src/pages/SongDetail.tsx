@@ -1286,6 +1286,16 @@ const SongDetail = () => {
                 isVerified={post.profiles?.is_verified ?? false}
                 userId={post.user_id ?? null}
                 prefetchedData={danceData}
+                previewPaletteColor={
+                  (danceData as any)?.auto_palettes?.[0]?.[0]
+                  ?? (danceData as any)?.palette?.[0]
+                  ?? null
+                }
+                previewImageUrl={
+                  (danceData as any)?.section_images?.[0]
+                  ?? (danceData as any)?.album_art_url
+                  ?? null
+                }
               />
             </div>
           </div>

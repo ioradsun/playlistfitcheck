@@ -226,14 +226,6 @@ export function useFeedPosts(): FeedState {
     const lyricPrefetch = consumeLyricDataPrefetch();
     void lyricPrefetch;
 
-    let resolveTypographyFromDirection: ((cd: any) => any) | null = null;
-    let getFontNamesForPreload: ((resolved: any) => string[]) | null = null;
-    let ensureFontReady: ((fontName: string) => Promise<boolean>) | null = null;
-    try {
-      ({ resolveTypographyFromDirection, getFontNamesForPreload } = await import("@/lib/fontResolver"));
-      ({ ensureFontReady } = await import("@/lib/fontReadinessCache"));
-    } catch {}
-
     const newMap = new Map(lyricDataMap);
     const cacheObj: Record<string, any> = {};
     for (const post of filtered) {
@@ -252,16 +244,6 @@ export function useFeedPosts(): FeedState {
         .filter(Boolean)
         .forEach((url: string) => preloadImage(url));
       if (lp.album_art_url) preloadImage(lp.album_art_url);
-
-      if (resolveTypographyFromDirection && getFontNamesForPreload && ensureFontReady) {
-        try {
-          const typo = resolveTypographyFromDirection(lp.cinematic_direction);
-          const fontNames = getFontNamesForPreload(typo);
-          fontNames.forEach((name) => {
-            void ensureFontReady(name);
-          });
-        } catch {}
-      }
     }
 
     if (Object.keys(cacheObj).length > 0) {
@@ -272,6 +254,21 @@ export function useFeedPosts(): FeedState {
     if (newMap.size > lyricDataMap.size) {
       setLyricDataMap(newMap);
     }
+
+    import("@/lib/fontResolver").then(({ resolveTypographyFromDirection, getFontNamesForPreload }) => {
+      import("@/lib/fontReadinessCache").then(({ ensureFontReady }) => {
+        for (const post of filtered) {
+          const cd = (post as any).lyric_projects?.cinematic_direction;
+          if (!cd) continue;
+          try {
+            const typo = resolveTypographyFromDirection(cd);
+            getFontNamesForPreload(typo).forEach((name) => {
+              void ensureFontReady(name);
+            });
+          } catch {}
+        }
+      });
+    }).catch(() => {});
   }, [feedView, billboardMode]);
 
   // ── loadMore: cursor-based pagination ─────────────────────────────────

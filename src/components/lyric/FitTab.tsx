@@ -1181,6 +1181,16 @@ export function FitTab({
                       userId={user?.id ?? null}
                       prefetchedData={danceData}
                       lyricDanceUrl={danceUrl ?? null}
+                      previewPaletteColor={
+                        (danceData as any)?.auto_palettes?.[0]?.[0]
+                        ?? (danceData as any)?.palette?.[0]
+                        ?? null
+                      }
+                      previewImageUrl={
+                        (danceData as any)?.section_images?.[0]
+                        ?? (danceData as any)?.album_art_url
+                        ?? null
+                      }
                     />
                   ) : null}
                 </Suspense>

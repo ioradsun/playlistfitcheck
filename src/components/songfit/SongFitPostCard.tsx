@@ -258,6 +258,16 @@ export const SongFitPostCard = memo(function SongFitPostCard({
                 isVerified={(post.profiles as any)?.is_verified}
                 userId={post.user_id}
                 onProfileClick={handleProfileClick}
+                previewPaletteColor={
+                  (post.lyric_projects as any)?.auto_palettes?.[0]?.[0]
+                  ?? post.lyric_projects?.palette?.[0]
+                  ?? null
+                }
+                previewImageUrl={
+                  post.lyric_projects?.section_images?.[0]
+                  ?? post.lyric_projects?.album_art_url
+                  ?? null
+                }
               />
             </div>
           ) : (

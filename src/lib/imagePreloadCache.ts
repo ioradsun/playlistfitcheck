@@ -7,7 +7,10 @@
 const pending = new Map<string, Promise<HTMLImageElement>>();
 const resolved = new Map<string, HTMLImageElement>();
 
-export function preloadImage(url: string): Promise<HTMLImageElement> {
+export function preloadImage(
+  url: string,
+  options?: { priority?: "high" | "low" | "auto" },
+): Promise<HTMLImageElement> {
   if (resolved.has(url)) return Promise.resolve(resolved.get(url)!);
   const existing = pending.get(url);
   if (existing) return existing;
@@ -15,6 +18,9 @@ export function preloadImage(url: string): Promise<HTMLImageElement> {
   const promise = new Promise<HTMLImageElement>((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
+    if (options?.priority) {
+      (img as any).fetchPriority = options.priority;
+    }
     img.onload = () => {
       resolved.set(url, img);
       pending.delete(url);

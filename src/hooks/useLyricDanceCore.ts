@@ -26,7 +26,15 @@ export function useLyricDanceCore({
   usePool = false,
   evicted = false,
 }: UseLyricDanceCoreOptions) {
-  const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(prefetchedData ?? null);
+  const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(() => {
+    if (!prefetchedData) return null;
+    return {
+      ...prefetchedData,
+      cinematic_direction: prefetchedData.cinematic_direction
+        ? normalizeCinematicDirection(prefetchedData.cinematic_direction)
+        : prefetchedData.cinematic_direction,
+    };
+  });
   const [muted, setMuted] = useState(() => isGlobalMuted());
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
 
@@ -37,11 +45,14 @@ export function useLyricDanceCore({
 
   useEffect(() => {
     if (prefetchedData) {
-      setFetchedData({
-        ...prefetchedData,
-        cinematic_direction: prefetchedData.cinematic_direction
-          ? normalizeCinematicDirection(prefetchedData.cinematic_direction)
-          : prefetchedData.cinematic_direction,
+      setFetchedData((prev) => {
+        if (prev && prev.id === (prefetchedData as any).id && prev.cinematic_direction) return prev;
+        return {
+          ...prefetchedData,
+          cinematic_direction: prefetchedData.cinematic_direction
+            ? normalizeCinematicDirection(prefetchedData.cinematic_direction)
+            : prefetchedData.cinematic_direction,
+        };
       });
       return;
     }
