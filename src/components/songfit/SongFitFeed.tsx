@@ -476,12 +476,9 @@ interface SongFitFeedProps {
   reelsMode?: boolean;
 }
 
-const FADE_KEYFRAMES = "@keyframes fadeIn{from{opacity:0}to{opacity:1}}";
-
 export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const hasFadedIn = useRef(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -525,10 +522,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     feed.consumeNewDrops();
     document.getElementById("songfit-scroll-container")?.scrollTo({ top: 0, behavior: "smooth" });
   }, [feed]);
-
-  const fadeInRef = useCallback((el: HTMLDivElement | null) => {
-    if (el) hasFadedIn.current = true;
-  }, []);
 
   // Unlock audio on first touch anywhere in the feed
   useEffect(() => {
@@ -776,8 +769,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         </button>
       )}
 
-      {!hasFadedIn.current && <style>{FADE_KEYFRAMES}</style>}
-
       {displayLoading ? (
         <FeedSkeleton reelsMode={reelsMode} />
       ) : filteredPosts.length === 0 ? (
@@ -789,10 +780,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           </p>
         </div>
       ) : (
-        <div
-          style={{ animation: hasFadedIn.current ? "none" : "fadeIn 0.3s ease forwards" }}
-          ref={fadeInRef}
-        >
           <FeedList
             posts={filteredPosts}
             feedView={feed.feedView}
@@ -804,7 +791,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
             lyricDataMap={feed.lyricDataMap}
             reelsMode={reelsMode}
           />
-        </div>
       )}
 
     </div>
