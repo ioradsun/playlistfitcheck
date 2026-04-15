@@ -206,8 +206,20 @@ export function useFeedPosts(): FeedState {
     const filtered = allPosts.filter((p) => matchesView(p, feedView));
     const normalized = filtered.map(hydrateDefaults);
 
-    // ── Render cards IMMEDIATELY — don't wait for lyric data ──
-    setPosts(normalized);
+    // ── Only update if data actually changed — prevents cache→fresh double render ──
+    // On warm-cache visits, the prefetch returns the same posts that were already
+    // loaded from localStorage. Without this check, every card re-renders with
+    // identical data but new object references, causing a visible flash.
+    setPosts((prev) => {
+      if (
+        prev.length === normalized.length &&
+        prev.length > 0 &&
+        prev.every((p, i) => p.id === normalized[i].id)
+      ) {
+        return prev; // Same posts, same order — keep reference stable
+      }
+      return normalized;
+    });
     try {
       cacheWrite("feed_posts", allPosts);
     } catch {}
