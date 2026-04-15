@@ -110,18 +110,34 @@ const ObservedCard = memo(function ObservedCard({
     return () => ro.disconnect();
   }, [post.id, onMeasure]);
 
-  // Wide observer: visibility
+  // Wide observer: visibility (with debounced exit to prevent edge thrashing)
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setVisible(entry.isIntersecting);
         if (entry.isIntersecting) {
+          // Enter immediately — cancel any pending exit
+          if (exitTimerRef.current) {
+            clearTimeout(exitTimerRef.current);
+            exitTimerRef.current = null;
+          }
+          setVisible(true);
           if (!loggedRef.current) {
             loggedRef.current = true;
             logImpression(post.id);
+          }
+        } else {
+          // Debounce exit — card at boundary can thrash without this.
+          // 300ms is long enough to absorb scroll jitter but short enough
+          // that scrolling past feels responsive.
+          if (!exitTimerRef.current) {
+            exitTimerRef.current = setTimeout(() => {
+              exitTimerRef.current = null;
+              setVisible(false);
+            }, 300);
           }
         }
       },
@@ -129,7 +145,13 @@ const ObservedCard = memo(function ObservedCard({
     );
 
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (exitTimerRef.current) {
+        clearTimeout(exitTimerRef.current);
+        exitTimerRef.current = null;
+      }
+    };
   }, [post.id, reelsMode]);
 
   // Tight observer: center detection — only the middle 30% of viewport

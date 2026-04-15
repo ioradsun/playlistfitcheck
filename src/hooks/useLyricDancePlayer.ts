@@ -115,13 +115,11 @@ export function useLyricDancePlayer(
 
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const onReadyRef = useRef(onReady);
-  const lastFrameUrlRef = useRef<string | null>(null);
   const savedTimeRef = useRef<number>(0);
   const warmRef = useRef(false);
   const playerDataIdRef = useRef<string | null>(null);
   const slotRef = useRef<ReturnType<typeof acquireCanvasSlot> | null>(null);
   const seekListenerRef = useRef<(() => void) | null>(null);
-  const snapshotGenRef = useRef(0);
   const [retryTick, setRetryTick] = useState(0);
   onReadyRef.current = onReady;
 
@@ -133,13 +131,8 @@ export function useLyricDancePlayer(
 
   // ── Full teardown helper (used by identity change + unmount) ────────────
   function teardownPlayer() {
-    ++snapshotGenRef.current; // Invalidate any in-flight toBlob callbacks
     detachAudio(playerRef.current, seekListenerRef);
     releaseSlots(postIdRef.current, slotRef, containerRef, usePoolRef.current);
-    if (lastFrameUrlRef.current) {
-      URL.revokeObjectURL(lastFrameUrlRef.current);
-      lastFrameUrlRef.current = null;
-    }
     playerRef.current?.destroy();
     playerRef.current = null;
     warmRef.current = false;
@@ -187,18 +180,12 @@ export function useLyricDancePlayer(
         savedTimeRef.current = p.audio?.currentTime ?? 0;
         p.pause();
       }
-      // Snapshot before releasing — guarded against stale async delivery
+      // Snapshot synchronously before releasing
       const bg = slotRef.current?.bg;
       if (bg && bg.width > 0 && bg.height > 0) {
-        const gen = ++snapshotGenRef.current;
         try {
-          bg.toBlob((blob) => {
-            if (!blob || snapshotGenRef.current !== gen) return;
-            if (lastFrameUrlRef.current) URL.revokeObjectURL(lastFrameUrlRef.current);
-            const url = URL.createObjectURL(blob);
-            lastFrameUrlRef.current = url;
-            setLastFrameUrl(url);
-          }, "image/jpeg", 0.65);
+          const url = bg.toDataURL("image/jpeg", 0.65);
+          setLastFrameUrl(url);
         } catch { /* tainted */ }
       }
       detachAudio(p, seekListenerRef);
@@ -292,11 +279,7 @@ export function useLyricDancePlayer(
       if (destroyed) return;
 
       if (bgCanvas) bgCanvas.style.opacity = "1";
-      if (lastFrameUrlRef.current) {
-        URL.revokeObjectURL(lastFrameUrlRef.current);
-        lastFrameUrlRef.current = null;
-        setLastFrameUrl(null);
-      }
+      setLastFrameUrl(null);
       if (p.audio && p.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
         p.audio.preload = "metadata";
         p.audio.load();
@@ -352,18 +335,15 @@ export function useLyricDancePlayer(
       savedTimeRef.current = p.audio?.currentTime ?? 0;
       p.pause();
 
-      // Snapshot canvas before releasing — guarded against stale async delivery
+      // Snapshot canvas synchronously before releasing.
+      // toDataURL is sync — the URL is available in the same tick as releaseSlots,
+      // so React never renders a frame without a poster. toBlob was async and caused
+      // a 1-3 frame black flash between canvas removal and blob delivery.
       const bg = slotRef.current?.bg;
       if (bg && bg.width > 0 && bg.height > 0) {
-        const gen = ++snapshotGenRef.current;
         try {
-          bg.toBlob((blob) => {
-            if (!blob || snapshotGenRef.current !== gen) return;
-            if (lastFrameUrlRef.current) URL.revokeObjectURL(lastFrameUrlRef.current);
-            const url = URL.createObjectURL(blob);
-            lastFrameUrlRef.current = url;
-            setLastFrameUrl(url);
-          }, "image/jpeg", 0.65);
+          const url = bg.toDataURL("image/jpeg", 0.65);
+          setLastFrameUrl(url);
         } catch { /* tainted canvas */ }
       }
 
@@ -435,14 +415,9 @@ export function useLyricDancePlayer(
       }
     }
 
-    // Show canvas, clear snapshot + invalidate any in-flight blob
+    // Show canvas, clear snapshot
     slot.bg.style.opacity = "1";
-    ++snapshotGenRef.current;
-    if (lastFrameUrlRef.current) {
-      URL.revokeObjectURL(lastFrameUrlRef.current);
-      lastFrameUrlRef.current = null;
-      setLastFrameUrl(null);
-    }
+    setLastFrameUrl(null);
 
     if (!p.isFullModeEnabled) {
       p.scheduleFullModeUpgrade();
