@@ -445,7 +445,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             aria-hidden
             className="absolute inset-0 w-full h-full pointer-events-none"
             style={{ objectFit: "cover", zIndex: 0, opacity: 0.85 }}
-            loading="lazy"
           />
         )}
 
