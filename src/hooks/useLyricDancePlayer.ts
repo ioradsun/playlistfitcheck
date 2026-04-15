@@ -221,9 +221,9 @@ export function useLyricDancePlayer(
       if (containerRef.current) {
         if (!containerRef.current.contains(bgCanvas)) containerRef.current.appendChild(bgCanvas);
         if (!containerRef.current.contains(textCanvas)) containerRef.current.appendChild(textCanvas);
-        bgCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+        bgCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;";
         bgCanvas.style.zIndex = "1";
-        textCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+        textCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;";
         textCanvas.style.zIndex = "2";
       }
     } else {
@@ -379,9 +379,9 @@ export function useLyricDancePlayer(
     if (container) {
       if (!container.contains(slot.bg)) container.appendChild(slot.bg);
       if (!container.contains(slot.text)) container.appendChild(slot.text);
-      slot.bg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+      slot.bg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;";
       slot.bg.style.zIndex = "1";
-      slot.text.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+      slot.text.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;";
       slot.text.style.zIndex = "2";
     }
 
