@@ -415,9 +415,9 @@ export function useLyricDancePlayer(
       }
     }
 
-    // Show canvas, clear snapshot
-    slot.bg.style.opacity = "1";
-    setLastFrameUrl(null);
+    // Canvas reveal is deferred to the engine's first tick() after draw().
+    // The poster (lastFrameUrl at z-index 0) stays visible until the canvas
+    // (z-index 1) is revealed with content. No black flash.
 
     if (!p.isFullModeEnabled) {
       p.scheduleFullModeUpgrade();
