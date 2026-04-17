@@ -19,6 +19,14 @@ export function usePrimaryArbiter(
   postIds: string[],
 ): ArbiterResult {
   const [result, setResult] = useState<ArbiterResult>({ primaryId: null, closestIndex: 0 });
+  // Refs that mirror the latest values of renderedIds and postIds without retriggering the effect.
+  // This is critical: these values change on every FmlyFeed render, and if we depended on them
+  // the scroll listener would be torn down and re-added at ~60Hz during fast scroll, dropping events.
+  const renderedIdsRef = useRef(renderedIds);
+  const postIdsRef = useRef(postIds);
+  renderedIdsRef.current = renderedIds;
+  postIdsRef.current = postIds;
+
   const lastScrollY = useRef(0);
   const lastScrollT = useRef(performance.now());
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -31,30 +39,30 @@ export function usePrimaryArbiter(
     lastScrollY.current = getY();
 
     /**
-     * One measurement pass. Returns both the primary candidate (gated on center-overlap)
-     * and the closest rendered card index (no gate).
+     * One measurement pass. Reads latest renderedIds/postIds from refs so it
+     * always sees the current window without triggering listener re-subscription.
      */
     const measure = (): { primaryId: string | null; closestIndex: number } => {
+      const ids = renderedIdsRef.current;
+      const pIds = postIdsRef.current;
       const vpCenter = window.innerHeight / 2;
       let primaryBestId: string | null = null;
       let primaryBestDist = Infinity;
       let closestId: string | null = null;
       let closestDist = Infinity;
 
-      for (const id of renderedIds) {
+      for (const id of ids) {
         const el = cardRefs.current.get(id);
         if (!el) continue;
         const r = el.getBoundingClientRect();
         const center = r.top + r.height / 2;
         const dist = Math.abs(center - vpCenter);
 
-        // Closest (for window advance) — unconditional
         if (dist < closestDist) {
           closestDist = dist;
           closestId = id;
         }
 
-        // Primary (for engine hosting) — requires card to overlap viewport center
         if (dist > r.height / 2) continue;
         if (dist < primaryBestDist) {
           primaryBestDist = dist;
@@ -62,7 +70,7 @@ export function usePrimaryArbiter(
         }
       }
 
-      const closestIndex = closestId ? postIds.indexOf(closestId) : -1;
+      const closestIndex = closestId ? pIds.indexOf(closestId) : -1;
       return { primaryId: primaryBestId, closestIndex };
     };
 
@@ -94,7 +102,6 @@ export function usePrimaryArbiter(
       lastScrollY.current = y;
       lastScrollT.current = now;
 
-      // Update closestIndex immediately; primary is debounced via scheduleSettle
       const m = measure();
       setResult((prev) =>
         prev.closestIndex === m.closestIndex ? prev : { ...prev, closestIndex: m.closestIndex }
@@ -103,14 +110,14 @@ export function usePrimaryArbiter(
     };
 
     target.addEventListener("scroll", onScroll, { passive: true });
-    commitPrimary(); // initial measurement
+    commitPrimary();
 
     return () => {
       target.removeEventListener("scroll", onScroll);
       if (settleRef.current) clearTimeout(settleRef.current);
       liveCard.set(null);
     };
-  }, [cardRefs, renderedIds, scrollContainer, postIds]);
+  }, [scrollContainer, cardRefs]);
 
   return result;
 }
