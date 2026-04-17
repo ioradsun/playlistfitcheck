@@ -28,6 +28,7 @@ interface Props {
   };
   lyricDanceData?: LyricDanceData | null;
   visible?: boolean;
+  fastScrolling?: boolean;
   reelsMode?: boolean;
   isFirst?: boolean;
 }
@@ -36,6 +37,7 @@ export const SongFitPostCard = memo(function SongFitPostCard({
   post,
   lyricDanceData,
   visible,
+  fastScrolling = false,
   reelsMode = false,
 }: Props) {
   const { user } = useAuth();
@@ -89,14 +91,15 @@ export const SongFitPostCard = memo(function SongFitPostCard({
               isVerified={(post.profiles as any)?.is_verified}
               userId={post.user_id}
               onProfileClick={handleProfileClick}
+              fastScrolling={fastScrolling}
               previewPaletteColor={
                 (post.lyric_projects as any)?.auto_palettes?.[0]?.[0]
                 ?? post.lyric_projects?.palette?.[0]
                 ?? null
               }
               previewImageUrl={
-                post.lyric_projects?.section_images?.[0]
-                ?? post.lyric_projects?.album_art_url
+                post.lyric_projects?.album_art_url
+                ?? post.lyric_projects?.section_images?.[0]
                 ?? null
               }
             />

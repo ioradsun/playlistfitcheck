@@ -317,6 +317,18 @@ export function useFeedPosts(): FeedState {
       setLyricDataMap(newMap);
     }
 
+    const FIRST_VISIBLE = 3;
+    normalized.slice(0, FIRST_VISIBLE).forEach((post) => {
+      const lp = (post as any).lyric_projects;
+      if (lp?.album_art_url) void preloadImage(lp.album_art_url, { priority: "high" });
+      if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0], { priority: "high" });
+    });
+    normalized.slice(FIRST_VISIBLE).forEach((post) => {
+      const lp = (post as any).lyric_projects;
+      if (lp?.album_art_url) void preloadImage(lp.album_art_url);
+      if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0]);
+    });
+
     // Font preloading handled by prefetch.ts (module eval) and engine (kickFontStabilizationLoad).
     // ensureFontReady deduplicates, so this was a no-op burning dynamic import overhead.
   }, [feedView, billboardMode, lyricDataMap, mergeLyricCaches, posts.length]);
@@ -382,6 +394,18 @@ export function useFeedPosts(): FeedState {
         if (newMap.size > lyricDataMap.size) {
           setLyricDataMap(newMap);
         }
+
+        const FIRST_VISIBLE = 3;
+        normalized.slice(0, FIRST_VISIBLE).forEach((post) => {
+          const lp = (post as any).lyric_projects;
+          if (lp?.album_art_url) void preloadImage(lp.album_art_url, { priority: "high" });
+          if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0], { priority: "high" });
+        });
+        normalized.slice(FIRST_VISIBLE).forEach((post) => {
+          const lp = (post as any).lyric_projects;
+          if (lp?.album_art_url) void preloadImage(lp.album_art_url);
+          if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0]);
+        });
       }
       setHasMore((data ?? []).length === PAGE_SIZE);
     } finally {

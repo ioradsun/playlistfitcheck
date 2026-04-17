@@ -16,6 +16,7 @@ interface UseLyricDanceCoreOptions {
   postId?: string;
   usePool?: boolean;
   evicted?: boolean;
+  fastScrolling?: boolean;
 }
 
 
@@ -25,6 +26,7 @@ export function useLyricDanceCore({
   postId: _postId,
   usePool = false,
   evicted = false,
+  fastScrolling = false,
 }: UseLyricDanceCoreOptions) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(() => {
     if (!prefetchedData) return null;
@@ -92,7 +94,7 @@ export function useLyricDanceCore({
     canvasRef,
     textCanvasRef,
     containerRef,
-    { bootMode: "minimal", eagerUpgrade: true, usePool, postId: _postId ?? lyricDanceId, evicted },
+    { bootMode: "minimal", eagerUpgrade: true, usePool, postId: _postId ?? lyricDanceId, evicted, fastScrolling },
   );
   const durationSec = useMemo(() => {
     const lines = (data as any)?.lines ?? (data as any)?.lyrics ?? [];

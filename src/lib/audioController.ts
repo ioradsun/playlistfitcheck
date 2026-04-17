@@ -17,6 +17,7 @@ class AudioController {
   private _listeners = new Set<Listener>();
   private _registryListeners = new Set<Listener>();
   private _snapshot: AudioSnapshot = { effectivePrimaryId: null, muted: true };
+  private _fastScrolling = false;
 
   register(postId: string, player: LyricDancePlayer): void {
     const changed = this._registry.get(postId) !== player;
@@ -62,6 +63,12 @@ class AudioController {
       this._explicitPrimaryId = null;
       this._reconcile();
     }
+  }
+
+  setFastScrolling(value: boolean): void {
+    if (this._fastScrolling === value) return;
+    this._fastScrolling = value;
+    if (!value) this._reconcile();
   }
 
   /** Check if a player is registered. Used by the feed to gate eligibility. */
@@ -115,7 +122,7 @@ class AudioController {
         const p = this._registry.get(nextId);
         if (p) {
           const shouldMute = !isAudioUnlocked() || isGlobalMuted();
-          if (p.audio.paused) {
+          if (!this._fastScrolling && p.audio.paused) {
             p.play(true);
           }
           p.setMuted(shouldMute);

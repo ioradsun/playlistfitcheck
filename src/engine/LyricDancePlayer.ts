@@ -3490,6 +3490,7 @@ export class LyricDancePlayer {
       if (this._pendingCanvasReveal) {
         this._pendingCanvasReveal = false;
         this.canvas.style.opacity = "1";
+        if (this.textCanvas) this.textCanvas.style.opacity = "1";
       }
     } catch (err) {
       console.error('[LyricEngine] tick crash:', err);

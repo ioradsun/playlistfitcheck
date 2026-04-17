@@ -25,7 +25,8 @@
 import { useEffect, useRef, useState } from "react";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withInitLimit, withPriorityInitLimit } from "@/engine/initQueue";
-import { acquireCanvasSlot, releaseCanvasSlot } from "@/engine/canvasPool";
+import { reserveCanvasSlot, releaseCanvasSlotLogical } from "@/engine/canvasPool";
+import { getLastFrame, setLastFrame } from "@/engine/lastFrameCache";
 import { acquireAudio, evictLeastImportant, releaseAudio } from "@/lib/audioPool";
 
 interface Options {
@@ -36,6 +37,7 @@ interface Options {
   usePool?: boolean;
   postId?: string;
   evicted?: boolean;
+  fastScrolling?: boolean;
   priority?: boolean;
 }
 
@@ -53,20 +55,22 @@ export interface UseLyricDancePlayerReturn {
 // Single path prevents DOM/pool desync.
 function releaseSlots(
   postId: string | undefined,
-  slotRef: React.MutableRefObject<ReturnType<typeof acquireCanvasSlot> | null>,
+  slotRef: React.MutableRefObject<ReturnType<typeof reserveCanvasSlot> | null>,
   containerRef: React.RefObject<HTMLDivElement>,
   usePool: boolean,
+  detachDom = false,
 ) {
   if (slotRef.current && postId) {
     const bg = slotRef.current.bg;
     const text = slotRef.current.text;
     if (bg) bg.style.opacity = "0";
+    if (text) text.style.opacity = "0";
     const container = containerRef.current;
-    if (container) {
+    if (container && detachDom) {
       if (bg && container.contains(bg)) container.removeChild(bg);
       if (text && container.contains(text)) container.removeChild(text);
     }
-    releaseCanvasSlot(postId);
+    releaseCanvasSlotLogical(postId);
     slotRef.current = null;
   }
   if (usePool && postId) releaseAudio(postId);
@@ -105,20 +109,23 @@ export function useLyricDancePlayer(
     usePool = false,
     postId,
     evicted = false,
+    fastScrolling = false,
     priority = !evicted,
   } = options;
 
   const [data, setData] = useState<LyricDanceData | null>(initialData);
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
-  const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(null);
+  const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(
+    postId ? getLastFrame(postId) : null,
+  );
 
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const onReadyRef = useRef(onReady);
   const savedTimeRef = useRef<number>(0);
   const warmRef = useRef(false);
   const playerDataIdRef = useRef<string | null>(null);
-  const slotRef = useRef<ReturnType<typeof acquireCanvasSlot> | null>(null);
+  const slotRef = useRef<ReturnType<typeof reserveCanvasSlot> | null>(null);
   const seekListenerRef = useRef<(() => void) | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   onReadyRef.current = onReady;
@@ -132,7 +139,7 @@ export function useLyricDancePlayer(
   // ── Full teardown helper (used by identity change + unmount) ────────────
   function teardownPlayer() {
     detachAudio(playerRef.current, seekListenerRef);
-    releaseSlots(postIdRef.current, slotRef, containerRef, usePoolRef.current);
+    releaseSlots(postIdRef.current, slotRef, containerRef, usePoolRef.current, true);
     playerRef.current?.destroy();
     playerRef.current = null;
     warmRef.current = false;
@@ -188,6 +195,7 @@ export function useLyricDancePlayer(
         try {
           const url = bg.toDataURL("image/jpeg", 0.65);
           setLastFrameUrl(url);
+          setLastFrame(postId, url);
         } catch { /* tainted */ }
       }
       detachAudio(p, seekListenerRef);
@@ -209,13 +217,13 @@ export function useLyricDancePlayer(
   useEffect(() => {
     if (warmRef.current || !dataReady || evicted) return;
 
-    let slot: ReturnType<typeof acquireCanvasSlot> | null = null;
+    let slot: ReturnType<typeof reserveCanvasSlot> | null = null;
     let bgCanvas: HTMLCanvasElement | null = null;
     let textCanvas: HTMLCanvasElement | null = null;
     let pooledAudio: HTMLAudioElement | null = null;
 
     if (usePool && postId) {
-      slot = acquireCanvasSlot(postId);
+      slot = reserveCanvasSlot(postId);
       if (!slot) return;
       bgCanvas = slot.bg;
       textCanvas = slot.text;
@@ -223,10 +231,10 @@ export function useLyricDancePlayer(
       if (containerRef.current) {
         if (!containerRef.current.contains(bgCanvas)) containerRef.current.appendChild(bgCanvas);
         if (!containerRef.current.contains(textCanvas)) containerRef.current.appendChild(textCanvas);
-        bgCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;";
-        bgCanvas.style.zIndex = "1";
-        textCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;";
-        textCanvas.style.zIndex = "2";
+        bgCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 200ms ease-out;";
+        bgCanvas.style.zIndex = "2";
+        textCanvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 200ms ease-out;";
+        textCanvas.style.zIndex = "3";
       }
     } else {
       bgCanvas = canvasRef.current;
@@ -234,7 +242,7 @@ export function useLyricDancePlayer(
     }
 
     if (!bgCanvas || !textCanvas || !containerRef.current) {
-      if (slot && postId) { releaseCanvasSlot(postId); slotRef.current = null; }
+      if (slot && postId) { releaseCanvasSlotLogical(postId); slotRef.current = null; }
       return;
     }
 
@@ -245,7 +253,7 @@ export function useLyricDancePlayer(
         pooledAudio = acquireAudio(postId, data.audio_url);
       }
       if (!pooledAudio) {
-        if (slot) { releaseCanvasSlot(postId); slotRef.current = null; }
+        if (slot) { releaseCanvasSlotLogical(postId); slotRef.current = null; }
         return;
       }
     }
@@ -280,7 +288,7 @@ export function useLyricDancePlayer(
       await p.init();
       if (destroyed) return;
 
-      if (bgCanvas) bgCanvas.style.opacity = "1";
+      if (bgCanvas) bgCanvas.style.opacity = "0";
       setLastFrameUrl(null);
       if (p.audio && p.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
         p.audio.preload = "metadata";
@@ -313,16 +321,8 @@ export function useLyricDancePlayer(
       }
 
       if (slot && postId) {
-        if (bgCanvas) bgCanvas.style.opacity = "0";
-        const container = containerRef.current;
-        if (container) {
-          if (container.contains(bgCanvas!)) container.removeChild(bgCanvas!);
-          if (container.contains(textCanvas!)) container.removeChild(textCanvas!);
-        }
-        releaseCanvasSlot(postId);
+        releaseSlots(postId, slotRef, containerRef, usePool, true);
       }
-      if (usePool && postId) releaseAudio(postId);
-      slotRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataReady, data?.id, usePool, postId, evicted, retryTick]);
@@ -346,19 +346,29 @@ export function useLyricDancePlayer(
         try {
           const url = bg.toDataURL("image/jpeg", 0.65);
           setLastFrameUrl(url);
+          setLastFrame(postId, url);
         } catch { /* tainted canvas */ }
       }
 
       detachAudio(p, seekListenerRef);
-      releaseSlots(postId, slotRef, containerRef, usePool);
+      if (slotRef.current) {
+        slotRef.current.bg.style.opacity = "0";
+        slotRef.current.text.style.opacity = "0";
+      }
+      slotRef.current = null;
+      setTimeout(() => {
+        if (!postId) return;
+        releaseCanvasSlotLogical(postId);
+      }, 220);
+      if (usePool && postId) releaseAudio(postId);
       setPlayerReady(false);
       return;
     }
 
     // ── WARM → HOT ───────────────────────────────────────────────────
-    if (slotRef.current) return; // Already HOT
+    if (fastScrolling || slotRef.current) return; // Defer HOT during scroll fling
 
-    const slot = acquireCanvasSlot(postId);
+    const slot = reserveCanvasSlot(postId);
     if (!slot) return; // Pool exhausted — retry via crowdfit:pool-slot-freed
 
     // Acquire audio BEFORE committing canvas — card is only HOT with both
@@ -372,7 +382,7 @@ export function useLyricDancePlayer(
     }
     if (!pooledAudio && data?.audio_url) {
       // Audio required but unavailable — release canvas, stay WARM
-      releaseCanvasSlot(postId);
+      releaseCanvasSlotLogical(postId);
       return;
     }
 
@@ -381,10 +391,10 @@ export function useLyricDancePlayer(
     if (container) {
       if (!container.contains(slot.bg)) container.appendChild(slot.bg);
       if (!container.contains(slot.text)) container.appendChild(slot.text);
-      slot.bg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;";
-      slot.bg.style.zIndex = "1";
-      slot.text.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;";
-      slot.text.style.zIndex = "2";
+      slot.bg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 200ms ease-out;";
+      slot.bg.style.zIndex = "2";
+      slot.text.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 200ms ease-out;";
+      slot.text.style.zIndex = "3";
     }
 
     // Swap render target — preserves compiled scene
@@ -427,7 +437,7 @@ export function useLyricDancePlayer(
     p.primeAudio();
     setPlayerReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evicted, usePool, postId, data?.audio_url, retryTick]);
+  }, [evicted, usePool, postId, data?.audio_url, retryTick, fastScrolling]);
 
   // ── Hot-patch player when data changes ────────────────────────────────
   useEffect(() => {
