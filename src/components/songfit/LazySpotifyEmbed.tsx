@@ -7,7 +7,7 @@ import {
   loadSpotifyIframeApi,
   type SpotifyEmbedController,
 } from "@/lib/spotifyIframeApi";
-import { audioController } from "@/lib/audioController";
+import { liveCard } from "@/lib/liveCard";
 
 let _activeController: SpotifyEmbedController | null = null;
 
@@ -153,9 +153,9 @@ function LazySpotifyEmbedInner({
   // ── Pause when this card is no longer primary ─────────────────────────
   useEffect(() => {
     if (!postId || !isSpotify) return;
-    return audioController.subscribe(() => {
-      const { effectivePrimaryId } = audioController.getSnapshot();
-      if (effectivePrimaryId !== postId && isPlayingRef.current) {
+    return liveCard.subscribe(() => {
+      const primaryId = liveCard.getSnapshot();
+      if (primaryId !== postId && isPlayingRef.current) {
         _activeController?.pause();
         isPlayingRef.current = false;
       }

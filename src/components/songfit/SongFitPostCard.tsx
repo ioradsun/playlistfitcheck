@@ -27,8 +27,6 @@ interface Props {
     signal_velocity?: number;
   };
   lyricDanceData?: LyricDanceData | null;
-  visible?: boolean;
-  fastScrolling?: boolean;
   reelsMode?: boolean;
   isFirst?: boolean;
 }
@@ -36,8 +34,6 @@ interface Props {
 export const SongFitPostCard = memo(function SongFitPostCard({
   post,
   lyricDanceData,
-  visible,
-  fastScrolling = false,
   reelsMode = false,
 }: Props) {
   const { user } = useAuth();
@@ -81,7 +77,6 @@ export const SongFitPostCard = memo(function SongFitPostCard({
               lyricDanceId={post.project_id!}
               songTitle={post.lyric_projects?.title ?? post.caption}
               artistName={displayName}
-              visible={visible}
               postId={post.id}
               lyricDanceUrl={lyricDanceUrl}
               spotifyTrackId={post.lyric_projects?.spotify_track_id ?? null}
@@ -91,7 +86,6 @@ export const SongFitPostCard = memo(function SongFitPostCard({
               isVerified={(post.profiles as any)?.is_verified}
               userId={post.user_id}
               onProfileClick={handleProfileClick}
-              fastScrolling={fastScrolling}
               previewPaletteColor={
                 (post.lyric_projects as any)?.auto_palettes?.[0]?.[0]
                 ?? post.lyric_projects?.palette?.[0]

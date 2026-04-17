@@ -14,10 +14,6 @@ interface UseLyricDanceCoreOptions {
   lyricDanceId: string;
   prefetchedData?: LyricDanceData | null;
   postId?: string;
-  usePool?: boolean;
-  evicted?: boolean;
-  fastScrolling?: boolean;
-  isPrimary?: boolean;
 }
 
 
@@ -25,10 +21,6 @@ export function useLyricDanceCore({
   lyricDanceId,
   prefetchedData,
   postId: _postId,
-  usePool = false,
-  evicted = false,
-  fastScrolling = false,
-  isPrimary = true,
 }: UseLyricDanceCoreOptions) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(() => {
     if (!prefetchedData) return null;
@@ -96,7 +88,7 @@ export function useLyricDanceCore({
     canvasRef,
     textCanvasRef,
     containerRef,
-    { bootMode: "minimal", eagerUpgrade: true, usePool, postId: _postId ?? lyricDanceId, evicted, fastScrolling },
+    { bootMode: "minimal", eagerUpgrade: true, priority: true },
   );
   const durationSec = useMemo(() => {
     const lines = (data as any)?.lines ?? (data as any)?.lyrics ?? [];
@@ -183,7 +175,7 @@ export function useLyricDanceCore({
   }, [player, fireHeat, moments]);
 
   useEffect(() => {
-    if (!data?.id || evicted || !isPrimary) return;
+    if (!data?.id) return;
 
     let mounted = true;
     const hydrate = async () => {
@@ -272,10 +264,10 @@ export function useLyricDanceCore({
       pendingFiresRef.current = [];
       supabase.removeChannel(fireChannel);
     };
-  }, [data?.id, evicted, isPrimary]);
+  }, [data?.id]);
 
   useEffect(() => {
-    if (!player || !isPrimary) return;
+    if (!player) return;
     const audio = player.audio;
     let rafId = 0;
 
@@ -321,7 +313,7 @@ export function useLyricDanceCore({
       audio.removeEventListener("pause", checkPlaying);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [player, isPrimary]);
+  }, [player]);
 
   const handleReplay = useCallback(() => {
     if (!player) return;
@@ -329,7 +321,7 @@ export function useLyricDanceCore({
     player.seek(0);
     player.play();
     setMuted(false);
-  }, [player, isPrimary]);
+  }, [player]);
 
   return {
     canvasRef,
