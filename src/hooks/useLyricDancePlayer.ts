@@ -116,9 +116,7 @@ export function useLyricDancePlayer(
   const [data, setData] = useState<LyricDanceData | null>(initialData);
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
-  const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(
-    postId ? getLastFrame(postId) : null,
-  );
+  const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(null);
 
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const onReadyRef = useRef(onReady);
@@ -135,6 +133,15 @@ export function useLyricDancePlayer(
   const usePoolRef = useRef(usePool);
   postIdRef.current = postId;
   usePoolRef.current = usePool;
+
+  useEffect(() => {
+    if (!postId) {
+      setLastFrameUrl(null);
+      return;
+    }
+    const cached = getLastFrame(postId);
+    if (cached) setLastFrameUrl(cached);
+  }, [postId]);
 
   // ── Full teardown helper (used by identity change + unmount) ────────────
   function teardownPlayer() {
@@ -395,6 +402,14 @@ export function useLyricDancePlayer(
       slot.bg.style.zIndex = "2";
       slot.text.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 200ms ease-out;";
       slot.text.style.zIndex = "3";
+    }
+
+    // Force layout before setRenderTarget so the engine sees correct dimensions.
+    // Without this, setRenderTarget can briefly fall back to defaults after
+    // scroll-driven virtual-window shifts until ResizeObserver catches up.
+    const rect = container?.getBoundingClientRect();
+    if (rect && rect.width > 0 && rect.height > 0) {
+      p.resize(rect.width, rect.height);
     }
 
     // Swap render target — preserves compiled scene

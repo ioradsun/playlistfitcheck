@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 
 type TimedText = { start: number; end: number; text: string };
 type TimedWord = { word: string; start: number; end: number };
@@ -75,7 +75,10 @@ export const LyricTextLayer = memo(function LyricTextLayer({
 
   const firstPaintRef = useRef(true);
   const showTransition = !firstPaintRef.current;
-  firstPaintRef.current = false;
+
+  useEffect(() => {
+    firstPaintRef.current = false;
+  }, []);
 
   const alignment = phrase?.bias === "left" ? "flex-start" : phrase?.bias === "right" ? "flex-end" : "center";
   const textAlign = phrase?.bias ?? "center";
