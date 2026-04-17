@@ -157,7 +157,9 @@ export function useLyricDancePlayer(
     if (playerRef.current) teardownPlayer();
   }, [initialData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dataReady = !!(data?.cinematic_direction);
+  const hasLines =
+    Array.isArray((data as any)?.lines) && (data as any).lines.length > 0;
+  const dataReady = hasLines;
 
   // ── Listen for freed pool slots ────────────────────────────────────────
   useEffect(() => {

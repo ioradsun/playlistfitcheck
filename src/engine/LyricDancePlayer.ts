@@ -1692,6 +1692,7 @@ export class LyricDancePlayer {
   private _wickSeekOverlay: HTMLDivElement | null = null;
   public beatVisEnabled = false;
   public renderMode: "lyric" | "beat" = "lyric";
+  public textRenderMode: "dom" | "canvas" | "both" = "canvas";
   public wickBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
   private _sectionScrimOpacity: number[] = [];
@@ -2121,9 +2122,8 @@ export class LyricDancePlayer {
       return;
     }
 
-    const schedule = typeof window.requestIdleCallback === "function"
-      ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 200 })
-      : (cb: () => void) => window.setTimeout(cb, 50);
+    const schedule = (cb: () => void) =>
+      requestAnimationFrame(() => requestAnimationFrame(cb));
 
     this._pendingUpgradeTimeout = schedule(() => {
       this._pendingUpgradeTimeout = null;
@@ -4109,6 +4109,7 @@ export class LyricDancePlayer {
     // Camera zoom is now applied via CameraRig.getSubjectTransform() at the text rendering stage
     this.ctx.textAlign = 'left';
     this.setCanvasBaseline('middle');
+    const renderCanvasText = this.textRenderMode === 'canvas' || this.textRenderMode === 'both';
 
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
@@ -4298,7 +4299,7 @@ export class LyricDancePlayer {
     this._lastShadowColor = 'transparent';
 
     // ═══ HERO SMOKE: palette-colored flame wisps rising from hero words ═══
-    if (qTier < 3) {
+    if (renderCanvasText && qTier < 3) {
       const smokePalette = this._framePalette ?? this.data?.palette ?? ['#a855f7', '#ec4899', '#ffffff'];
       this._heroSmoke.update(sortBuf, smokePalette, qTier, this._smokePhraseAge);
       this.ctx.save();
@@ -4310,8 +4311,10 @@ export class LyricDancePlayer {
       this.setCanvasBaseline('middle');
     }
 
-    for (let ci = 0; ci < sortBuf.length; ci += 1) {
-      drawChunkText(sortBuf[ci]);
+    if (renderCanvasText) {
+      for (let ci = 0; ci < sortBuf.length; ci += 1) {
+        drawChunkText(sortBuf[ci]);
+      }
     }
 
     this.ctx.shadowBlur = 0;
@@ -4331,7 +4334,7 @@ export class LyricDancePlayer {
     this.setCanvasBaseline('alphabetic');
 
     // ═══ EXIT EFFECT: cinematic phrase exit ═══
-    if (this._exitEffect.active) {
+    if (renderCanvasText && this._exitEffect.active) {
       this._exitEffect.draw(this.ctx, tSec, this._effectiveDpr);
     }
 

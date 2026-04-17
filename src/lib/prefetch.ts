@@ -115,8 +115,24 @@ export function getCachedFeed(): any[] | null {
 }
 
 /** Returns cached lyric dance data keyed by ID, or null. Sync, no network. */
+let _didWarnLegacyLyricCache = false;
+
+export function getCachedLyricText(): Record<string, any> | null {
+  return cacheRead<Record<string, any>>("lyric_text");
+}
+
+export function getCachedLyricScene(): Record<string, any> | null {
+  return cacheRead<Record<string, any>>("lyric_scene");
+}
+
+/** Legacy fallback (read-only). Use getCachedLyricText/getCachedLyricScene for new writes. */
 export function getCachedLyricData(): Record<string, any> | null {
-  return cacheRead<Record<string, any>>("lyric_data");
+  const legacy = cacheRead<Record<string, any>>("lyric_data");
+  if (legacy && !_didWarnLegacyLyricCache) {
+    _didWarnLegacyLyricCache = true;
+    console.warn("[prefetch] legacy lyric_data cache hit; migrate to lyric_text/lyric_scene.");
+  }
+  return legacy;
 }
 
 // ── Auth session prefetch — consumed by AuthProvider ─────────────────────────
@@ -154,14 +170,35 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
         if (result.data && result.data.length > 0) {
           cacheWrite("feed_posts", result.data);
 
-          const lyricCache: Record<string, any> = getCachedLyricData() ?? {};
+          const lyricTextCache: Record<string, any> = getCachedLyricText() ?? {};
+          const lyricSceneCache: Record<string, any> = getCachedLyricScene() ?? {};
           for (let pi = 0; pi < (result.data as any[]).length; pi++) {
             const post = (result.data as any[])[pi];
             const lp = post.lyric_projects;
             if (!lp?.id) continue;
 
-            if (lp.cinematic_direction && !lyricCache[lp.id]?.cinematic_direction) {
-              lyricCache[lp.id] = lp;
+            lyricTextCache[lp.id] = {
+              id: lp.id,
+              lines: lp.lines,
+              words: lp.words,
+              audio_url: lp.audio_url,
+              title: lp.title,
+              artist_name: lp.artist_name,
+              album_art_url: lp.album_art_url,
+              spotify_track_id: lp.spotify_track_id,
+            };
+
+            if (lp.cinematic_direction) {
+              lyricSceneCache[lp.id] = {
+                id: lp.id,
+                cinematic_direction: lp.cinematic_direction,
+                section_images: lp.section_images,
+                palette: lp.palette,
+                auto_palettes: lp.auto_palettes,
+                beat_grid: lp.beat_grid,
+                physics_spec: lp.physics_spec,
+                empowerment_promise: lp.empowerment_promise,
+              };
             }
 
             const sectionImages = lp.section_images ?? [];
@@ -177,9 +214,8 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
             }
           }
 
-          if (Object.keys(lyricCache).length > 0) {
-            cacheWrite("lyric_data", lyricCache);
-          }
+          if (Object.keys(lyricTextCache).length > 0) cacheWrite("lyric_text", lyricTextCache);
+          if (Object.keys(lyricSceneCache).length > 0) cacheWrite("lyric_scene", lyricSceneCache);
 
         }
         return result;
