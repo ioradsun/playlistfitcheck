@@ -17,6 +17,7 @@ interface UseLyricDanceCoreOptions {
   usePool?: boolean;
   evicted?: boolean;
   fastScrolling?: boolean;
+  isPrimary?: boolean;
 }
 
 
@@ -27,6 +28,7 @@ export function useLyricDanceCore({
   usePool = false,
   evicted = false,
   fastScrolling = false,
+  isPrimary = true,
 }: UseLyricDanceCoreOptions) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(() => {
     if (!prefetchedData) return null;
@@ -181,7 +183,7 @@ export function useLyricDanceCore({
   }, [player, fireHeat, moments]);
 
   useEffect(() => {
-    if (!data?.id || evicted) return;
+    if (!data?.id || evicted || !isPrimary) return;
 
     let mounted = true;
     const hydrate = async () => {
@@ -270,10 +272,10 @@ export function useLyricDanceCore({
       pendingFiresRef.current = [];
       supabase.removeChannel(fireChannel);
     };
-  }, [data?.id, evicted]);
+  }, [data?.id, evicted, isPrimary]);
 
   useEffect(() => {
-    if (!player) return;
+    if (!player || !isPrimary) return;
     const audio = player.audio;
     let rafId = 0;
 
@@ -319,7 +321,7 @@ export function useLyricDanceCore({
       audio.removeEventListener("pause", checkPlaying);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [player]);
+  }, [player, isPrimary]);
 
   const handleReplay = useCallback(() => {
     if (!player) return;
@@ -327,7 +329,7 @@ export function useLyricDanceCore({
     player.seek(0);
     player.play();
     setMuted(false);
-  }, [player]);
+  }, [player, isPrimary]);
 
   return {
     canvasRef,
