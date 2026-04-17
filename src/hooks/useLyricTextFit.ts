@@ -1,14 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fitTextToViewport, type MeasureContext } from "@/engine/textLayout";
 
-let sharedMeasureCanvas: HTMLCanvasElement | null = null;
+let _sharedMeasureCanvas: HTMLCanvasElement | null = null;
 
 function getMeasureContext(): MeasureContext | null {
   if (typeof document === "undefined") return null;
-  if (!sharedMeasureCanvas) {
-    sharedMeasureCanvas = document.createElement("canvas");
+  if (!_sharedMeasureCanvas) {
+    _sharedMeasureCanvas = document.createElement("canvas");
   }
-  return sharedMeasureCanvas.getContext("2d");
+  return _sharedMeasureCanvas.getContext("2d");
 }
 
 export interface LyricTextFit {
@@ -17,131 +17,82 @@ export interface LyricTextFit {
   lines: string[];
 }
 
-interface UseLyricTextFitParams {
-  containerRef: RefObject<HTMLElement | null>;
-  text: string;
-  fontFamily: string;
-  fontWeight: number;
-  maxFontPx?: number;
-  minFontPx?: number;
-}
-
-function splitWords(text: string): string[] {
-  return text.trim().split(/\s+/).filter(Boolean);
-}
-
-function computeFit({
-  measureCtx,
-  container,
-  words,
-  fontFamily,
-  fontWeight,
-  maxFontPx,
-  minFontPx,
-}: {
-  measureCtx: MeasureContext;
-  container: HTMLElement;
-  words: string[];
-  fontFamily: string;
-  fontWeight: number;
-  maxFontPx: number;
-  minFontPx: number;
-}): LyricTextFit | null {
-  const cw = container.clientWidth;
-  const ch = container.clientHeight;
-  if (cw <= 0 || ch <= 0) return null;
-  if (!words.length) {
-    return { fontSize: minFontPx, totalHeight: 0, lines: [] };
-  }
-
-  const layout = fitTextToViewport(measureCtx, words, cw, ch, fontFamily, fontWeight, {
-    minFontPx,
-    targetFillRatio: 0.88,
-  });
-
-  return {
-    fontSize: Math.min(maxFontPx, Math.max(minFontPx, layout.fontSize)),
-    totalHeight: layout.totalHeight,
-    lines: layout.lines,
-  };
-}
-
+/**
+ * Compute optimal font size for lyric text rendered inside a container.
+ *
+ * Wraps the engine's `fitTextToViewport` so DOM and canvas text size identically.
+ * Recomputes on container resize, text change, font change, and document.fonts.ready.
+ */
 export function useLyricTextFit({
   containerRef,
   text,
   fontFamily,
   fontWeight,
-  maxFontPx = 64,
-  minFontPx = 16,
-}: UseLyricTextFitParams): LyricTextFit {
+  maxFontPx = 72,
+  minFontPx = 18,
+}: {
+  containerRef: React.RefObject<HTMLElement | null>;
+  text: string;
+  fontFamily: string;
+  fontWeight: number;
+  maxFontPx?: number;
+  minFontPx?: number;
+}): LyricTextFit {
   const [fit, setFit] = useState<LyricTextFit>({
     fontSize: Math.min(maxFontPx, 32),
     totalHeight: 0,
-    lines: splitWords(text).length ? [text] : [],
+    lines: [text],
   });
-  const lastDepsRef = useRef<string>("");
+
+  const computeRef = useRef<() => void>(() => {});
 
   useLayoutEffect(() => {
     const container = containerRef.current;
+    if (!container) return;
     const measureCtx = getMeasureContext();
-    if (!container || !measureCtx) return;
+    if (!measureCtx) return;
 
-    const runCompute = () => {
-      const next = computeFit({
-        measureCtx,
-        container,
-        words: splitWords(text),
-        fontFamily,
-        fontWeight,
-        maxFontPx,
+    computeRef.current = () => {
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      if (cw <= 0 || ch <= 0) return;
+
+      const words = text.trim().split(/\s+/).filter(Boolean);
+      if (words.length === 0) {
+        setFit({ fontSize: minFontPx, totalHeight: 0, lines: [] });
+        return;
+      }
+
+      const layout = fitTextToViewport(measureCtx, words, cw, ch, fontFamily, fontWeight, {
         minFontPx,
+        targetFillRatio: 0.88,
       });
-      if (next) setFit(next);
+
+      setFit({
+        fontSize: Math.min(maxFontPx, Math.max(minFontPx, layout.fontSize)),
+        totalHeight: layout.totalHeight,
+        lines: layout.lines,
+      });
     };
 
-    const depsKey = `${text}|${fontFamily}|${fontWeight}|${maxFontPx}|${minFontPx}`;
-    if (depsKey !== lastDepsRef.current) {
-      lastDepsRef.current = depsKey;
-    }
-    runCompute();
+    computeRef.current();
 
-    const resizeObserver = new ResizeObserver(runCompute);
-    resizeObserver.observe(container);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
+    const ro = new ResizeObserver(() => computeRef.current());
+    ro.observe(container);
+    return () => ro.disconnect();
   }, [containerRef, text, fontFamily, fontWeight, maxFontPx, minFontPx]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !document.fonts) return;
-
     let cancelled = false;
     document.fonts.ready.then(() => {
       if (cancelled) return;
-
-      const container = containerRef.current;
-      const measureCtx = getMeasureContext();
-      if (!container || !measureCtx) return;
-
-      lastDepsRef.current = "";
-      const next = computeFit({
-        measureCtx,
-        container,
-        words: splitWords(text),
-        fontFamily,
-        fontWeight,
-        maxFontPx,
-        minFontPx,
-      });
-
-      if (next) setFit(next);
+      computeRef.current();
     });
-
     return () => {
       cancelled = true;
     };
-  }, [containerRef, text, fontFamily, fontWeight, maxFontPx, minFontPx]);
+  }, []);
 
   return fit;
 }
