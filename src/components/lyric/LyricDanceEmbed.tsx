@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useSyncExternalStore, memo } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useSyncExternalStore, memo, useMemo } from "react";
 import { Share2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDanceCore } from "@/hooks/useLyricDanceCore";
@@ -17,7 +17,7 @@ import { primeAudioPool } from "@/lib/audioPool";
 import { isGlobalMuted } from "@/lib/globalMute";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
-import { preloadImage } from "@/lib/imagePreloadCache";
+import { getPreloadedImage, preloadImage } from "@/lib/imagePreloadCache";
 
 interface LyricDanceEmbedProps {
   lyricDanceId: string;
@@ -37,6 +37,7 @@ interface LyricDanceEmbedProps {
   previewPaletteColor?: string | null;
   /** Section image URL — used by drawMinimalFirstFrame via preload cache, NOT CSS background */
   previewImageUrl?: string | null;
+  fastScrolling?: boolean;
 }
 
 export interface LyricDanceEmbedHandle {
@@ -67,6 +68,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   onProfileClick,
   previewPaletteColor,
   previewImageUrl,
+  fastScrolling = false,
 }, ref) {
   const isFeedEmbed = visible !== undefined;
   const evicted = isFeedEmbed ? !visible : false;
@@ -88,7 +90,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     fireUserMap,
     fireAnonCount,
     lastFrameUrl,
-  } = useLyricDanceCore({ lyricDanceId, prefetchedData, postId, usePool: isFeedEmbed, evicted });
+  } = useLyricDanceCore({ lyricDanceId, prefetchedData, postId, usePool: isFeedEmbed, evicted, fastScrolling });
 
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
   const [comments, setComments] = useState<Comment[]>([]);
@@ -98,6 +100,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const audioState = useSyncExternalStore(audioController.subscribe, audioController.getSnapshot, audioController.getSnapshot);
   const isPrimary = isFeedEmbed && audioState.effectivePrimaryId === postId;
   const feedMuted = isFeedEmbed ? audioState.muted : muted;
+  const posterSrc = useMemo(() => {
+    if (lastFrameUrl) return lastFrameUrl;
+    const albumArt = (data as any)?.album_art_url ?? (prefetchedData as any)?.album_art_url ?? null;
+    const sectionImg = previewImageUrl ?? null;
+    if (sectionImg && getPreloadedImage(sectionImg)) return sectionImg;
+    return albumArt || sectionImg || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+  }, [lastFrameUrl, data, prefetchedData, previewImageUrl]);
 
   useImperativeHandle(ref, () => ({
     getPlayer: () => player ?? null,
@@ -399,6 +408,20 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [previewImageUrl]);
 
   useEffect(() => () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); }, []);
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isFeedEmbed) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const interval = setInterval(() => {
+      const img = container.querySelector("img");
+      const canvas = container.querySelector("canvas");
+      if (!img) console.warn("[feed-qa] card has no poster image", postId);
+      if (canvas && parseFloat(canvas.style.opacity || "0") > 0 && img instanceof HTMLImageElement && !img.complete) {
+        console.warn("[feed-qa] canvas shown before poster decoded", postId);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [containerRef, isFeedEmbed, postId]);
 
   const pulseStyle = `
     @keyframes ld-pulse {
@@ -444,16 +467,16 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         }}
         onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
-        {/* Shows the last rendered frame (via snapshot) when evicted, or the initial section image when first loading. Prevents black squares. */}
-        {(lastFrameUrl || previewImageUrl) && (
-          <img
-            src={lastFrameUrl || previewImageUrl!}
-            alt=""
-            aria-hidden
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ objectFit: "cover", zIndex: 0, opacity: 0.85 }}
-          />
-        )}
+        {/* Poster layer — mounted for card lifetime; canvas crossfades on top. */}
+        <img
+          src={posterSrc}
+          alt=""
+          aria-hidden
+          decoding="async"
+          fetchPriority={isFeedEmbed && isPrimary ? "high" : "low"}
+          className="absolute inset-0 w-full h-full pointer-events-none select-none"
+          style={{ objectFit: "cover", zIndex: 1, opacity: 1 }}
+        />
 
         {cardMode === "listen" && (
           <>

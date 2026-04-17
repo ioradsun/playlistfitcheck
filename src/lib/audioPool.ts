@@ -1,4 +1,4 @@
-const POOL_SIZE = 4;
+const POOL_SIZE = 3;
 
 interface AudioSlot {
   audio: HTMLAudioElement;

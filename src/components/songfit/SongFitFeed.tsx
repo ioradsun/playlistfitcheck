@@ -19,6 +19,7 @@ import { primeAudioPool } from "@/lib/audioPool";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
+import { useScrollVelocity } from "@/hooks/useScrollVelocity";
 import type { ContentFilter } from "./types";
 
 // ── Skeleton ────────────────────────────────────────────────────────────────
@@ -73,6 +74,7 @@ const ObservedCard = memo(function ObservedCard({
   onCenterLeave,
   cardRefsMap,
   onMeasure,
+  fastScrolling,
 }: {
   post: any;
   rank?: number;
@@ -86,6 +88,7 @@ const ObservedCard = memo(function ObservedCard({
   onCenterLeave: (postId: string) => void;
   cardRefsMap: MutableRefObject<Map<string, HTMLDivElement>>;
   onMeasure?: (postId: string, height: number) => void;
+  fastScrolling: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -111,34 +114,26 @@ const ObservedCard = memo(function ObservedCard({
   }, [post.id, onMeasure]);
 
   // Wide observer: visibility (with debounced exit to prevent edge thrashing)
-  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingStateRef = useRef<boolean | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          // Enter immediately — cancel any pending exit
-          if (exitTimerRef.current) {
-            clearTimeout(exitTimerRef.current);
-            exitTimerRef.current = null;
-          }
-          setVisible(true);
-          if (!loggedRef.current) {
-            loggedRef.current = true;
-            logImpression(post.id);
-          }
-        } else {
-          // Debounce exit — card at boundary can thrash without this.
-          // 300ms is long enough to absorb scroll jitter but short enough
-          // that scrolling past feels responsive.
-          if (!exitTimerRef.current) {
-            exitTimerRef.current = setTimeout(() => {
-              exitTimerRef.current = null;
-              setVisible(false);
-            }, 300);
-          }
+        const target = entry.isIntersecting;
+        pendingStateRef.current = target;
+        if (visTimerRef.current) clearTimeout(visTimerRef.current);
+        visTimerRef.current = setTimeout(() => {
+          visTimerRef.current = null;
+          const next = pendingStateRef.current;
+          if (next !== null) setVisible(next);
+          pendingStateRef.current = null;
+        }, 120);
+        if (target && !loggedRef.current) {
+          loggedRef.current = true;
+          logImpression(post.id);
         }
       },
       { rootMargin: reelsMode ? "10% 0px" : "200px 0px" },
@@ -147,9 +142,9 @@ const ObservedCard = memo(function ObservedCard({
     observer.observe(el);
     return () => {
       observer.disconnect();
-      if (exitTimerRef.current) {
-        clearTimeout(exitTimerRef.current);
-        exitTimerRef.current = null;
+      if (visTimerRef.current) {
+        clearTimeout(visTimerRef.current);
+        visTimerRef.current = null;
       }
     };
   }, [post.id, reelsMode]);
@@ -181,6 +176,7 @@ const ObservedCard = memo(function ObservedCard({
         signalData={signalData}
         lyricDanceData={lyricDanceData}
         visible={visible}
+        fastScrolling={fastScrolling}
         reelsMode={reelsMode}
         isFirst={isFirst}
       />
@@ -199,6 +195,7 @@ function FeedList({
   onRefresh,
   lyricDataMap,
   reelsMode,
+  fastScrolling,
 }: {
   posts: any[];
   feedView: string;
@@ -209,6 +206,7 @@ function FeedList({
   onRefresh: () => void;
   lyricDataMap: Map<string, any>;
   reelsMode: boolean;
+  fastScrolling: boolean;
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const centerSetRef = useRef<Set<string>>(new Set());
@@ -221,7 +219,7 @@ function FeedList({
   const measuredHeightsRef = useRef<Map<string, number>>(new Map());
   const topSpacerRef = useRef<HTMLDivElement>(null);
   const bottomSpacerRef = useRef<HTMLDivElement>(null);
-  const WINDOW_RADIUS = 2;
+  const WINDOW_RADIUS = 1;
   const windowStart = Math.max(0, activeIndex - WINDOW_RADIUS);
   const windowEnd = Math.min(posts.length - 1, activeIndex + WINDOW_RADIUS);
   const renderedPosts = posts.slice(windowStart, windowEnd + 1);
@@ -454,6 +452,7 @@ function FeedList({
           onCenterEnter={onCenterEnter}
           onCenterLeave={onCenterLeave}
           onMeasure={onMeasure}
+          fastScrolling={fastScrolling}
         />
       );
       })}
@@ -486,6 +485,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const feed = useFeedPosts();
+  const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
+  const { isFastScrolling } = useScrollVelocity(scrollContainer);
   const hasSearchQuery = feed.searchTerm.trim().length > 0;
   const searchUiVisible = reelsMode ? (searchOpen || searchFocused || hasSearchQuery) : (searchFocused || hasSearchQuery);
   const displayPosts = hasSearchQuery
@@ -524,6 +525,15 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   }, [feed]);
 
   // Unlock audio on first touch anywhere in the feed
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    setScrollContainer(document.getElementById("songfit-scroll-container"));
+  }, []);
+
+  useEffect(() => {
+    audioController.setFastScrolling(isFastScrolling);
+  }, [isFastScrolling]);
+
   useEffect(() => {
     const handler = () => {
       unlockAudio();
@@ -780,17 +790,18 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
           </p>
         </div>
       ) : (
-          <FeedList
-            posts={filteredPosts}
-            feedView={feed.feedView}
-            signalMap={feed.signalMap}
-            loadingMore={hasSearchQuery ? false : feed.loadingMore}
-            hasMore={hasSearchQuery ? false : feed.hasMore}
-            loadMore={hasSearchQuery ? async () => {} : feed.loadMore}
-            onRefresh={feed.refresh}
-            lyricDataMap={feed.lyricDataMap}
-            reelsMode={reelsMode}
-          />
+        <FeedList
+          posts={filteredPosts}
+          feedView={feed.feedView}
+          signalMap={feed.signalMap}
+          loadingMore={hasSearchQuery ? false : feed.loadingMore}
+          hasMore={hasSearchQuery ? false : feed.hasMore}
+          loadMore={hasSearchQuery ? async () => {} : feed.loadMore}
+          onRefresh={feed.refresh}
+          lyricDataMap={feed.lyricDataMap}
+          reelsMode={reelsMode}
+          fastScrolling={isFastScrolling}
+        />
       )}
 
     </div>
