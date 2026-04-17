@@ -68,6 +68,11 @@ export const LyricTextLayer = memo(function LyricTextLayer({
     return Array.from(new Set(all));
   }, [phrase]);
 
+  const heroRegex = useMemo(() => {
+    if (!heroWords.length) return null;
+    return new RegExp(`(${heroWords.map(escapeRegex).join("|")})`, "gi");
+  }, [heroWords]);
+
   const firstPaintRef = useRef(true);
   const showTransition = !firstPaintRef.current;
   firstPaintRef.current = false;
@@ -81,9 +86,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
     textTransform: typographyPlan?.case === "upper" ? "uppercase" : undefined,
   };
 
-  const parts = heroWords.length
-    ? visibleText.split(new RegExp(`(${heroWords.map(escapeRegex).join("|")})`, "gi"))
-    : [visibleText];
+  const parts = heroRegex ? visibleText.split(heroRegex) : [visibleText];
 
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: alignment, pointerEvents: "none", padding: "0 7%" }} data-text-owner={ownsText ? "dom" : "canvas"}>

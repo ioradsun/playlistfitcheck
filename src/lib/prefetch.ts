@@ -227,15 +227,6 @@ export function consumeFeedPrefetch() {
   return p;
 }
 
-// ── Lyric dance prefetch — compatibility no-op ──────────────────────────────
-export let lyricDataPrefetch: Promise<{ data: any[] | null; error: any }> | null = null;
-
-export function consumeLyricDataPrefetch() {
-  const p = lyricDataPrefetch;
-  lyricDataPrefetch = null;
-  return p;
-}
-
 // ── Site copy prefetch — consumed by SiteCopyProvider ────────────────────────
 
 export let siteCopyPrefetch: Promise<{ data: any; error: any }> | null =
