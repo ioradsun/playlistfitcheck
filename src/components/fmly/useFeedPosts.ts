@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import type { SongFitPost, FeedView, BillboardMode } from "./types";
+import type { FmlyPost, FeedView, BillboardMode } from "./types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import {
   consumeFeedPrefetch,
@@ -36,14 +36,14 @@ const POST_SELECT =
   "physics_spec, empowerment_promise)";
 
 // ── Filter helpers ──────────────────────────────────────────────────────────
-function matchesView(p: SongFitPost, view: FeedView): boolean {
+function matchesView(p: FmlyPost, view: FeedView): boolean {
   if (view === "all" || view === "billboard") return true;
   if (view === "now_streaming") return !!p.lyric_projects?.spotify_track_id;
   if (view === "in_studio") return !!p.project_id;
   return true;
 }
 
-function hydrateDefaults(p: SongFitPost): SongFitPost {
+function hydrateDefaults(p: FmlyPost): FmlyPost {
   return { ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 };
 }
 
@@ -53,7 +53,7 @@ function hydrateDefaults(p: SongFitPost): SongFitPost {
  * Side effect: triggers preloadImage() for section_images + album_art.
  */
 function hydrateLyricRows(
-  posts: SongFitPost[],
+  posts: FmlyPost[],
   currentMap: Map<string, LyricDanceData>,
 ): { nextMap: Map<string, LyricDanceData>; cachePatch: Record<string, LyricDanceData>; grew: boolean } {
   const nextMap = new Map(currentMap);
@@ -87,7 +87,7 @@ function hydrateLyricRows(
 /**
  * Prioritize poster decodes for the top-of-feed cards.
  */
-function preloadFirstVisible(posts: SongFitPost[], count = 3): void {
+function preloadFirstVisible(posts: FmlyPost[], count = 3): void {
   posts.slice(0, count).forEach((post) => {
     const lp = (post as any).lyric_projects;
     if (lp?.album_art_url) void preloadImage(lp.album_art_url, { priority: "high" });
@@ -103,7 +103,7 @@ function preloadFirstVisible(posts: SongFitPost[], count = 3): void {
 // ── Billboard scoring ───────────────────────────────────────────────────────
 async function scoreBillboard(
   mode: BillboardMode,
-): Promise<{ posts: SongFitPost[]; signalMap: Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }> }> {
+): Promise<{ posts: FmlyPost[]; signalMap: Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }> }> {
   let cutoff: string | null = null;
   let ceiling: string | null = null;
   if (mode === "this_week") cutoff = new Date(Date.now() - 7 * 86_400_000).toISOString();
@@ -119,7 +119,7 @@ async function scoreBillboard(
     .limit(100)
     .order("created_at", { ascending: false });
 
-  const posts = (pool ?? []) as unknown as SongFitPost[];
+  const posts = (pool ?? []) as unknown as FmlyPost[];
   if (posts.length === 0) return { posts: [], signalMap: {} };
 
   const postIds = posts.map((p) => p.id);
@@ -174,11 +174,11 @@ async function scoreBillboard(
 
 // ── Hook ────────────────────────────────────────────────────────────────────
 export interface FeedState {
-  posts: SongFitPost[];
+  posts: FmlyPost[];
   loading: boolean;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  searchResults: SongFitPost[];
+  searchResults: FmlyPost[];
   searchLoading: boolean;
   isSearching: boolean;
   loadingMore: boolean;
@@ -194,20 +194,20 @@ export interface FeedState {
   loadMore: () => Promise<void>;
   refresh: () => void;
   consumeNewDrops: () => void;
-  setPosts: React.Dispatch<React.SetStateAction<SongFitPost[]>>;
+  setPosts: React.Dispatch<React.SetStateAction<FmlyPost[]>>;
 }
 
 export function useFeedPosts(): FeedState {
   const { user } = useAuth();
 
   // ── Core state ──
-  const [posts, setPosts] = useState<SongFitPost[]>(() => {
+  const [posts, setPosts] = useState<FmlyPost[]>(() => {
     const cached = getCachedFeed();
-    return cached?.length ? (cached as unknown as SongFitPost[]).map(hydrateDefaults) : [];
+    return cached?.length ? (cached as unknown as FmlyPost[]).map(hydrateDefaults) : [];
   });
   const [loading, setLoading] = useState(() => !getCachedFeed()?.length);
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<SongFitPost[]>([]);
+  const [searchResults, setSearchResults] = useState<FmlyPost[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -304,7 +304,7 @@ export function useFeedPosts(): FeedState {
           .limit(PAGE_SIZE)
           .order("created_at", { ascending: false });
 
-    let allPosts = (raw ?? []) as unknown as SongFitPost[];
+    let allPosts = (raw ?? []) as unknown as FmlyPost[];
     const filtered = allPosts.filter((p) => matchesView(p, feedView));
     const normalized = filtered.map(hydrateDefaults);
 
@@ -355,7 +355,7 @@ export function useFeedPosts(): FeedState {
         .order("created_at", { ascending: false })
         .limit(PAGE_SIZE);
 
-      let nextPosts = (data ?? []) as unknown as SongFitPost[];
+      let nextPosts = (data ?? []) as unknown as FmlyPost[];
       nextPosts = nextPosts.filter((p) => matchesView(p, feedView));
 
       if (nextPosts.length > 0) {
@@ -427,7 +427,7 @@ export function useFeedPosts(): FeedState {
           .order("created_at", { ascending: false })
           .limit(40);
 
-        const results = ((data ?? []) as unknown as SongFitPost[]).map(hydrateDefaults);
+        const results = ((data ?? []) as unknown as FmlyPost[]).map(hydrateDefaults);
         setSearchResults(results);
 
         const { nextMap, cachePatch, grew } = hydrateLyricRows(results, lyricDataMap);
@@ -449,8 +449,8 @@ export function useFeedPosts(): FeedState {
   // ── Dance-published event ─────────────────────────────────────────────
   useEffect(() => {
     const handler = () => void fetchPosts();
-    window.addEventListener("songfit:dance-published", handler);
-    return () => window.removeEventListener("songfit:dance-published", handler);
+    window.addEventListener("fmly:dance-published", handler);
+    return () => window.removeEventListener("fmly:dance-published", handler);
   }, [fetchPosts]);
 
   // ── Public API ────────────────────────────────────────────────────────

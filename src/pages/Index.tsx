@@ -39,7 +39,7 @@ import {
   LyricFitTabImport,
   MixFitCheckImport,
   ProFitTabImport,
-  SongFitTabImport,
+  FmlyTabImport,
   VibeFitTabImport,
 } from "@/lib/routePrefetch";
 import { importWithRetry } from "@/lib/importWithRetry";
@@ -64,14 +64,14 @@ const HitFitTab = lazy(() =>
 const ProFitTab = lazy(() =>
   ProFitTabImport().then((module) => ({ default: module.ProFitTab })),
 );
-const SongFitTab = lazy(() =>
+const FmlyTab = lazy(() =>
   importWithRetry(
-    () => SongFitTabImport(),
+    () => FmlyTabImport(),
     () =>
       import(
-        /* @vite-ignore */ `../components/songfit/SongFitTab.tsx?t=${Date.now()}`
-      ) as ReturnType<typeof SongFitTabImport>,
-  ).then((module) => ({ default: module.SongFitTab })),
+        /* @vite-ignore */ `../components/fmly/FmlyTab.tsx?t=${Date.now()}`
+      ) as ReturnType<typeof FmlyTabImport>,
+  ).then((module) => ({ default: module.FmlyTab })),
 );
 const DreamFitTab = lazy(() =>
   DreamFitTabImport().then((module) => ({ default: module.DreamFitTab })),
@@ -192,10 +192,10 @@ const Index = () => {
   // Derive active tab from URL path (strip /:projectId suffix)
   const basePath = location.pathname.replace(/\/[0-9a-f-]{36}$/, "");
   const rawTabFromPath =
-    PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || "songfit";
+    PATH_TO_TAB[basePath] || PATH_TO_TAB[location.pathname] || "fmly";
   const tabFromPath = rawTabFromPath;
   const [activeTab, setActiveTabState] = useState(tabFromPath);
-  const reelsMode = isMobile && activeTab === "songfit";
+  const reelsMode = isMobile && activeTab === "fmly";
   const [reelsScrolled, setReelsScrolled] = useState(false);
   const playlistQuota = useUsageQuota("playlist", {
     enabled: activeTab === "playlist",
@@ -226,7 +226,7 @@ const Index = () => {
       setReelsScrolled(false);
       return;
     }
-    const el = document.getElementById("songfit-scroll-container");
+    const el = document.getElementById("fmly-feed-scroll");
     if (!el) return;
     const onScroll = () => setReelsScrolled(el.scrollTop > 50);
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -478,7 +478,7 @@ const Index = () => {
           setIsFetchingProject(false);
           setProjectMissing(true);
           toast.error("Project not found");
-          navigate(pathMap[tab] || TOOL_TO_PATH.songfit, { replace: true });
+          navigate(pathMap[tab] || TOOL_TO_PATH.fmly, { replace: true });
           return;
         }
         projectLoadedRef.current = projectId;
@@ -754,7 +754,7 @@ const Index = () => {
     if (state?.returnTab) {
       const TAB_TO_PATH = TOOL_TO_PATH;
       setActiveTab(state.returnTab);
-      navigate(TAB_TO_PATH[state.returnTab] || TOOL_TO_PATH.songfit, { replace: true });
+      navigate(TAB_TO_PATH[state.returnTab] || TOOL_TO_PATH.fmly, { replace: true });
       if (
         !state.reportData &&
         !state.autoRun &&
@@ -964,7 +964,7 @@ const Index = () => {
         setActiveTab(tab);
       });
 
-      navigate(TOOL_TO_PATH[tab] || TOOL_TO_PATH.songfit, { replace: true });
+      navigate(TOOL_TO_PATH[tab] || TOOL_TO_PATH.fmly, { replace: true });
     },
     [setActiveTab, navigate],
   );
@@ -1192,10 +1192,10 @@ const Index = () => {
     }
 
     switch (activeTab) {
-      case "songfit":
+      case "fmly":
         return (
           <div
-            id="songfit-scroll-container"
+            id="fmly-feed-scroll"
             className={cn(
               "flex-1",
               reelsMode
@@ -1204,8 +1204,8 @@ const Index = () => {
             )}
             onTouchStart={reelsMode ? () => unlockAudio() : undefined}
           >
-            <Suspense fallback={<PageSkeleton tool="songfit" mode="new" />}>
-              <SongFitTab reelsMode={reelsMode} />
+            <Suspense fallback={<PageSkeleton tool="fmly" mode="new" />}>
+              <FmlyTab reelsMode={reelsMode} />
             </Suspense>
           </div>
         );

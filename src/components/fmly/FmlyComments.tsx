@@ -5,7 +5,7 @@ import { User, Send, Loader2, CornerDownRight, Smile, Trash2, Heart } from "luci
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import type { SongFitComment } from "./types";
+import type { FmlyComment } from "./types";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
@@ -23,9 +23,9 @@ interface Props {
   onCommentAdded?: (postId: string) => void;
 }
 
-function buildTree(comments: SongFitComment[]): SongFitComment[] {
-  const map = new Map<string, SongFitComment>();
-  const roots: SongFitComment[] = [];
+function buildTree(comments: FmlyComment[]): FmlyComment[] {
+  const map = new Map<string, FmlyComment>();
+  const roots: FmlyComment[] = [];
   comments.forEach(c => map.set(c.id, { ...c, replies: [] }));
   map.forEach(c => {
     if (c.parent_comment_id && map.has(c.parent_comment_id)) {
@@ -46,7 +46,7 @@ function CommentItem({
   currentUserId,
   likedSet,
 }: {
-  comment: SongFitComment;
+  comment: FmlyComment;
   depth: number;
   onReply: (commentId: string, displayName: string) => void;
   onDelete: (commentId: string) => void;
@@ -132,9 +132,9 @@ function CommentItem({
   );
 }
 
-export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
+export function FmlyComments({ postId, onClose, onCommentAdded }: Props) {
   const { user } = useAuth();
-  const [comments, setComments] = useState<SongFitComment[]>([]);
+  const [comments, setComments] = useState<FmlyComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -153,7 +153,7 @@ export function SongFitComments({ postId, onClose, onCommentAdded }: Props) {
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
       .limit(200);
-    const fetched = (data || []) as unknown as SongFitComment[];
+    const fetched = (data || []) as unknown as FmlyComment[];
     setComments(fetched);
 
     // Fetch which ones the current user has liked

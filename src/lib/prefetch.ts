@@ -7,7 +7,7 @@ import { preloadImage } from "@/lib/imagePreloadCache";
  * Consumed once by the corresponding component, then cleared.
  *
  * Embed routes (3-segment paths like /:artist/:song/lyric-dance) skip
- * feed, siteCopy, auth, and SongFitTab prefetches entirely — those
+ * feed, siteCopy, auth, and FmlyTab prefetches entirely — those
  * pages never use them.
  */
 
@@ -147,7 +147,7 @@ export function consumeAuthPrefetch() {
   return p;
 }
 
-// ── Feed posts prefetch — consumed by SongFitFeed on first mount ─────────────
+// ── Feed posts prefetch — consumed by FmlyFeed on first mount ─────────────
 
 const FEED_PAGE_SIZE = 20;
 const FEED_COLUMNS =
@@ -252,7 +252,7 @@ export function consumeSiteCopyPrefetch() {
 }
 
 if (!_isEmbedRoute) {
-  import("./routePrefetch").then(({ SongFitTabImport }) => void SongFitTabImport());
+  import("./routePrefetch").then(({ FmlyTabImport }) => void FmlyTabImport());
   void import("../MainAppShell");
 }
 

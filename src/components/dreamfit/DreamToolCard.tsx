@@ -7,7 +7,7 @@ import { DreamSignal } from "./DreamSignal";
 import { formatDistanceToNow } from "date-fns";
 import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
-import { ProfileHoverCard } from "@/components/songfit/ProfileHoverCard";
+import { ProfileHoverCard } from "@/components/fmly/ProfileHoverCard";
 import {
   DropdownMenu,
   DropdownMenuContent,
