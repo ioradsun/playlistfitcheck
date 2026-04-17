@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 import { useVoteGate } from "@/hooks/useVoteGate";
 
-const SESSION_COUNT_KEY = "crowdfit_reviews_this_session";
+const SESSION_COUNT_KEY = "fmly_reviews_this_session";
 
 function incrementSessionReviewCount() {
   const next = parseInt(sessionStorage.getItem(SESSION_COUNT_KEY) || "0", 10) + 1;
@@ -91,7 +91,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
 
   const handleVote = (replay: boolean) => {
     if (!user && !allowAnonymous) {
-      navigate("/Auth", { state: { returnTab: "crowdfit" } });
+      navigate("/Auth", { state: { returnTab: "fmly" } });
       return;
     }
     const clickedSide = replay ? "a" : "b";

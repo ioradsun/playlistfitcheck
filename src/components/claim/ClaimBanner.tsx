@@ -21,7 +21,7 @@ export default function ClaimBanner({
 
   const handleClaim = () => {
     navigate("/auth", {
-      state: { claimSlug: artistSlug, returnTab: "CrowdFit" },
+      state: { claimSlug: artistSlug, returnTab: "fmly" },
     });
   };
 

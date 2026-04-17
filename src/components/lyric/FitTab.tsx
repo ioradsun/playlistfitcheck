@@ -311,10 +311,10 @@ export function FitTab({
   }), [cinematicDirection]);
   const siteCopy = useSiteCopy();
 
-  // ── CrowdFit publish state ─────────────────────────────────────────
-  const [crowdfitPostId, setCrowdfitPostId] = useState<string | null>(null);
-  const crowdfitTogglingRef = useRef(false);
-  const [crowdfitToggling, setCrowdfitToggling] = useState(false);
+  // ── FMLY publish state ─────────────────────────────────────────────
+  const [fmlyPostId, setFmlyPostId] = useState<string | null>(null);
+  const fmlyTogglingRef = useRef(false);
+  const [fmlyToggling, setFmlyToggling] = useState(false);
 
   const [fireData, setFireData] = useState({
     fireStrength: null as any,
@@ -328,10 +328,10 @@ export function FitTab({
 
 
 
-  // Look for existing CrowdFit post when we know the dance ID
+  // Look for existing FMLY post when we know the dance ID
   useEffect(() => {
     if (!danceId || !user) {
-      setCrowdfitPostId(null);
+      setFmlyPostId(null);
       return;
     }
     Promise.resolve(supabase
@@ -342,24 +342,24 @@ export function FitTab({
       .maybeSingle()
       .then(({ data }: any) => {
         if (data && data.status !== "removed") {
-          setCrowdfitPostId(data.id);
+          setFmlyPostId(data.id);
         } else {
-          setCrowdfitPostId(null);
+          setFmlyPostId(null);
         }
-      })).catch(() => setCrowdfitPostId(null));
+      })).catch(() => setFmlyPostId(null));
   }, [danceId, user]);
 
-  // CrowdFit toggle handler
+  // FMLY toggle handler
   const handleCrowdfitToggle = useCallback(async () => {
     if (
       !user ||
       !danceId ||
       !danceUrl ||
-      crowdfitTogglingRef.current
+      fmlyTogglingRef.current
     )
       return;
-    crowdfitTogglingRef.current = true;
-    setCrowdfitToggling(true);
+    fmlyTogglingRef.current = true;
+    setFmlyToggling(true);
 
     // Derive artist_slug + url_slug from publishedUrl or fallback
     const urlParts = danceUrl?.match(/^\/([^/]+)\/([^/]+)\/lyric-dance/);
@@ -367,18 +367,18 @@ export function FitTab({
     const urlSlugVal = urlParts?.[2] ?? slugify(lyricData?.title || "untitled");
 
     try {
-      if (crowdfitPostId) {
+      if (fmlyPostId) {
         // Remove from FMLY — keep slugs so public URL survives
         await supabase
           .from("feed_posts" as any)
           .update({ status: "removed" })
-          .eq("id", crowdfitPostId);
+          .eq("id", fmlyPostId);
         await supabase
           .from("lyric_projects")
           .update({ is_published: false, published_at: null })
           .eq("id", danceId)
           .eq("user_id", user.id);
-        setCrowdfitPostId(null);
+        setFmlyPostId(null);
         toast.success("Removed from FMLY");
       } else {
         const publishPayload = {
@@ -427,7 +427,7 @@ export function FitTab({
             .update(publishPayload)
             .eq("id", danceId)
             .eq("user_id", user.id);
-          setCrowdfitPostId(existing.id);
+          setFmlyPostId(existing.id);
         } else {
           const expiresAt = new Date();
           expiresAt.setDate(expiresAt.getDate() + 21);
@@ -446,7 +446,7 @@ export function FitTab({
             .single();
           if (insertError) throw new Error(insertError.message);
           if (inserted) {
-            setCrowdfitPostId(inserted.id);
+            setFmlyPostId(inserted.id);
             await supabase
               .from("lyric_projects")
               .update(publishPayload)
@@ -460,14 +460,14 @@ export function FitTab({
     } catch (e: any) {
       toast.error(e.message || "Failed to post to FMLY");
     } finally {
-      crowdfitTogglingRef.current = false;
-      setCrowdfitToggling(false);
+      fmlyTogglingRef.current = false;
+      setFmlyToggling(false);
     }
   }, [
     user,
     danceId,
     danceUrl,
-    crowdfitPostId,
+    fmlyPostId,
     lyricData?.title,
   ]);
 
@@ -1115,29 +1115,29 @@ export function FitTab({
               <button
                 onClick={() => {
                   const isUnlimited = !!(profile as any)?.is_unlimited;
-                  if (!isUnlimited && !canCreate && !crowdfitPostId) {
+                  if (!isUnlimited && !canCreate && !fmlyPostId) {
                     const remaining = required - credits;
                     toast.error(`Fire ${remaining} song${remaining === 1 ? "" : "s"} to unlock posting`);
                     return;
                   }
                   handleCrowdfitToggle();
                 }}
-                disabled={crowdfitToggling || (!crowdfitPostId && generationStatus.sectionImages === "running")}
+                disabled={fmlyToggling || (!fmlyPostId && generationStatus.sectionImages === "running")}
                 className={`flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 ${
-                  crowdfitPostId
+                  fmlyPostId
                     ? "text-primary border-primary/40 bg-primary/5"
                     : "text-foreground hover:text-primary border-border/40 hover:border-primary/40"
                 } disabled:opacity-50`}
                 title={
-                  crowdfitPostId
+                  fmlyPostId
                     ? "Remove from FMLY"
                     : "Post to FMLY"
                 }
               >
-                {crowdfitToggling ? (
+                {fmlyToggling ? (
                   <Loader2 size={14} className="animate-spin" />
                 ) : null}
-                {crowdfitPostId ? "Live" : "Post to FMLY"}
+                {fmlyPostId ? "Live" : "Post to FMLY"}
               </button>
               {user?.email === "sunpatel@gmail.com" && cinematicDirection && (
                 <button
