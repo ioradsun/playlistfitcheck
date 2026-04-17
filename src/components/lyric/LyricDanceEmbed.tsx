@@ -134,7 +134,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
-  const [muted, setMuted] = useState(() => isGlobalMuted());
+  const [muted, setMuted] = useState(false);
   const [fireHeat, setFireHeat] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
   const [fireUserMap, setFireUserMap] = useState<Record<number, string[]>>({});
   const [fireAnonCount, setFireAnonCount] = useState<Record<number, number>>({});
@@ -550,12 +550,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       return;
     }
 
-    // Live card: toggle mute. Unmuting resumes play.
-    const next = !muted;
-    player?.setMuted(next);
-    if (!next) player?.play(true);
-    setMuted(next);
-  }, [live, muted, player, setMuted, onRequestPrimary]);
+    // Toggle mute intent. Sync effect propagates to player.
+    setMuted((prev) => !prev);
+  }, [live, setMuted, onRequestPrimary]);
 
   const seekOnly = useCallback((timeSec: number) => {
     player?.seek(timeSec);
@@ -624,14 +621,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [live, player, danceId]);
 
   // 12. Mode lifecycle effects (cardMode visibility, end-of-track handoff)
+  // On go-live: reset mute intent to "play audibly".
+  // New primary card always starts unmuted — user must tap to mute it.
+  // Going not-live doesn't touch intent; next primary will reset its own.
   useEffect(() => {
-    if (!live) return;
-    if (!playerReady || !player) return;
-    unlockAudio();
-    player.setMuted(false);
-    player.play(true);
-    setMuted(false);
-  }, [live, playerReady, player, setMuted]);
+    if (live) setMuted(false);
+  }, [live]);
 
   useEffect(() => {
     if (!live) return;
@@ -648,33 +643,49 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
   }, [muted]);
 
+  // Sync player state to React state. Single owner of mute, play, region, loop writes.
+  // Deterministic function of (player, playerReady, live, cardMode, muted).
+  // No ordering dependencies with other effects.
+  useEffect(() => {
+    if (!player || !playerReady) return;
+
+    const isListening = cardMode === "listen";
+    const shouldEngage = live && isListening;
+
+    if (shouldEngage) {
+      unlockAudio();
+      player.setRegion(undefined, undefined);
+      player.audio.loop = true;
+      player.setMuted(muted);
+      player.play(true);
+    } else {
+      player.setMuted(true);
+      player.audio.loop = false;
+      // Don't pause — engine may need to continue for export/preview contexts.
+      // Non-primary cards have live=false which tears down the engine via the hook.
+    }
+  }, [player, playerReady, live, cardMode, muted]);
+
+  // Canvas visibility based on cardMode. Pure DOM-style concern, not player state.
   useEffect(() => {
     if (!live) return;
-    if (!player) return;
+    if (!containerRef.current) return;
+    const isListening = cardMode === "listen";
+    const canvases = containerRef.current.querySelectorAll("canvas");
+    canvases.forEach((c) => {
+      c.style.visibility = isListening ? "visible" : "hidden";
+      c.style.pointerEvents = "none";
+    });
+  }, [cardMode, live]);
+
+  // Clear any pending panel-play timer when cardMode or live changes.
+  // This was bundled into Effect B; now separated for clarity.
+  useEffect(() => {
     if (panelPlayTimerRef.current) {
       clearTimeout(panelPlayTimerRef.current);
       panelPlayTimerRef.current = null;
     }
-    const isListening = cardMode === "listen";
-
-    if (containerRef.current) {
-      const canvases = containerRef.current.querySelectorAll("canvas");
-      canvases.forEach((c) => {
-        c.style.visibility = isListening ? "visible" : "hidden";
-        c.style.pointerEvents = "none";
-      });
-    }
-
-    if (!isListening) {
-      player.setMuted(true);
-      player.audio.loop = false;
-      return;
-    }
-
-    player.setMuted(true);
-    player.setRegion(undefined, undefined);
-    player.audio.loop = true;
-  }, [cardMode, player, containerRef, live]);
+  }, [cardMode, live]);
 
   useEffect(() => {
     if (!live) return;
