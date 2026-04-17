@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLyricDancePlayer } from "@/hooks/useLyricDancePlayer";
 import { useLyricSections } from "@/hooks/useLyricSections";
@@ -14,6 +14,7 @@ interface UseLyricDanceCoreOptions {
   lyricDanceId: string;
   prefetchedData?: LyricDanceData | null;
   postId?: string;
+  live?: boolean;
 }
 
 
@@ -21,6 +22,7 @@ export function useLyricDanceCore({
   lyricDanceId,
   prefetchedData,
   postId: _postId,
+  live = true,
 }: UseLyricDanceCoreOptions) {
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(() => {
     if (!prefetchedData) return null;
@@ -83,12 +85,12 @@ export function useLyricDanceCore({
     };
   }, [lyricDanceId, prefetchedData]);
 
-  const { player, playerReady, data, lastFrameUrl } = useLyricDancePlayer(
+  const { player, playerReady, data } = useLyricDancePlayer(
     fetchedData,
     canvasRef,
     textCanvasRef,
     containerRef,
-    { priority: true },
+    { priority: true, live },
   );
   const durationSec = useMemo(() => {
     const lines = (data as any)?.lines ?? (data as any)?.lyrics ?? [];
@@ -175,6 +177,7 @@ export function useLyricDanceCore({
   }, [player, fireHeat, moments]);
 
   useEffect(() => {
+    if (!live) return;
     if (!data?.id) return;
 
     let mounted = true;
@@ -264,9 +267,10 @@ export function useLyricDanceCore({
       pendingFiresRef.current = [];
       supabase.removeChannel(fireChannel);
     };
-  }, [data?.id]);
+  }, [data?.id, live]);
 
   useEffect(() => {
+    if (!live) return;
     if (!player) return;
     const audio = player.audio;
     let rafId = 0;
@@ -313,15 +317,7 @@ export function useLyricDanceCore({
       audio.removeEventListener("pause", checkPlaying);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [player]);
-
-  const handleReplay = useCallback(() => {
-    if (!player) return;
-    player.setMuted(false);
-    player.seek(0);
-    player.play();
-    setMuted(false);
-  }, [player]);
+  }, [live, player]);
 
   return {
     canvasRef,
@@ -340,7 +336,5 @@ export function useLyricDanceCore({
     activeLine,
     fireUserMap,
     fireAnonCount,
-    handleReplay,
-    lastFrameUrl,
   };
 }

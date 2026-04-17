@@ -1,6 +1,18 @@
 let audio: HTMLAudioElement | null = null;
 
 export const primaryAudio = {
+  /**
+   * Ensure shared audio is gesture-primed for programmatic playback.
+   */
+  prime(): void {
+    if (!audio) {
+      audio = new Audio();
+      audio.preload = "auto";
+    }
+    audio.muted = true;
+    void audio.play().catch(() => {});
+  },
+
   acquire(url: string): HTMLAudioElement {
     if (!audio) {
       audio = new Audio();

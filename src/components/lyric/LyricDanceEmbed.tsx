@@ -33,6 +33,8 @@ interface LyricDanceEmbedProps {
   previewPaletteColor?: string | null;
   /** Section image URL — used by preload cache, NOT CSS background */
   previewImageUrl?: string | null;
+  /** Enables full player behaviors; false renders static preview shell. */
+  live?: boolean;
 }
 
 export interface LyricDanceEmbedHandle {
@@ -62,6 +64,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   onProfileClick,
   previewPaletteColor,
   previewImageUrl,
+  live = true,
 }, ref) {
   const {
     canvasRef,
@@ -79,11 +82,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     activeLine,
     fireUserMap,
     fireAnonCount,
-    lastFrameUrl,
   } = useLyricDanceCore({
     lyricDanceId,
     prefetchedData,
     postId,
+    live,
   });
 
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
@@ -93,12 +96,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   const effectiveMuted = muted;
   const posterSrc = useMemo(() => {
-    if (lastFrameUrl) return lastFrameUrl;
     const albumArt = (data as any)?.album_art_url ?? (prefetchedData as any)?.album_art_url ?? null;
     const sectionImg = previewImageUrl ?? null;
     if (sectionImg && getPreloadedImage(sectionImg)) return sectionImg;
     return albumArt || sectionImg || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-  }, [lastFrameUrl, data, prefetchedData, previewImageUrl]);
+  }, [data, prefetchedData, previewImageUrl]);
 
   useImperativeHandle(ref, () => ({
     getPlayer: () => player ?? null,
@@ -120,17 +122,18 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
-  const [hasUnlocked, setHasUnlocked] = useState(false);
+  const hasUnlockedRef = useRef(false);
 
   useEffect(() => {
-    if (playerReady && player && !hasUnlocked) {
+    if (!live) return;
+    if (playerReady && player && !hasUnlockedRef.current) {
+      hasUnlockedRef.current = true;
       unlockAudio();
-      setHasUnlocked(true);
       player.setMuted(false);
       player.play(true);
       setMuted(false);
     }
-  }, [playerReady, player, hasUnlocked, setMuted]);
+  }, [live, playerReady, player, setMuted]);
 
   const playStartRef = useRef<number | null>(null);
   const totalDurationRef = useRef<number>(0);
@@ -141,6 +144,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const panelPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!live) return;
     if (!danceId) return;
     let mounted = true;
 
@@ -175,9 +179,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       mounted = false;
       supabase.removeChannel(channel);
     };
-  }, [danceId]);
+  }, [danceId, live]);
 
   useEffect(() => {
+    if (!live) return;
     const fireIds = Object.values(fireUserMap).flat();
     const commentIds = comments.filter((c) => c.user_id).map((c) => c.user_id!);
     const allIds = [...new Set([...fireIds, ...commentIds])];
@@ -201,13 +206,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         }
         setProfileMap(map);
       });
-  }, [fireUserMap, comments]);
+  }, [fireUserMap, comments, live]);
 
   useEffect(() => {
+    if (!live) return;
     if (!player) return;
     player.textRenderMode = 'dom';
     return () => { player.textRenderMode = 'canvas'; };
-  }, [player]);
+  }, [player, live]);
 
   useEffect(() => {
     if (muted) {
@@ -218,16 +224,18 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [muted]);
 
   const handleCanvasTap = useCallback((e: React.MouseEvent) => {
+    if (!live) return;
     e.stopPropagation();
     unlockAudio();
-    if (!hasUnlocked) setHasUnlocked(true);
+    hasUnlockedRef.current = true;
     const next = !muted;
     player?.setMuted(next);
     if (!next) player?.play(true);
     setMuted(next);
-  }, [hasUnlocked, muted, player, setMuted]);
+  }, [live, muted, player, setMuted]);
 
   useEffect(() => {
+    if (!live) return;
     if (!player) return;
     if (panelPlayTimerRef.current) {
       clearTimeout(panelPlayTimerRef.current);
@@ -252,15 +260,16 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     player.setMuted(true);
     player.setRegion(undefined, undefined);
     player.audio.loop = true;
-  }, [cardMode, player, containerRef]);
+  }, [cardMode, player, containerRef, live]);
 
   useEffect(() => {
+    if (!live) return;
     if (!durationSec || !player) return;
     if (currentTimeSec > durationSec + 2.2 && cardMode === "listen") {
       setCardMode("empowerment");
       player.audio.loop = false;
     }
-  }, [currentTimeSec, durationSec, cardMode, player]);
+  }, [currentTimeSec, durationSec, cardMode, live, player]);
 
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
@@ -277,6 +286,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [danceId, durationSec, player, userId]);
 
   useEffect(() => {
+    if (!live) return;
     if (!danceId) return;
     playCountRef.current += 1;
     playStartRef.current = Date.now();
@@ -299,7 +309,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       }
       flushPlay();
     };
-  }, [danceId, flushPlay]);
+  }, [danceId, flushPlay, live]);
 
 
   const seekOnly = useCallback((timeSec: number) => {
@@ -308,6 +318,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [player]);
 
   useEffect(() => {
+    if (!live) return;
     if (!player || !danceId) return;
     let cancelled = false;
     fetchFireData(danceId).then((fires) => {
@@ -315,30 +326,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       player.setHistoricalFires(fires);
     });
     return () => { cancelled = true; };
-  }, [player, danceId]);
+  }, [player, danceId, live]);
 
   useEffect(() => () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); }, []);
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const container = containerRef.current;
-    if (!container) return;
-    const interval = setInterval(() => {
-      const img = container.querySelector("img");
-      const canvas = container.querySelector("canvas");
-      if (!img) console.warn("[feed-qa] card has no poster image", postId);
-      if (canvas && parseFloat(canvas.style.opacity || "0") > 0 && img instanceof HTMLImageElement && !img.complete) {
-        console.warn("[feed-qa] canvas shown before poster decoded", postId);
-      }
-    }, 500);
-    return () => clearInterval(interval);
-  }, [containerRef, postId]);
-
-  const pulseStyle = `
-    @keyframes ld-pulse {
-      0%, 100% { opacity: 0.25; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(1.08); }
-    }
-  `;
 
   const getCurrentFireIndex = useCallback(() => {
     if (activeLine) return activeLine.lineIndex;
@@ -352,14 +342,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
-      <style>{pulseStyle}</style>
       <PlayerHeader
         avatarUrl={avatarUrl}
         artistName={artistName}
         songTitle={songTitle}
         spotifyArtistId={spotifyArtistId}
         lyricDanceUrl={lyricDanceUrl}
-        showMenuButton={true}
+        showMenuButton={live}
         isVerified={isVerified}
         userId={userId}
         onProfileClick={onProfileClick}
@@ -375,7 +364,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             ? `radial-gradient(ellipse at 50% 40%, ${previewPaletteColor}33 0%, #0a0a0a 70%)`
             : "#0a0a0a",
         }}
-        onClick={cardMode === "listen" ? handleCanvasTap : undefined}
+        onClick={live && cardMode === "listen" ? handleCanvasTap : undefined}
       >
         {/* Poster layer — mounted for card lifetime; canvas crossfades on top. */}
         <img
@@ -388,21 +377,19 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           style={{ objectFit: "cover", zIndex: 1, opacity: 1 }}
         />
 
-        {cardMode === "listen" && (
-          <>
-            <>
-              <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />
-              <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }} />
-            </>
+        <LyricTextLayer
+          lines={((data ?? prefetchedData) as any)?.lines ?? []}
+          words={((data ?? prefetchedData) as any)?.words}
+          phrases={((data ?? prefetchedData) as any)?.cinematic_direction?.phrases}
+          typographyPlan={((data ?? prefetchedData) as any)?.cinematic_direction?.typographyPlan ?? null}
+          currentTimeSec={currentTimeSec}
+          ownsText={true}
+        />
 
-            <LyricTextLayer
-              lines={((data ?? prefetchedData) as any)?.lines ?? []}
-              words={((data ?? prefetchedData) as any)?.words}
-              phrases={((data ?? prefetchedData) as any)?.cinematic_direction?.phrases}
-              typographyPlan={((data ?? prefetchedData) as any)?.cinematic_direction?.typographyPlan ?? null}
-              currentTimeSec={currentTimeSec}
-              ownsText={true}
-            />
+        {live && cardMode === "listen" && (
+          <>
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />
+            <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }} />
 
             {effectiveMuted && (
               <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
@@ -438,7 +425,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           </>
         )}
 
-        {cardMode === "empowerment" && (
+        {live && cardMode === "empowerment" && (
           <EmpowermentModePanel
             danceId={danceId ?? null}
             empowermentPromise={
@@ -448,14 +435,16 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           />
         )}
 
-        {cardMode === "moments" && (
+        {live && cardMode === "moments" && (
           <MomentPanel
             danceId={danceId}
             moments={moments}
             fireHeat={fireHeat}
             currentTimeSec={currentTimeSec}
-            words={((data as any)?.cinematic_direction?._instrumental ? undefined : ((data?.words as Array<{ word: string; start: number; end: number }>) ?? []))}
-            isInstrumental={!!(data as any)?.cinematic_direction?._instrumental}
+            words={(Array.isArray((data as any)?.lines) && (data as any).lines.length > 0)
+              ? ((data?.words as Array<{ word: string; start: number; end: number }>) ?? [])
+              : undefined}
+            isInstrumental={!Array.isArray((data as any)?.lines) || (data as any).lines.length === 0}
             comments={comments}
             onCommentAdded={(comment) => setComments((prev) => (prev.some((c) => c.id === comment.id) ? prev : [...prev, comment]))}
             profileMap={profileMap}
@@ -482,7 +471,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           />
         )}
 
-        {cardMode === "results" && (
+        {live && cardMode === "results" && (
           <CardResultsPanel
             moments={moments}
             fireHeat={fireHeat}
@@ -493,7 +482,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         )}
       </div>
 
-      {cardMode === "listen" && (
+      {live && cardMode === "listen" && (
         <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
           <LyricInteractionLayer
             moments={moments}
@@ -539,17 +528,19 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         </div>
       )}
 
-      <ViralClipModal
-        isOpen={viralClipOpen}
-        onClose={() => setViralClipOpen(false)}
-        getPlayer={getPlayerStable}
-        moments={moments}
-        fireHeat={fireHeat}
-        comments={comments}
-        songTitle={songTitle}
-        artistName={artistName ?? "artist"}
-        audioUrl={((data ?? prefetchedData) as any)?.audio_url ?? ""}
-      />
+      {live && (
+        <ViralClipModal
+          isOpen={viralClipOpen}
+          onClose={() => setViralClipOpen(false)}
+          getPlayer={getPlayerStable}
+          moments={moments}
+          fireHeat={fireHeat}
+          comments={comments}
+          songTitle={songTitle}
+          artistName={artistName ?? "artist"}
+          audioUrl={((data ?? prefetchedData) as any)?.audio_url ?? ""}
+        />
+      )}
     </div>
   );
 }));
