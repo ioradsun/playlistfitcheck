@@ -729,6 +729,23 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           className="absolute inset-0 w-full h-full pointer-events-none select-none"
           style={{ objectFit: "cover", zIndex: 1, opacity: 1 }}
         />
+        {/* Static vignette — applied only when live=false. Approximates the engine's
+         *  own vignette so non-primary cards feel like stilled versions of the live card
+         *  rather than a separate visual language. When live, the canvas draws its own
+         *  dynamic vignette on top, so this overlay must not render. */}
+        {!live && (
+          <div
+            aria-hidden
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              zIndex: 2,
+              background: `
+                radial-gradient(ellipse at 50% 45%, transparent 20%, rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.35) 100%),
+                linear-gradient(to bottom, transparent 70%, rgba(0,0,0,0.25) 100%)
+              `,
+            }}
+          />
+        )}
 
         <LyricTextLayer
           lines={((data ?? prefetchedData) as any)?.lines ?? []}
