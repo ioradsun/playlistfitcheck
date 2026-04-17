@@ -92,7 +92,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
   const parts = heroRegex ? visibleText.split(heroRegex) : [visibleText];
 
   return (
-    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: alignment, pointerEvents: "none", padding: "0 7%" }} data-text-owner={ownsText ? "dom" : "canvas"}>
+    <div style={{ position: "absolute", inset: 0, zIndex: 3, display: "flex", alignItems: "center", justifyContent: alignment, pointerEvents: "none", padding: "0 7%" }} data-text-owner={ownsText ? "dom" : "canvas"}>
       <div role="region" aria-live="off" aria-label="Lyrics" style={{ maxWidth: "86%", overflow: "hidden", wordBreak: "normal", textAlign: textAlign as "left" | "center" | "right", fontSize: "clamp(20px, 4.2vw, 46px)", lineHeight: 1.2, color: "#fff", opacity: previewText ? 0.5 : 1, transition: showTransition ? "opacity 120ms" : "none", textWrap: "balance", textShadow: "0 1px 20px rgba(0,0,0,.45)" }}>
         {parts.map((part, idx) => {
           const isHero = heroWords.some((w) => part.toLowerCase() === w.toLowerCase());
