@@ -4,14 +4,21 @@ import { liveCard } from "@/lib/liveCard";
 const SETTLE_MS = 80;
 const VELOCITY_THRESHOLD_PX_PER_SEC = 2500;
 
-interface Rect { id: string; top: number; height: number }
+export interface ArbiterResult {
+  /** Currently-live card id. Null during fast scroll or when no card overlaps viewport center. */
+  primaryId: string | null;
+  /** Index (in postIds) of the card whose center is closest to the viewport center.
+   *  Updated on every scroll, not debounced, not velocity-gated. Drives the virtual window. */
+  closestIndex: number;
+}
 
 export function usePrimaryArbiter(
   scrollContainer: HTMLElement | null,
   cardRefs: React.MutableRefObject<Map<string, HTMLElement>>,
   renderedIds: Set<string>,
-): string | null {
-  const [primaryId, setPrimaryId] = useState<string | null>(null);
+  postIds: string[],
+): ArbiterResult {
+  const [result, setResult] = useState<ArbiterResult>({ primaryId: null, closestIndex: 0 });
   const lastScrollY = useRef(0);
   const lastScrollT = useRef(performance.now());
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,42 +30,59 @@ export function usePrimaryArbiter(
 
     lastScrollY.current = getY();
 
-    const measure = () => {
+    /**
+     * One measurement pass. Returns both the primary candidate (gated on center-overlap)
+     * and the closest rendered card index (no gate).
+     */
+    const measure = (): { primaryId: string | null; closestIndex: number } => {
       const vpCenter = window.innerHeight / 2;
-      const rects: Rect[] = [];
+      let primaryBestId: string | null = null;
+      let primaryBestDist = Infinity;
+      let closestId: string | null = null;
+      let closestDist = Infinity;
+
       for (const id of renderedIds) {
         const el = cardRefs.current.get(id);
         if (!el) continue;
         const r = el.getBoundingClientRect();
-        rects.push({ id, top: r.top, height: r.height });
-      }
-
-      let bestId: string | null = null;
-      let bestDist = Infinity;
-      for (const r of rects) {
         const center = r.top + r.height / 2;
         const dist = Math.abs(center - vpCenter);
+
+        // Closest (for window advance) — unconditional
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestId = id;
+        }
+
+        // Primary (for engine hosting) — requires card to overlap viewport center
         if (dist > r.height / 2) continue;
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestId = r.id;
+        if (dist < primaryBestDist) {
+          primaryBestDist = dist;
+          primaryBestId = id;
         }
       }
 
-      setPrimaryId((prev) => (prev === bestId ? prev : bestId));
-      liveCard.set(bestId);
+      const closestIndex = closestId ? postIds.indexOf(closestId) : -1;
+      return { primaryId: primaryBestId, closestIndex };
     };
 
-    const schedule = () => {
+    const commitPrimary = () => {
+      const m = measure();
+      const fast = velocityRef.current > VELOCITY_THRESHOLD_PX_PER_SEC;
+      const primaryId = fast ? null : m.primaryId;
+      setResult((prev) =>
+        prev.primaryId === primaryId && prev.closestIndex === m.closestIndex
+          ? prev
+          : { primaryId, closestIndex: m.closestIndex }
+      );
+      liveCard.set(primaryId);
+    };
+
+    const scheduleSettle = () => {
       if (settleRef.current) clearTimeout(settleRef.current);
       settleRef.current = setTimeout(() => {
         settleRef.current = null;
-        if (velocityRef.current > VELOCITY_THRESHOLD_PX_PER_SEC) {
-          setPrimaryId((prev) => (prev === null ? prev : null));
-          liveCard.set(null);
-          return;
-        }
-        measure();
+        commitPrimary();
       }, SETTLE_MS);
     };
 
@@ -69,18 +93,24 @@ export function usePrimaryArbiter(
       if (dt > 0) velocityRef.current = Math.abs((y - lastScrollY.current) / dt) * 1000;
       lastScrollY.current = y;
       lastScrollT.current = now;
-      schedule();
+
+      // Update closestIndex immediately; primary is debounced via scheduleSettle
+      const m = measure();
+      setResult((prev) =>
+        prev.closestIndex === m.closestIndex ? prev : { ...prev, closestIndex: m.closestIndex }
+      );
+      scheduleSettle();
     };
 
     target.addEventListener("scroll", onScroll, { passive: true });
-    measure();
+    commitPrimary(); // initial measurement
 
     return () => {
       target.removeEventListener("scroll", onScroll);
       if (settleRef.current) clearTimeout(settleRef.current);
       liveCard.set(null);
     };
-  }, [cardRefs, renderedIds, scrollContainer]);
+  }, [cardRefs, renderedIds, scrollContainer, postIds]);
 
-  return primaryId;
+  return result;
 }
