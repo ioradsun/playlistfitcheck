@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
+import { VideoOptionsPanel } from "@/components/lyric/VideoOptionsPanel";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -31,6 +32,7 @@ import type {
   LyricData,
 } from "./LyricDisplay";
 import type { BeatGridData } from "@/hooks/useBeatGrid";
+import { DEFAULT_VIDEO_OPTIONS } from "@/types/CinematicDirection";
 // FrameRenderState import removed — V3 derives from cinematicDirection
 import type { HeaderProjectSetter } from "./LyricsTab";
 import type { GenerationStatus } from "./LyricFitTab";
@@ -303,11 +305,10 @@ export function FitTab({
     useRef<import("@/components/lyric/LyricDanceEmbed").LyricDanceEmbedHandle>(
       null,
     );
-  useEffect(() => {
-    const player = dancePlayerRef.current?.getPlayer();
-    if (!player) return;
-    player.beatVisEnabled = filmMode === "beat";
-  }, [filmMode, danceId, danceData]);
+  const currentOptions = useMemo(() => ({
+    ...DEFAULT_VIDEO_OPTIONS,
+    ...(((cinematicDirection as any)?.options ?? {}) as Partial<typeof DEFAULT_VIDEO_OPTIONS>),
+  }), [cinematicDirection]);
   const siteCopy = useSiteCopy();
 
   // ── CrowdFit publish state ─────────────────────────────────────────
@@ -1068,6 +1069,15 @@ export function FitTab({
             <div className="space-y-3">
             {/* Action toolbar — above the player */}
             <div className="flex items-center justify-center gap-1">
+              {danceId ? (
+                <VideoOptionsPanel
+                  projectId={danceId}
+                  initialOptions={currentOptions}
+                  onChange={(opts) => {
+                    dancePlayerRef.current?.getPlayer()?.applyOptions(opts);
+                  }}
+                />
+              ) : null}
               <a
                 href={danceUrl}
                 target="_blank"

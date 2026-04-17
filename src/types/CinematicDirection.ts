@@ -5,6 +5,21 @@
  * Consumed by: fontResolver, sceneCompiler, LyricDancePlayer, generate-section-images
  */
 
+export interface VideoOptions {
+  /** Canvas-drawn beat visualizer strip (reactive to beat energy). */
+  beatVisualizer: boolean;
+  /** Canvas-drawn dynamite wick progress bar. */
+  wickBar: boolean;
+  /** Preset for flash strength, scrim darkness, and vignette intensity. */
+  intensity: 'soft' | 'hard';
+}
+
+export const DEFAULT_VIDEO_OPTIONS: VideoOptions = {
+  beatVisualizer: false,
+  wickBar: false,
+  intensity: 'soft',
+};
+
 export interface CinematicDirection {
   /** One-sentence world description */
   description?: string;
@@ -30,6 +45,8 @@ export interface CinematicDirection {
 
   /** Beat grid summary attached by client */
   beat_grid?: { bpm: number; confidence: number };
+  /** Creator-controlled rendering options. Defaults applied when absent. */
+  options?: VideoOptions;
 }
 
 export interface CinematicSection {
