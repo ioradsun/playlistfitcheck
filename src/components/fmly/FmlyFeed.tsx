@@ -2,8 +2,8 @@
  * FmlyFeed — the FMLY feed.
  *
  * Uses usePrimaryArbiter (single scroll-driven center-distance check) to pick
- * one card as LIVE at a time. Renders FeedPrimaryCard (full LyricDanceEmbed)
- * for the primary card, FeedPosterCard (live=false shell) for the rest.
+ * one card as LIVE at a time by rendering FeedCard with live=true.
+ * Non-primary cards render FeedCard with live=false shell behavior.
  * PostCommentPanel is the sole comment UX (inline in card).
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -18,8 +18,7 @@ import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { cn } from "@/lib/utils";
 import { useFeedWindow } from "@/components/fmly/feed/useFeedWindow";
 import { usePrimaryArbiter } from "@/components/fmly/feed/usePrimaryArbiter";
-import { FeedPrimaryCard } from "@/components/fmly/feed/FeedPrimaryCard";
-import { FeedPosterCard } from "@/components/fmly/feed/FeedPosterCard";
+import { FeedCard } from "@/components/fmly/feed/FeedCard";
 import type { ContentFilter } from "./types";
 
 // ── Skeleton ────────────────────────────────────────────────────────────────
@@ -83,39 +82,25 @@ function FeedList({
 
   const postIds = posts.map((p) => p.id);
   const feedWindow = useFeedWindow(posts.length, postIds);
-  const primaryId = usePrimaryArbiter(scrollContainer, feedWindow.cardRefs, feedWindow.renderedIds);
+  const { primaryId, closestIndex } = usePrimaryArbiter(
+    scrollContainer,
+    feedWindow.cardRefs,
+    feedWindow.renderedIds,
+    postIds,
+  );
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
     if (el) feedWindow.cardRefs.current.set(id, el);
     else feedWindow.cardRefs.current.delete(id);
   }, [feedWindow.cardRefs]);
 
+  // Sync virtual window to the arbiter's measurement.
+  // Arbiter runs one scroll listener; we just consume its output.
   useEffect(() => {
-    const target = scrollContainer ?? document.scrollingElement ?? document.documentElement;
-    if (!target) return;
-    const onScroll = () => {
-      const vpCenter = window.innerHeight / 2;
-      let closest = feedWindow.activeIndex;
-      let closestDist = Infinity;
-
-      for (let i = feedWindow.windowStart; i <= feedWindow.windowEnd; i += 1) {
-        const id = postIds[i];
-        const el = feedWindow.cardRefs.current.get(id);
-        if (!el) continue;
-        const r = el.getBoundingClientRect();
-        const dist = Math.abs((r.top + r.height / 2) - vpCenter);
-        if (dist < closestDist) {
-          closestDist = dist;
-          closest = i;
-        }
-      }
-
-      if (closest !== feedWindow.activeIndex) feedWindow.setActiveIndex(closest);
-    };
-
-    target.addEventListener("scroll", onScroll, { passive: true });
-    return () => target.removeEventListener("scroll", onScroll);
-  }, [feedWindow, postIds, scrollContainer]);
+    if (closestIndex >= 0 && closestIndex !== feedWindow.activeIndex) {
+      feedWindow.setActiveIndex(closestIndex);
+    }
+  }, [closestIndex, feedWindow]);
 
   useEffect(() => {
     if (feedView === "billboard" || !hasMore) return;
@@ -150,25 +135,14 @@ function FeedList({
       {feedWindow.windowStart > 0 && <div style={{ height: topSpacerHeight }} />}
 
       {renderedPosts.map((post) => (
-        post.id === primaryId
-          ? (
-            <FeedPrimaryCard
-              key={post.id}
-              post={post}
-              lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
-              registerRef={registerRef}
-              onMeasure={feedWindow.onCardMeasure}
-            />
-          )
-          : (
-            <FeedPosterCard
-              key={post.id}
-              post={post}
-              lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
-              registerRef={registerRef}
-              onMeasure={feedWindow.onCardMeasure}
-            />
-          )
+        <FeedCard
+          key={post.id}
+          post={post}
+          lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
+          live={post.id === primaryId}
+          registerRef={registerRef}
+          onMeasure={feedWindow.onCardMeasure}
+        />
       ))}
 
       {feedWindow.windowEnd < posts.length - 1 && <div style={{ height: bottomSpacerHeight }} />}

@@ -6,13 +6,17 @@ import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 interface Props {
   post: FmlyPost;
   lyricData: LyricDanceData | null;
+  /** When true, the card hosts the live player (engine, audio, FMLY bar, modes).
+   *  When false, it's a static shell (poster + DOM lyrics + header). */
+  live: boolean;
   registerRef: (id: string, el: HTMLElement | null) => void;
   onMeasure: (id: string, height: number) => void;
 }
 
-export const FeedPrimaryCard = memo(function FeedPrimaryCard({
+export const FeedCard = memo(function FeedCard({
   post,
   lyricData,
+  live,
   registerRef,
   onMeasure,
 }: Props) {
@@ -40,7 +44,10 @@ export const FeedPrimaryCard = memo(function FeedPrimaryCard({
 
   return (
     <div ref={rootRef} className="px-2 pb-3">
-      <div className="relative overflow-hidden rounded-2xl" style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.04)" }}>
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.04)" }}
+      >
         <div className="relative" style={{ height: 320 }}>
           <LyricDanceEmbed
             lyricDanceId={post.project_id ?? ""}
@@ -60,7 +67,7 @@ export const FeedPrimaryCard = memo(function FeedPrimaryCard({
               ?? null
             }
             previewImageUrl={lp?.album_art_url ?? lp?.section_images?.[0] ?? null}
-            live
+            live={live}
           />
         </div>
       </div>
