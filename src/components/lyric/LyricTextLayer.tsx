@@ -1,9 +1,12 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useMemo, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { ResolvedTypography } from "@/lib/fontResolver";
 import { useLyricTextFit } from "@/hooks/useLyricTextFit";
+import { getPhraseExitVariant, getWordEntryDelay, getWordExitVariant, type ExitEffect } from "./lyricExitVariants";
 
 type TimedText = { start: number; end: number; text: string };
 type TimedWord = { word: string; start: number; end: number };
+
 type Phrase = {
   start?: number;
   end?: number;
@@ -13,6 +16,8 @@ type Phrase = {
   wordRange?: [number, number];
   bias?: "left" | "center" | "right";
   composition?: "stack" | "line" | "center_word";
+  revealStyle?: "instant" | "stagger_fast" | "stagger_slow";
+  exitEffect?: ExitEffect;
 };
 
 interface LyricTextLayerProps {
@@ -24,8 +29,6 @@ interface LyricTextLayerProps {
   ownsText: boolean;
 }
 
-const escapeRegex = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 export const LyricTextLayer = memo(function LyricTextLayer({
   lines,
   words,
@@ -34,9 +37,23 @@ export const LyricTextLayer = memo(function LyricTextLayer({
   currentTimeSec,
   ownsText,
 }: LyricTextLayerProps) {
-  const candidates = phrases?.length
-    ? phrases.map((p) => ({ start: p.start ?? 0, end: p.end ?? Number.MAX_SAFE_INTEGER, text: p.text ?? "", phrase: p }))
-    : lines.map((l) => ({ start: l.start, end: l.end, text: l.text, phrase: undefined as Phrase | undefined }));
+  const outerRef = useRef<HTMLDivElement>(null);
+
+  const candidates = useMemo(() => {
+    return phrases?.length
+      ? phrases.map((p) => ({
+          start: p.start ?? 0,
+          end: p.end ?? Number.MAX_SAFE_INTEGER,
+          text: p.text ?? "",
+          phrase: p,
+        }))
+      : lines.map((l) => ({
+          start: l.start,
+          end: l.end,
+          text: l.text,
+          phrase: undefined as Phrase | undefined,
+        }));
+  }, [phrases, lines]);
 
   const active = useMemo(() => {
     if (!candidates.length) return null;
@@ -47,60 +64,50 @@ export const LyricTextLayer = memo(function LyricTextLayer({
     return past ?? candidates[0];
   }, [candidates, currentTimeSec]);
 
-  const previewText = currentTimeSec === 0 && !candidates.some((p) => 0 >= p.start && 0 <= p.end)
-    ? (lines[0]?.text ?? "")
-    : "";
+  const previewText = currentTimeSec === 0 && !candidates.some((p) => 0 >= p.start && 0 <= p.end) ? (lines[0]?.text ?? "") : "";
 
   const phraseText = (active?.text || previewText || "").trim();
   const phrase = active?.phrase;
 
-  const visibleText = useMemo(() => {
-    if (!phrase) return phraseText;
-    if (!words?.length || !phrase.wordRange || phrase.wordRange.length !== 2) return phraseText;
-    const [start, end] = phrase.wordRange;
-    return words
-      .slice(Math.max(0, start), Math.max(start + 1, end + 1))
-      .filter((w) => currentTimeSec >= w.start)
-      .map((w) => w.word)
-      .join(" ") || phraseText;
-  }, [phrase, words, phraseText, currentTimeSec]);
+  const phraseWords = useMemo(() => {
+    if (phrase?.wordRange && words?.length) {
+      const [start, end] = phrase.wordRange;
+      return words.slice(Math.max(0, start), Math.max(start + 1, end + 1)).map((w) => w.word);
+    }
+    return phraseText.split(/\s+/).filter(Boolean);
+  }, [phrase, words, phraseText]);
 
-  const heroWords = useMemo(() => {
-    const all = [...(phrase?.heroWords ?? []), phrase?.heroWord ?? ""].map((w) => w.trim()).filter(Boolean);
-    return Array.from(new Set(all));
+  const heroWordSet = useMemo(() => {
+    const all = [...(phrase?.heroWords ?? []), phrase?.heroWord ?? ""]
+      .map((w) => w.trim())
+      .filter(Boolean);
+    return new Set(all.map((w) => w.toLowerCase()));
   }, [phrase]);
-
-  const heroRegex = useMemo(() => {
-    if (!heroWords.length) return null;
-    return new RegExp(`(${heroWords.map(escapeRegex).join("|")})`, "gi");
-  }, [heroWords]);
-
-  const firstPaintRef = useRef(true);
-  const showTransition = !firstPaintRef.current;
-  const outerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    firstPaintRef.current = false;
-  }, []);
 
   const primaryFontFamily = useMemo(() => {
     if (!typography?.fontFamily) return "Montserrat";
-    return typography.fontFamily.split(",")[0]?.trim().replace(/["']/g, "") || "Montserrat";
+    return typography.fontFamily.split(",")[0].trim().replace(/["']/g, "");
   }, [typography?.fontFamily]);
 
   const primaryFontWeight = typography?.fontWeight ?? 700;
 
   const fit = useLyricTextFit({
     containerRef: outerRef,
-    text: visibleText,
+    text: phraseText || "—",
     fontFamily: primaryFontFamily,
     fontWeight: primaryFontWeight,
-    maxFontPx: 64,
+    maxFontPx: 72,
     minFontPx: 18,
   });
 
-  const alignment = phrase?.bias === "left" ? "flex-start" : phrase?.bias === "right" ? "flex-end" : "center";
-  const textAlign = phrase?.bias ?? "center";
+  const composition = phrase?.composition ?? "line";
+  const bias = phrase?.bias ?? "center";
+  const revealStyle = phrase?.revealStyle ?? "stagger_fast";
+  const exitEffect: ExitEffect = phrase?.exitEffect ?? "fade";
+
+  const alignment = bias === "left" ? "flex-start" : bias === "right" ? "flex-end" : "center";
+  const textAlign: "left" | "center" | "right" = bias;
+
   const baseStyle = typography
     ? {
         fontFamily: typography.fontFamily,
@@ -114,13 +121,21 @@ export const LyricTextLayer = memo(function LyricTextLayer({
         textTransform: "none" as const,
         letterSpacing: "0.2em",
       };
-  const heroWeight = typography?.heroWeight ?? 800;
 
-  const parts = heroRegex ? visibleText.split(heroRegex) : [visibleText];
+  const heroWeight = typography?.heroWeight ?? 800;
+  const heroScale = 1.15;
+  const fillerOpacity = 0.65;
+  const phraseHasHero = heroWordSet.size > 0;
+  const phraseVariant = getPhraseExitVariant(exitEffect);
+
+  const phraseKey = phrase
+    ? `phrase-${phrase.wordRange?.[0] ?? 0}-${phrase.wordRange?.[1] ?? 0}-${phrase.start ?? 0}`
+    : `line-${active?.start ?? 0}-${active?.end ?? 0}`;
 
   return (
     <div
       ref={outerRef}
+      data-text-owner={ownsText ? "dom" : "canvas"}
       style={{
         position: "absolute",
         inset: 0,
@@ -131,44 +146,142 @@ export const LyricTextLayer = memo(function LyricTextLayer({
         pointerEvents: "none",
         padding: "0 5%",
       }}
-      data-text-owner={ownsText ? "dom" : "canvas"}
     >
-      <div
-        role="region"
-        aria-live="off"
-        aria-label="Lyrics"
-        style={{
-          width: "100%",
-          textAlign: textAlign as "left" | "center" | "right",
-          fontSize: `${fit.fontSize}px`,
-          lineHeight: 1.15,
-          color: "#fff",
-          opacity: previewText ? 0.5 : 1,
-          transition: showTransition ? "opacity 120ms, font-size 80ms" : "none",
-          textWrap: "balance",
-          wordBreak: "normal",
-          overflowWrap: "break-word",
-          textShadow: "0 1px 20px rgba(0,0,0,.45)",
-        }}
-      >
-        {parts.map((part, idx) => {
-          const isHero = heroWords.some((w) => part.toLowerCase() === w.toLowerCase());
-          if (!isHero) {
-            return <span key={`${part}-${idx}`} style={baseStyle}>{part}</span>;
-          }
-          return (
-            <span
-              key={`${part}-${idx}`}
-              style={{
-                ...baseStyle,
-                fontWeight: heroWeight,
-              }}
-            >
-              {part}
-            </span>
-          );
-        })}
-      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        {phraseText && (
+          <motion.div
+            key={phraseKey}
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={phraseVariant.exit}
+            transition={phraseVariant.transition}
+            style={{
+              width: "100%",
+              fontSize: `${fit.fontSize}px`,
+              lineHeight: 1.15,
+              color: "#fff",
+              textShadow: "0 1px 20px rgba(0,0,0,.45)",
+              textAlign,
+              wordBreak: "normal",
+              overflowWrap: "break-word",
+              ...getCompositionStyles(composition, bias),
+            }}
+          >
+            <PhraseBody
+              words={phraseWords}
+              heroWordSet={heroWordSet}
+              baseStyle={baseStyle}
+              heroWeight={heroWeight}
+              heroScale={heroScale}
+              fillerOpacity={fillerOpacity}
+              phraseHasHero={phraseHasHero}
+              revealStyle={revealStyle}
+              exitEffect={exitEffect}
+              composition={composition}
+              isPreview={!!previewText}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 });
+
+interface PhraseBodyProps {
+  words: string[];
+  heroWordSet: Set<string>;
+  baseStyle: Record<string, unknown>;
+  heroWeight: number;
+  heroScale: number;
+  fillerOpacity: number;
+  phraseHasHero: boolean;
+  revealStyle: "instant" | "stagger_fast" | "stagger_slow";
+  exitEffect: ExitEffect;
+  composition: "stack" | "line" | "center_word";
+  isPreview: boolean;
+}
+
+function PhraseBody({
+  words,
+  heroWordSet,
+  baseStyle,
+  heroWeight,
+  heroScale,
+  fillerOpacity,
+  phraseHasHero,
+  revealStyle,
+  exitEffect,
+  composition,
+  isPreview,
+}: PhraseBodyProps) {
+  if (words.length === 0) return null;
+
+  return (
+    <>
+      {words.map((word, i) => {
+        const isHero = heroWordSet.has(word.toLowerCase().replace(/[^\w']/g, ""));
+        const entryDelay = getWordEntryDelay(i, revealStyle);
+        const wordExit = getWordExitVariant(exitEffect, i, words.length);
+
+        const wordStyle: Record<string, unknown> = {
+          ...baseStyle,
+          display: "inline-block",
+          opacity: isPreview ? 0.5 : phraseHasHero && !isHero ? fillerOpacity : 1,
+          transformOrigin: "center",
+        };
+
+        if (isHero) {
+          wordStyle.fontWeight = heroWeight;
+          wordStyle.scale = heroScale;
+          wordStyle.zIndex = 2;
+        }
+
+        return (
+          <motion.span
+            key={`w-${i}-${word}`}
+            style={wordStyle}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: wordStyle.opacity as number, y: 0 }}
+            exit={wordExit.exit}
+            transition={{
+              opacity: { duration: 0.4, delay: entryDelay, ease: "easeOut" },
+              y: { duration: 0.4, delay: entryDelay, ease: "easeOut" },
+              ...wordExit.transition,
+            }}
+          >
+            {word}
+            {i < words.length - 1 && composition !== "stack" && <span aria-hidden>&nbsp;</span>}
+          </motion.span>
+        );
+      })}
+    </>
+  );
+}
+
+function getCompositionStyles(
+  composition: "stack" | "line" | "center_word",
+  bias: "left" | "center" | "right",
+): Record<string, unknown> {
+  const alignItems = bias === "left" ? "flex-start" : bias === "right" ? "flex-end" : "center";
+
+  switch (composition) {
+    case "stack":
+      return {
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.1em",
+        alignItems,
+      };
+    case "center_word":
+      return {
+        display: "block",
+        textWrap: "balance" as const,
+      };
+    case "line":
+    default:
+      return {
+        display: "block",
+        textWrap: "balance" as const,
+      };
+  }
+}
