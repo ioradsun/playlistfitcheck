@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import type { FmlyPost } from "@/components/fmly/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -74,6 +75,18 @@ export const FeedCard = memo(function FeedCard({
             }
             previewImageUrl={lp?.album_art_url ?? lp?.section_images?.[0] ?? null}
             live={live}
+            menuSlot={
+              <SidebarTrigger
+                className="p-1 rounded-md text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors md:hidden"
+                style={{ flexShrink: 0 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <line x1="2" y1="4" x2="14" y2="4" />
+                  <line x1="2" y1="8" x2="14" y2="8" />
+                  <line x1="2" y1="12" x2="14" y2="12" />
+                </svg>
+              </SidebarTrigger>
+            }
             onRequestPrimary={handleRequestPrimary}
           />
         </div>

@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, type ReactNode, type RefObject } from "react";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
@@ -45,7 +44,9 @@ interface PlayerHeaderProps {
   songTitle: string;
   spotifyArtistId?: string | null;
   lyricDanceUrl?: string | null;
-  showMenuButton?: boolean;
+  /** Optional UI to render in the top-left menu slot.
+   *  Feed passes a menu trigger; standalone contexts leave this undefined. */
+  menuSlot?: ReactNode;
   isVerified?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
@@ -117,7 +118,7 @@ export function PlayerHeader({
   songTitle,
   spotifyArtistId,
   lyricDanceUrl,
-  showMenuButton = false,
+  menuSlot,
   isVerified,
   userId,
   onProfileClick,
@@ -149,17 +150,10 @@ export function PlayerHeader({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", minWidth: 0, gap: 8, position: "relative" }}>
-        {showMenuButton && (
-          <SidebarTrigger
-            className="p-1 rounded-md text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors md:hidden"
-            style={{ flexShrink: 0 }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <line x1="2" y1="4" x2="14" y2="4" />
-              <line x1="2" y1="8" x2="14" y2="8" />
-              <line x1="2" y1="12" x2="14" y2="12" />
-            </svg>
-          </SidebarTrigger>
+        {menuSlot && (
+          <div style={{ flexShrink: 0 }}>
+            {menuSlot}
+          </div>
         )}
 
         <AvatarWithBadges
@@ -181,7 +175,7 @@ export function PlayerHeader({
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
               style={{
                 position: "absolute",
-                left: showMenuButton ? 68 : 36,
+                left: menuSlot ? 68 : 36,
                 top: "50%",
                 transform: "translateY(-50%)",
                 height: 28,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo, useMemo, type ReactNode } from "react";
 import { Share2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -68,6 +68,8 @@ interface LyricDanceEmbedProps {
   previewImageUrl?: string | null;
   /** Enables full player behaviors; false renders static preview shell. */
   live?: boolean;
+  /** Optional top-left menu slot (typically a menu trigger for feed contexts). */
+  menuSlot?: ReactNode;
   /** Invoked when the user taps a non-live card. Feed wrappers implement this
    *  to promote the card to primary. Ignored when live=true (tap toggles mute). */
   onRequestPrimary?: () => void;
@@ -103,6 +105,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     previewPaletteColor,
     previewImageUrl,
     live = true,
+    menuSlot,
     onRequestPrimary,
   } = props;
 
@@ -728,7 +731,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         songTitle={songTitle}
         spotifyArtistId={spotifyArtistId}
         lyricDanceUrl={lyricDanceUrl}
-        showMenuButton={live}
+        menuSlot={live ? menuSlot : undefined}
         isVerified={isVerified}
         userId={userId}
         onProfileClick={onProfileClick}
