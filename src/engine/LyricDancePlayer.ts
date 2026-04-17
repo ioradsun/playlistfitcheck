@@ -1853,9 +1853,12 @@ export class LyricDancePlayer {
   private _bgCacheDebounce: ReturnType<typeof setTimeout> | null = null;
   private _pendingCanPlayHandler: (() => void) | null = null;
   private _playPromise: Promise<void> | null = null;
+  private _audioListenerAbort: AbortController = new AbortController();
+  private _ownsAudio = true;
   private _exportFrameCount?: number;
   private options?: {
     preloadedImages?: HTMLImageElement[];
+    externalAudio?: HTMLAudioElement;
   };
 
   constructor(
@@ -1865,7 +1868,8 @@ export class LyricDancePlayer {
     container: HTMLDivElement,
     options?: {
       preloadedImages?: HTMLImageElement[];
-      },
+      externalAudio?: HTMLAudioElement;
+    },
   ) {
     this.data = data;
     const opts = {
@@ -1892,13 +1896,29 @@ export class LyricDancePlayer {
     const tctx = textCanvas.getContext("2d", { alpha: true });
     if (tctx) tctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
-    this.audio = new Audio(data.audio_url);
-    // Disable native loop for region-based players — tick() handles region looping manually
-    this.audio.loop = !(data.region_start != null && data.region_end != null);
-    this.audio.muted = true;
-    // Start downloading immediately — HTTP cache is warm from prefetch.ts fetch().
-    // No reason to defer: the engine WILL play this audio.
-    this.audio.preload = "auto";
+    this._audioListenerAbort = new AbortController();
+    const audioSignal = this._audioListenerAbort.signal;
+
+    if (options?.externalAudio) {
+      this.audio = options.externalAudio;
+      this._ownsAudio = false;
+      // Apply engine audio config to the shared element.
+      this.audio.src = data.audio_url;
+      // Disable native loop for region-based players — tick() handles region looping manually
+      this.audio.loop = !(data.region_start != null && data.region_end != null);
+      this.audio.preload = "auto";
+      // Don't mutate mute state here — sync effects set this explicitly.
+    } else {
+      this.audio = new Audio(data.audio_url);
+      this._ownsAudio = true;
+      // Disable native loop for region-based players — tick() handles region looping manually
+      this.audio.loop = !(data.region_start != null && data.region_end != null);
+      this.audio.muted = true;
+      // Start downloading immediately — HTTP cache is warm from prefetch.ts fetch().
+      // No reason to defer: the engine WILL play this audio.
+      this.audio.preload = "auto";
+    }
+
     const onMetadata = () => {
       this.audio.removeEventListener("loadedmetadata", onMetadata);
       // If initial bake had wrong duration, re-bake once metadata is available
@@ -1917,16 +1937,16 @@ export class LyricDancePlayer {
         }
       }
     };
-    this.audio.addEventListener("loadedmetadata", onMetadata);
+    this.audio.addEventListener("loadedmetadata", onMetadata, { signal: audioSignal });
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
-    document.addEventListener("visibilitychange", this._handleVisibilityChange);
+    document.addEventListener("visibilitychange", this._handleVisibilityChange, { signal: audioSignal });
     this._handlePageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
         // Page restored from BFCache — re-validate context and resume
         this._handleVisibilityChangeImpl();
       }
     };
-    window.addEventListener("pageshow", this._handlePageShow);
+    window.addEventListener("pageshow", this._handlePageShow, { signal: audioSignal });
 
 
     this.ambientParticleEngine = new ParticleEngine({
@@ -2998,10 +3018,12 @@ export class LyricDancePlayer {
     }
     this.audio.pause();
     this._playPromise = null;
-    this.audio.src = "";
+    this._audioListenerAbort.abort();
+
+    if (this._ownsAudio) {
+      this.audio.src = "";
+    }
     this._timeInitialized = false;
-    document.removeEventListener("visibilitychange", this._handleVisibilityChange);
-    window.removeEventListener("pageshow", this._handlePageShow);
 
     if (this.audioContext) {
       void this.audioContext.close().catch(() => {});
