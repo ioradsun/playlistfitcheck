@@ -18,7 +18,7 @@ import { primeAudioPool } from "@/lib/audioPool";
 import { isGlobalMuted } from "@/lib/globalMute";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
-import { getPreloadedImage, preloadImage } from "@/lib/imagePreloadCache";
+import { getPreloadedImage } from "@/lib/imagePreloadCache";
 
 interface LyricDanceEmbedProps {
   lyricDanceId: string;
@@ -421,11 +421,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     });
     return () => { cancelled = true; };
   }, [player, danceId]);
-
-  useEffect(() => {
-    if (!previewImageUrl) return;
-    void preloadImage(previewImageUrl);
-  }, [previewImageUrl]);
 
   useEffect(() => () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); }, []);
   useEffect(() => {

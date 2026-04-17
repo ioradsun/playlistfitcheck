@@ -18,7 +18,6 @@ import type { SongFitPost, FeedView, BillboardMode } from "./types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import {
   consumeFeedPrefetch,
-  consumeLyricDataPrefetch,
   getCachedFeed,
   getCachedLyricData,
   getCachedLyricScene,
@@ -46,6 +45,59 @@ function matchesView(p: SongFitPost, view: FeedView): boolean {
 
 function hydrateDefaults(p: SongFitPost): SongFitPost {
   return { ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 };
+}
+
+/**
+ * Merge incoming lyric_projects rows into the map. Returns the next map and
+ * an object of entries that should be written to the split localStorage caches.
+ * Side effect: triggers preloadImage() for section_images + album_art.
+ */
+function hydrateLyricRows(
+  posts: SongFitPost[],
+  currentMap: Map<string, LyricDanceData>,
+): { nextMap: Map<string, LyricDanceData>; cachePatch: Record<string, LyricDanceData>; grew: boolean } {
+  const nextMap = new Map(currentMap);
+  const cachePatch: Record<string, LyricDanceData> = {};
+
+  for (const post of posts) {
+    const lp = (post as any).lyric_projects;
+    const lpHasLines = Array.isArray(lp?.lines) && lp.lines.length > 0;
+    if (!lp?.id || !lpHasLines) continue;
+
+    const existingRow = nextMap.get(lp.id) as any;
+    // Skip unless this row is an upgrade (existing lacks cinematic_direction and new one has it)
+    if (existingRow && (existingRow.cinematic_direction || !lp.cinematic_direction)) continue;
+
+    const merged = {
+      ...lp,
+      cinematic_direction: lp.cinematic_direction
+        ? normalizeCinematicDirection(lp.cinematic_direction)
+        : null,
+    } as LyricDanceData;
+    nextMap.set(lp.id, merged);
+    cachePatch[lp.id] = merged;
+
+    (lp.section_images ?? []).filter(Boolean).forEach((url: string) => preloadImage(url));
+    if (lp.album_art_url) preloadImage(lp.album_art_url);
+  }
+
+  return { nextMap, cachePatch, grew: nextMap.size > currentMap.size };
+}
+
+/**
+ * Prioritize poster decodes for the top-of-feed cards.
+ */
+function preloadFirstVisible(posts: SongFitPost[], count = 3): void {
+  posts.slice(0, count).forEach((post) => {
+    const lp = (post as any).lyric_projects;
+    if (lp?.album_art_url) void preloadImage(lp.album_art_url, { priority: "high" });
+    if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0], { priority: "high" });
+  });
+  posts.slice(count).forEach((post) => {
+    const lp = (post as any).lyric_projects;
+    if (lp?.album_art_url) void preloadImage(lp.album_art_url);
+    if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0]);
+  });
 }
 
 // ── Billboard scoring ───────────────────────────────────────────────────────
@@ -279,55 +331,10 @@ export function useFeedPosts(): FeedState {
     setLoading(false);
     setPendingNewCount(0);
 
-    // ── Hydrate lyric data directly from joined lyric_projects rows ──
-    const lyricPrefetch = consumeLyricDataPrefetch();
-    void lyricPrefetch;
-
-    const newMap = new Map(lyricDataMap);
-    const cacheObj: Record<string, any> = {};
-    for (const post of filtered) {
-      const lp = (post as any).lyric_projects;
-      const lpHasLines = Array.isArray(lp?.lines) && lp.lines.length > 0;
-      if (!lp?.id || !lpHasLines) continue;
-      const existingRow = newMap.get(lp.id) as any;
-      if (existingRow && (!!existingRow.cinematic_direction || !lp.cinematic_direction)) {
-        if (existingRow.cinematic_direction || !lp.cinematic_direction) continue;
-      }
-
-      const merged = {
-        ...lp,
-        cinematic_direction: lp.cinematic_direction
-          ? normalizeCinematicDirection(lp.cinematic_direction)
-          : null,
-      } as LyricDanceData;
-      newMap.set(lp.id, merged);
-      cacheObj[lp.id] = merged;
-
-      (lp.section_images ?? [])
-        .filter(Boolean)
-        .forEach((url: string) => preloadImage(url));
-      if (lp.album_art_url) preloadImage(lp.album_art_url);
-    }
-
-    if (Object.keys(cacheObj).length > 0) {
-      mergeLyricCaches(cacheObj as Record<string, LyricDanceData>);
-    }
-
-    if (newMap.size > lyricDataMap.size) {
-      setLyricDataMap(newMap);
-    }
-
-    const FIRST_VISIBLE = 3;
-    normalized.slice(0, FIRST_VISIBLE).forEach((post) => {
-      const lp = (post as any).lyric_projects;
-      if (lp?.album_art_url) void preloadImage(lp.album_art_url, { priority: "high" });
-      if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0], { priority: "high" });
-    });
-    normalized.slice(FIRST_VISIBLE).forEach((post) => {
-      const lp = (post as any).lyric_projects;
-      if (lp?.album_art_url) void preloadImage(lp.album_art_url);
-      if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0]);
-    });
+    const { nextMap, cachePatch, grew } = hydrateLyricRows(filtered, lyricDataMap);
+    if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
+    if (grew) setLyricDataMap(nextMap);
+    preloadFirstVisible(normalized);
 
     // Font preloading handled by prefetch.ts (module eval) and engine (kickFontStabilizationLoad).
     // ensureFontReady deduplicates, so this was a no-op burning dynamic import overhead.
@@ -361,51 +368,10 @@ export function useFeedPosts(): FeedState {
           return merged;
         });
 
-        const newMap = new Map(lyricDataMap);
-        const cacheObj: Record<string, any> = {};
-        for (const post of normalized) {
-          const lp = (post as any).lyric_projects;
-          const lpHasLines = Array.isArray(lp?.lines) && lp.lines.length > 0;
-          if (!lp?.id || !lpHasLines) continue;
-          const existingRow = newMap.get(lp.id) as any;
-          if (existingRow && (!!existingRow.cinematic_direction || !lp.cinematic_direction)) {
-            if (existingRow.cinematic_direction || !lp.cinematic_direction) continue;
-          }
-
-          const merged = {
-            ...lp,
-            cinematic_direction: lp.cinematic_direction
-              ? normalizeCinematicDirection(lp.cinematic_direction)
-              : null,
-          } as LyricDanceData;
-          newMap.set(lp.id, merged);
-          cacheObj[lp.id] = merged;
-
-          (lp.section_images ?? [])
-            .filter(Boolean)
-            .forEach((url: string) => preloadImage(url));
-          if (lp.album_art_url) preloadImage(lp.album_art_url);
-        }
-
-        if (Object.keys(cacheObj).length > 0) {
-          mergeLyricCaches(cacheObj as Record<string, LyricDanceData>);
-        }
-
-        if (newMap.size > lyricDataMap.size) {
-          setLyricDataMap(newMap);
-        }
-
-        const FIRST_VISIBLE = 3;
-        normalized.slice(0, FIRST_VISIBLE).forEach((post) => {
-          const lp = (post as any).lyric_projects;
-          if (lp?.album_art_url) void preloadImage(lp.album_art_url, { priority: "high" });
-          if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0], { priority: "high" });
-        });
-        normalized.slice(FIRST_VISIBLE).forEach((post) => {
-          const lp = (post as any).lyric_projects;
-          if (lp?.album_art_url) void preloadImage(lp.album_art_url);
-          if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0]);
-        });
+        const { nextMap, cachePatch, grew } = hydrateLyricRows(normalized, lyricDataMap);
+        if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
+        if (grew) setLyricDataMap(nextMap);
+        preloadFirstVisible(normalized);
       }
       setHasMore((data ?? []).length === PAGE_SIZE);
     } finally {
@@ -464,39 +430,10 @@ export function useFeedPosts(): FeedState {
         const results = ((data ?? []) as unknown as SongFitPost[]).map(hydrateDefaults);
         setSearchResults(results);
 
-        const newMap = new Map(lyricDataMap);
-        const cacheObj: Record<string, any> = {};
-        for (const post of results) {
-          const lp = (post as any).lyric_projects;
-          const lpHasLines = Array.isArray(lp?.lines) && lp.lines.length > 0;
-          if (!lp?.id || !lpHasLines) continue;
-          const existingRow = newMap.get(lp.id) as any;
-          if (existingRow && (!!existingRow.cinematic_direction || !lp.cinematic_direction)) {
-            if (existingRow.cinematic_direction || !lp.cinematic_direction) continue;
-          }
-
-          const merged = {
-            ...lp,
-            cinematic_direction: lp.cinematic_direction
-              ? normalizeCinematicDirection(lp.cinematic_direction)
-              : null,
-          } as LyricDanceData;
-          newMap.set(lp.id, merged);
-          cacheObj[lp.id] = merged;
-
-          (lp.section_images ?? [])
-            .filter(Boolean)
-            .forEach((url: string) => preloadImage(url));
-          if (lp.album_art_url) preloadImage(lp.album_art_url);
-        }
-
-        if (Object.keys(cacheObj).length > 0) {
-          mergeLyricCaches(cacheObj as Record<string, LyricDanceData>);
-        }
-
-        if (newMap.size > lyricDataMap.size) {
-          setLyricDataMap(newMap);
-        }
+        const { nextMap, cachePatch, grew } = hydrateLyricRows(results, lyricDataMap);
+        if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
+        if (grew) setLyricDataMap(nextMap);
+        preloadFirstVisible(results);
       } catch (err) {
         console.error("[useFeedPosts] search error:", err);
       } finally {

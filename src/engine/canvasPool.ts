@@ -48,13 +48,11 @@ export function releaseCanvasSlotLogical(postId: string): void {
   if (!slot) return;
   slot.inUse = false;
   slot.heldBy = null;
-  setTimeout(() => {
-    if (slot.inUse) return;
-    const bgCtx = slot.bg.getContext("2d", { alpha: false });
-    bgCtx?.clearRect(0, 0, slot.bg.width, slot.bg.height);
-    const tCtx = slot.text.getContext("2d", { alpha: true });
-    tCtx?.clearRect(0, 0, slot.text.width, slot.text.height);
-  }, 250);
+  // No canvas-clear here. The next acquirer's setRenderTarget() resizes the bg
+  // canvas (which clears it implicitly) and clearRect's the text canvas. Until
+  // then, the canvas is opacity 0 and invisible. Engine's _pendingCanvasReveal
+  // flips opacity to 1 only after the first draw() paints content — so stale
+  // pixels are overwritten in the same tick they'd become visible.
   // Wake any cards that were waiting for a free slot
   window.dispatchEvent(new CustomEvent("crowdfit:pool-slot-freed"));
 }
