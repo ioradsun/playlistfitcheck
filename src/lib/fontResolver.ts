@@ -11,6 +11,7 @@ import {
   findFont,
   type FontDef,
 } from './typographyManifest';
+import type { CinematicDirection } from '@/types/CinematicDirection';
 
 export type HeroStyle = 'weight-shift' | 'scale-only' | 'none';
 export type AccentDensity = 'low' | 'medium' | 'high';
@@ -53,7 +54,9 @@ function pickHeroWeight(font: FontDef, baseWeight: number): number {
   return heavier[0] ?? font.weights[font.weights.length - 1];
 }
 
-function resolveFromPlan(cd: any): ResolvedTypography | null {
+function resolveFromPlan(
+  cd: CinematicDirection | null | undefined,
+): ResolvedTypography | null {
   const plan = cd?.typographyPlan;
   if (!plan || typeof plan !== 'object') return null;
 
@@ -96,7 +99,9 @@ function resolveFromPlan(cd: any): ResolvedTypography | null {
   };
 }
 
-export function resolveTypographyFromDirection(cd: any): ResolvedTypography {
+export function resolveTypographyFromDirection(
+  cd: CinematicDirection | null | undefined,
+): ResolvedTypography {
   const fromPlan = resolveFromPlan(cd);
   if (fromPlan) return fromPlan;
 
