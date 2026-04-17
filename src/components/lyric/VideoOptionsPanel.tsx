@@ -40,7 +40,7 @@ export const VideoOptionsPanel = memo(function VideoOptionsPanel({
       const merged = { ...cinematicDirection, options: next };
       await supabase
         .from("lyric_projects")
-        .update({ cinematic_direction: merged })
+        .update({ cinematic_direction: merged as never })
         .eq("id", projectId);
     } finally {
       if (writeId === pendingWriteIdRef.current) {
