@@ -93,6 +93,18 @@ const ObservedCard = memo(function ObservedCard({
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const loggedRef = useRef(false);
+  const onMeasureRef = useRef(onMeasure);
+  const onCenterEnterRef = useRef(onCenterEnter);
+  const onCenterLeaveRef = useRef(onCenterLeave);
+
+  useEffect(() => {
+    onMeasureRef.current = onMeasure;
+  }, [onMeasure]);
+
+  useEffect(() => {
+    onCenterEnterRef.current = onCenterEnter;
+    onCenterLeaveRef.current = onCenterLeave;
+  }, [onCenterEnter, onCenterLeave]);
 
   // Register DOM ref for geometric center scoring
   useEffect(() => {
@@ -105,13 +117,13 @@ const ObservedCard = memo(function ObservedCard({
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || !onMeasure) return;
-    const measure = () => onMeasure(post.id, el.getBoundingClientRect().height);
+    if (!el || !onMeasureRef.current) return;
+    const measure = () => onMeasureRef.current?.(post.id, el.getBoundingClientRect().height);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [post.id, onMeasure]);
+  }, [post.id]);
 
   // Wide observer: visibility (with debounced exit to prevent edge thrashing)
   const visTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,13 +140,15 @@ const ObservedCard = memo(function ObservedCard({
         visTimerRef.current = setTimeout(() => {
           visTimerRef.current = null;
           const next = pendingStateRef.current;
-          if (next !== null) setVisible(next);
+          if (next !== null) {
+            setVisible(next);
+            if (next && !loggedRef.current) {
+              loggedRef.current = true;
+              logImpression(post.id);
+            }
+          }
           pendingStateRef.current = null;
         }, 120);
-        if (target && !loggedRef.current) {
-          loggedRef.current = true;
-          logImpression(post.id);
-        }
       },
       { rootMargin: reelsMode ? "10% 0px" : "200px 0px" },
     );
@@ -156,15 +170,15 @@ const ObservedCard = memo(function ObservedCard({
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) onCenterEnter(post.id);
-        else onCenterLeave(post.id);
+        if (entry.isIntersecting) onCenterEnterRef.current(post.id);
+        else onCenterLeaveRef.current(post.id);
       },
       { rootMargin: reelsMode ? "-45% 0px -45% 0px" : "-35% 0px -35% 0px" },
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [post.id, onCenterEnter, onCenterLeave, reelsMode]);
+  }, [post.id, reelsMode]);
 
   return (
     <div ref={ref} className={cn("shrink-0", reelsMode && "h-[100dvh] snap-start")}>

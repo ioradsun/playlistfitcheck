@@ -2831,6 +2831,11 @@ export class LyricDancePlayer {
 
     const cw = container?.offsetWidth || bgCanvas.offsetWidth || this.width || 960;
     const ch = container?.offsetHeight || bgCanvas.offsetHeight || this.height || 540;
+    // INVARIANT: this.resize() must always run — setting canvas.width implicitly
+    // clears the Canvas 2D buffer, which prevents stale pixels from a previous
+    // slot owner flashing when opacity is revealed.
+    // canvasPool.releaseCanvasSlotLogical relies on this to skip its own clear.
+    // Do NOT "optimize" this by skipping resize when dimensions are unchanged.
     if (cw > 0 && ch > 0) this.resize(cw, ch);
 
     // Canvas is blank after pool reuse — keep hidden (opacity 0) until
