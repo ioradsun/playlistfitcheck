@@ -5,15 +5,13 @@ import { withInitLimit, withPriorityInitLimit } from "@/engine/initQueue";
 interface Options {
   onReady?: (player: LyricDancePlayer) => void;
   priority?: boolean;
+  live?: boolean;
 }
 
 export interface UseLyricDancePlayerReturn {
   player: LyricDancePlayer | null;
   playerReady: boolean;
   data: LyricDanceData | null;
-  setData: React.Dispatch<React.SetStateAction<LyricDanceData | null>>;
-  playerRef: React.MutableRefObject<LyricDancePlayer | null>;
-  lastFrameUrl: string | null;
 }
 
 export function useLyricDancePlayer(
@@ -26,6 +24,7 @@ export function useLyricDancePlayer(
   const {
     onReady,
     priority = true,
+    live = true,
   } = options;
 
   const [data, setData] = useState<LyricDanceData | null>(initialData);
@@ -42,7 +41,7 @@ export function useLyricDancePlayer(
 
   useEffect(() => {
     const next = data;
-    if (!next?.id || !next.audio_url || !canvasRef.current || !textCanvasRef.current || !containerRef.current) {
+    if (!live || !next?.id || !next.audio_url || !canvasRef.current || !textCanvasRef.current || !containerRef.current) {
       setPlayerReady(false);
       if (playerRef.current) {
         playerRef.current.destroy();
@@ -76,14 +75,11 @@ export function useLyricDancePlayer(
       setPlayer((prev) => (prev === p ? null : prev));
       setPlayerReady(false);
     };
-  }, [canvasRef, containerRef, data, priority, textCanvasRef]);
+  }, [canvasRef, containerRef, data, live, priority, textCanvasRef]);
 
   return {
     player,
     playerReady,
     data,
-    setData,
-    playerRef,
-    lastFrameUrl: null,
   };
 }

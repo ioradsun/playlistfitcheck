@@ -64,7 +64,6 @@ export function LyricFitTab({
       const cd = initialLyric.cinematic_direction
         ?? initialLyric.render_data?.cinematicDirection
         ?? initialLyric.render_data?.cinematic_direction;
-      if (cd?._instrumental === true) return "beat";
       if (
         initialLyric.beat_grid &&
         Array.isArray(initialLyric.lines) &&

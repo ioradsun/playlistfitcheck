@@ -358,7 +358,6 @@ export function usePipelineScheduler({
       (initialLyric as any).cinematic_direction ||
       rd?.cinematicDirection ||
       rd?.cinematic_direction;
-    if (cd?._instrumental === true) return true;
     return !!(
       (initialLyric as any).beat_grid &&
       Array.isArray((initialLyric as any).lines) &&

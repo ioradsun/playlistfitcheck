@@ -5,7 +5,7 @@
  * Supports reels mode (full-screen snap scroll) and standard mode.
  * PostCommentPanel is the sole comment UX (inline in card).
  */
-import { memo, useState, useEffect, useCallback, useMemo, useRef, type MutableRefObject } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Plus, Search, X } from "lucide-react";
@@ -13,14 +13,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useFeedPosts } from "./useFeedPosts";
 import { PlusMenu } from "./PlusMenu";
 import { BillboardToggle } from "./BillboardToggle";
-import { primeAudioPool } from "@/lib/audioPool";
+import { primaryAudio } from "@/audio/primaryAudio";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
-import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
 import { useFeedWindow } from "@/feed/useFeedWindow";
 import { usePrimaryArbiter } from "@/feed/usePrimaryArbiter";
-import { FeedCard } from "@/feed/FeedCard";
-import { LivePlayerMount } from "@/feed/LivePlayerMount";
+import { FeedPrimaryCard } from "@/feed/FeedPrimaryCard";
+import { FeedPosterCard } from "@/feed/FeedPosterCard";
 import type { ContentFilter } from "./types";
 
 // ── Skeleton ────────────────────────────────────────────────────────────────
@@ -86,9 +85,6 @@ function FeedList({
   const feedWindow = useFeedWindow(posts.length, postIds);
   const primaryId = usePrimaryArbiter(scrollContainer, feedWindow.cardRefs, feedWindow.renderedIds);
 
-  const liveCanvasSlot = useRef<HTMLDivElement | null>(null);
-  const [currentTimeSec, setCurrentTimeSec] = useState(0);
-
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
     if (el) feedWindow.cardRefs.current.set(id, el);
     else feedWindow.cardRefs.current.delete(id);
@@ -149,24 +145,30 @@ function FeedList({
   }, [feedWindow, posts.length]);
 
   const renderedPosts = posts.slice(feedWindow.windowStart, feedWindow.windowEnd + 1);
-  const primaryPost = posts.find((post) => post.id === primaryId) ?? null;
-  const primaryLyricData = primaryPost?.project_id ? lyricDataMap.get(primaryPost.project_id) ?? null : null;
-
   return (
     <div className={reelsMode ? "" : "pb-24"}>
       {feedWindow.windowStart > 0 && <div style={{ height: topSpacerHeight }} />}
 
       {renderedPosts.map((post) => (
-        <FeedCard
-          key={post.id}
-          post={post}
-          lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
-          isLive={post.id === primaryId}
-          currentTimeSec={post.id === primaryId ? currentTimeSec : 0}
-          registerRef={registerRef}
-          onMeasure={feedWindow.onCardMeasure}
-          liveCanvasSlot={post.id === primaryId ? liveCanvasSlot : undefined}
-        />
+        post.id === primaryId
+          ? (
+            <FeedPrimaryCard
+              key={post.id}
+              post={post}
+              lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
+              registerRef={registerRef}
+              onMeasure={feedWindow.onCardMeasure}
+            />
+          )
+          : (
+            <FeedPosterCard
+              key={post.id}
+              post={post}
+              lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
+              registerRef={registerRef}
+              onMeasure={feedWindow.onCardMeasure}
+            />
+          )
       ))}
 
       {feedWindow.windowEnd < posts.length - 1 && <div style={{ height: bottomSpacerHeight }} />}
@@ -179,13 +181,6 @@ function FeedList({
         </div>
       )}
 
-      {primaryLyricData && (
-        <LivePlayerMount
-          data={primaryLyricData}
-          slotRef={liveCanvasSlot}
-          onTimeUpdate={setCurrentTimeSec}
-        />
-      )}
     </div>
   );
 }
@@ -215,7 +210,8 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
     return displayPosts.filter((post) => {
       if (!post.project_id) return contentFilter === "lyrics";
       const danceData = feed.lyricDataMap.get(post.project_id);
-      const isInstrumental = !!(danceData?.cinematic_direction as any)?._instrumental;
+      const lines = (danceData as any)?.lines;
+      const isInstrumental = !Array.isArray(lines) || lines.length === 0;
       return contentFilter === "beats" ? isInstrumental : !isInstrumental;
     });
   }, [displayPosts, contentFilter, feed.lyricDataMap]);
@@ -246,7 +242,7 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   useEffect(() => {
     const handler = () => {
       unlockAudio();
-      primeAudioPool();
+      primaryAudio.prime();
       // One-shot: remove after first fire
       document.removeEventListener("touchstart", handler);
       document.removeEventListener("click", handler);
