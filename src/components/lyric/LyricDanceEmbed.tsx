@@ -13,6 +13,7 @@ import { LyricTextLayer } from "@/components/lyric/LyricTextLayer";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { audioController } from "@/lib/audioController";
+import { useIsPrimary } from "@/hooks/useIsPrimary";
 import { primeAudioPool } from "@/lib/audioPool";
 import { isGlobalMuted } from "@/lib/globalMute";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
@@ -73,6 +74,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const isFeedEmbed = visible !== undefined;
   const evicted = isFeedEmbed ? !visible : false;
 
+  const selfIsPrimary = useIsPrimary(postId);
+  const isPrimary = isFeedEmbed && selfIsPrimary;
+
   const {
     canvasRef,
     textCanvasRef,
@@ -90,16 +94,27 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     fireUserMap,
     fireAnonCount,
     lastFrameUrl,
-  } = useLyricDanceCore({ lyricDanceId, prefetchedData, postId, usePool: isFeedEmbed, evicted, fastScrolling });
+  } = useLyricDanceCore({
+    lyricDanceId,
+    prefetchedData,
+    postId,
+    usePool: isFeedEmbed,
+    evicted,
+    fastScrolling,
+    isPrimary: !isFeedEmbed || isPrimary,
+  });
 
   const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
   const [comments, setComments] = useState<Comment[]>([]);
   const [viralClipOpen, setViralClipOpen] = useState(false);
   const [profileMap, setProfileMap] = useState<Record<string, { avatarUrl: string | null; displayName: string | null }>>({});
 
-  const audioState = useSyncExternalStore(audioController.subscribe, audioController.getSnapshot, audioController.getSnapshot);
-  const isPrimary = isFeedEmbed && audioState.effectivePrimaryId === postId;
-  const feedMuted = isFeedEmbed ? audioState.muted : muted;
+  const feedMuted = useSyncExternalStore(
+    audioController.subscribe,
+    () => audioController.getSnapshot().muted,
+    () => audioController.getSnapshot().muted,
+  );
+  const effectiveMuted = isFeedEmbed ? feedMuted : muted;
   const posterSrc = useMemo(() => {
     if (lastFrameUrl) return lastFrameUrl;
     const albumArt = (data as any)?.album_art_url ?? (prefetchedData as any)?.album_art_url ?? null;
@@ -150,7 +165,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const panelPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!danceId) return;
+    if (!danceId || (isFeedEmbed && !isPrimary)) return;
     let mounted = true;
 
     supabase
@@ -184,9 +199,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       mounted = false;
       supabase.removeChannel(channel);
     };
-  }, [danceId]);
+  }, [danceId, isFeedEmbed, isPrimary]);
 
   useEffect(() => {
+    if (isFeedEmbed && !isPrimary) {
+      setProfileMap({});
+      return;
+    }
+
     const fireIds = Object.values(fireUserMap).flat();
     const commentIds = comments.filter((c) => c.user_id).map((c) => c.user_id!);
     const allIds = [...new Set([...fireIds, ...commentIds])];
@@ -210,7 +230,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         }
         setProfileMap(map);
       });
-  }, [fireUserMap, comments]);
+  }, [fireUserMap, comments, isFeedEmbed, isPrimary]);
 
   useEffect(() => {
     if (!player || !data) return;
@@ -496,7 +516,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               ownsText={true}
             />
 
-            {((isFeedEmbed && isPrimary && feedMuted) || (!isFeedEmbed && muted)) && (
+            {effectiveMuted && (
               <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
                 <VolumeX size={20} color="white" />
               </div>
