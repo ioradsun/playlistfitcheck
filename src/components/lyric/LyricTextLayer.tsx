@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import type { ResolvedTypography } from "@/lib/fontResolver";
+import { useLyricTextFit } from "@/hooks/useLyricTextFit";
 
 type TimedText = { start: number; end: number; text: string };
 type TimedWord = { word: string; start: number; end: number };
@@ -76,10 +77,27 @@ export const LyricTextLayer = memo(function LyricTextLayer({
 
   const firstPaintRef = useRef(true);
   const showTransition = !firstPaintRef.current;
+  const outerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     firstPaintRef.current = false;
   }, []);
+
+  const primaryFontFamily = useMemo(() => {
+    if (!typography?.fontFamily) return "Montserrat";
+    return typography.fontFamily.split(",")[0]?.trim().replace(/["']/g, "") || "Montserrat";
+  }, [typography?.fontFamily]);
+
+  const primaryFontWeight = typography?.fontWeight ?? 700;
+
+  const fit = useLyricTextFit({
+    containerRef: outerRef,
+    text: visibleText,
+    fontFamily: primaryFontFamily,
+    fontWeight: primaryFontWeight,
+    maxFontPx: 64,
+    minFontPx: 18,
+  });
 
   const alignment = phrase?.bias === "left" ? "flex-start" : phrase?.bias === "right" ? "flex-end" : "center";
   const textAlign = phrase?.bias ?? "center";
@@ -101,8 +119,38 @@ export const LyricTextLayer = memo(function LyricTextLayer({
   const parts = heroRegex ? visibleText.split(heroRegex) : [visibleText];
 
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 3, display: "flex", alignItems: "center", justifyContent: alignment, pointerEvents: "none", padding: "0 7%" }} data-text-owner={ownsText ? "dom" : "canvas"}>
-      <div role="region" aria-live="off" aria-label="Lyrics" style={{ maxWidth: "86%", overflow: "hidden", wordBreak: "normal", textAlign: textAlign as "left" | "center" | "right", fontSize: "clamp(20px, 4.2vw, 46px)", lineHeight: 1.2, color: "#fff", opacity: previewText ? 0.5 : 1, transition: showTransition ? "opacity 120ms" : "none", textWrap: "balance", textShadow: "0 1px 20px rgba(0,0,0,.45)" }}>
+    <div
+      ref={outerRef}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 3,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: alignment,
+        pointerEvents: "none",
+        padding: "0 5%",
+      }}
+      data-text-owner={ownsText ? "dom" : "canvas"}
+    >
+      <div
+        role="region"
+        aria-live="off"
+        aria-label="Lyrics"
+        style={{
+          width: "100%",
+          textAlign: textAlign as "left" | "center" | "right",
+          fontSize: `${fit.fontSize}px`,
+          lineHeight: 1.15,
+          color: "#fff",
+          opacity: previewText ? 0.5 : 1,
+          transition: showTransition ? "opacity 120ms, font-size 80ms" : "none",
+          textWrap: "balance",
+          wordBreak: "normal",
+          overflowWrap: "break-word",
+          textShadow: "0 1px 20px rgba(0,0,0,.45)",
+        }}
+      >
         {parts.map((part, idx) => {
           const isHero = heroWords.some((w) => part.toLowerCase() === w.toLowerCase());
           if (!isHero) {
