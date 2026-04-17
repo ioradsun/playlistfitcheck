@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const WINDOW_RADIUS = 1;
+const WINDOW_RADIUS = 3;
 
 export interface FeedWindow {
   activeIndex: number;
