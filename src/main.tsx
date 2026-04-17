@@ -58,10 +58,15 @@ syncAppViewportHeight();
 window.addEventListener("resize", syncAppViewportHeight, { passive: true });
 window.addEventListener("orientationchange", syncAppViewportHeight, { passive: true });
 
-// Warm lyric engine font binaries — triggers .woff2 downloads in parallel.
-// On embed routes, only warm fonts likely used by the lyric engine preset.
-// On main app routes, warm the full set.
+// Warm app and lyric engine font binaries — triggers .woff2 downloads in parallel.
+// App fonts are always warmed; lyric fonts remain route-aware for embed performance.
 if (document.fonts) {
+  const appFonts = ["Geist", "Geist Mono"];
+  for (const family of appFonts) {
+    document.fonts.load(`400 16px "${family}"`).catch(() => {});
+    document.fonts.load(`700 16px "${family}"`).catch(() => {});
+  }
+
   const coreFonts = [
     "Montserrat",        // clean-modern (default)
     "Oswald",            // bold-impact
