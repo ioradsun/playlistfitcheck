@@ -58,7 +58,6 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "11.18.2",
-    "geist": "^1.7.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
     "mp4-muxer": "^5.2.2",
