@@ -21,6 +21,7 @@ import { LyricTextLayer } from "@/components/lyric/LyricTextLayer";
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { getPreloadedImage } from "@/lib/imagePreloadCache";
+import { resolveTypographyFromDirection } from "@/lib/fontResolver";
 
 /**
  * LyricDanceEmbed — THE player component.
@@ -307,6 +308,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     data?.beat_grid ?? null,
     data?.cinematic_direction ?? null,
     durationSec,
+  );
+  const resolvedTypography = useMemo(
+    () => resolveTypographyFromDirection((data ?? prefetchedData) as any),
+    [data, prefetchedData],
   );
 
   const activeLine = useMemo(() => {
@@ -758,7 +763,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           lines={((data ?? prefetchedData) as any)?.lines ?? []}
           words={((data ?? prefetchedData) as any)?.words}
           phrases={((data ?? prefetchedData) as any)?.cinematic_direction?.phrases}
-          typographyPlan={((data ?? prefetchedData) as any)?.cinematic_direction?.typographyPlan ?? null}
+          typography={resolvedTypography}
           currentTimeSec={currentTimeSec}
           ownsText={true}
         />
