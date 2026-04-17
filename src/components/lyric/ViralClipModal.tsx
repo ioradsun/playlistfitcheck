@@ -246,7 +246,7 @@ export function ViralClipModal({
 
     player.pause();
     player.wickBarEnabled = true;
-    player.beatVisEnabled = true;
+    player.applyOptions({ beatVisualizer: true });
 
     const abort = new AbortController();
     abortRef.current = abort;
@@ -286,7 +286,7 @@ export function ViralClipModal({
       }
     } finally {
       player.wickBarEnabled = false;
-      player.beatVisEnabled = false;
+      player.applyOptions({ beatVisualizer: false });
       abortRef.current = null;
       player.setRegion(undefined, undefined);
     }

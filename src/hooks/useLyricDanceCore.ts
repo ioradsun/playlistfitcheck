@@ -88,7 +88,7 @@ export function useLyricDanceCore({
     canvasRef,
     textCanvasRef,
     containerRef,
-    { bootMode: "minimal", eagerUpgrade: true, priority: true },
+    { priority: true },
   );
   const durationSec = useMemo(() => {
     const lines = (data as any)?.lines ?? (data as any)?.lyrics ?? [];

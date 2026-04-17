@@ -23,10 +23,7 @@ export function LivePlayerMount({ data, slotRef, onTimeUpdate }: Props) {
     host.appendChild(text);
 
     const audio = primaryAudio.acquire(data.audio_url);
-    const player = new LyricDancePlayer(data, bg, text, host, {
-      bootMode: "minimal",
-      externalAudio: audio,
-    });
+    const player = new LyricDancePlayer(data, bg, text, host, { externalAudio: audio });
 
     const resize = () => {
       const rect = host.getBoundingClientRect();
@@ -38,15 +35,11 @@ export function LivePlayerMount({ data, slotRef, onTimeUpdate }: Props) {
     ro.observe(host);
     resize();
 
-    const isInstrumental = !!(data as any)?.cinematic_direction?._instrumental || !((data as any)?.lines?.length);
-    player.beatVisEnabled = isInstrumental;
-    player.renderMode = isInstrumental ? "beat" : "lyric";
     player.textRenderMode = "dom";
 
     let cancelled = false;
     void player.init().then(() => {
       if (cancelled) return;
-      player.scheduleFullModeUpgrade();
       player.primeAudio();
       player.audio.muted = isGlobalMuted();
       player.play(false);

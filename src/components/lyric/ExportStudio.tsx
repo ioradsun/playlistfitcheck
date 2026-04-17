@@ -397,7 +397,7 @@ export function ExportStudio({
     const player = getPlayer();
     if (!player || !isOpen) return;
     player.wickBarEnabled = includeWickBar;
-    player.beatVisEnabled = includeBeatVis;
+    player.applyOptions({ beatVisualizer: includeBeatVis });
     player.setEmojiStreamEnabled(includeFireReaction);
   }, [includeWickBar, includeBeatVis, includeFireReaction, getPlayer, isOpen]);
 
@@ -409,7 +409,7 @@ export function ExportStudio({
       player.pause();
       player.setRegion(undefined, undefined);
       player.wickBarEnabled = false;
-      player.beatVisEnabled = false;
+      player.applyOptions({ beatVisualizer: false });
       player.setEmojiStreamEnabled(false);
       const prev = prevSizeRef.current;
       if (prev) {
@@ -452,7 +452,7 @@ export function ExportStudio({
     try {
       // Set export visual flags.
       player.wickBarEnabled = includeWickBar;
-      player.beatVisEnabled = includeBeatVis;
+      player.applyOptions({ beatVisualizer: includeBeatVis });
       player.setEmojiStreamEnabled(includeFireReaction);
       const blob = await exportVideoAsMP4({
         player,
@@ -499,7 +499,7 @@ export function ExportStudio({
       abortRef.current = null;
       // Restore preview visual flags.
       player.wickBarEnabled = false;
-      player.beatVisEnabled = false;
+      player.applyOptions({ beatVisualizer: false });
       player.setEmojiStreamEnabled(false);
     }
   };

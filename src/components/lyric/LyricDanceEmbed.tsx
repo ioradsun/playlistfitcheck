@@ -31,7 +31,7 @@ interface LyricDanceEmbedProps {
   onProfileClick?: () => void;
   /** Hex color from palette — renders instantly as background, zero network */
   previewPaletteColor?: string | null;
-  /** Section image URL — used by drawMinimalFirstFrame via preload cache, NOT CSS background */
+  /** Section image URL — used by preload cache, NOT CSS background */
   previewImageUrl?: string | null;
 }
 
@@ -202,13 +202,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         setProfileMap(map);
       });
   }, [fireUserMap, comments]);
-
-  useEffect(() => {
-    if (!player || !data) return;
-    const isInst = !!(data as any)?.cinematic_direction?._instrumental;
-    player.beatVisEnabled = isInst;
-    player.renderMode = isInst ? "beat" : "lyric";
-  }, [player, data]);
 
   useEffect(() => {
     if (!player) return;

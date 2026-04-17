@@ -35,7 +35,7 @@ export class IntensityRouter {
     particleSpeedMult: 0.3,
   };
 
-  update(beat: BeatState, dt: number, renderMode: "lyric" | "beat" = "lyric"): MotionProfile {
+  update(beat: BeatState, dt: number, intensityScale = 1): MotionProfile {
     const p = this._profile;
     const eAlpha = 1 - Math.exp(-dt / ENERGY_TAU);
     const bAlpha = 1 - Math.exp(-dt / BRIGHTNESS_TAU);
@@ -55,13 +55,13 @@ export class IntensityRouter {
     ));
     p.intensity = intensity;
 
-    // Lyric: subtle pulse for readability. Beat: stronger, music-video pulse.
-    const pulseBase = renderMode === "beat" ? 0.03 : 0.01;
-    const pulseScale = renderMode === "beat" ? 0.15 : 0.05;
+    const hardMix = Math.max(0, Math.min(1, (intensityScale - 1) / 0.5));
+    const pulseBase = 0.01 + (0.03 - 0.01) * hardMix;
+    const pulseScale = 0.05 + (0.15 - 0.05) * hardMix;
     p.bgPulseAmplitude = pulseBase + intensity * pulseScale;
 
     const camRaw = intensity > CAMERA_THRESHOLD ? (intensity - CAMERA_THRESHOLD) / (1 - CAMERA_THRESHOLD) : 0;
-    const camScale = renderMode === "beat" ? 1.5 : 1.0;
+    const camScale = 1 + 0.5 * hardMix;
     p.cameraBeatMult = camRaw * camRaw * camScale;
 
     p.textSyncFraction = intensity > SYNC_THRESHOLD ? ((intensity - SYNC_THRESHOLD) / (1 - SYNC_THRESHOLD)) * 0.15 : 0;

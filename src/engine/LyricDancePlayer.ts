@@ -12,7 +12,11 @@
  * - All state on instance (no global singletons).
  */
 
-import type { CinematicDirection } from "@/types/CinematicDirection";
+import {
+  DEFAULT_VIDEO_OPTIONS,
+  type CinematicDirection,
+  type VideoOptions,
+} from "@/types/CinematicDirection";
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
@@ -39,7 +43,7 @@ import { FinaleEffect } from "@/engine/FinaleEffect";
 import { ExitEffect } from '@/engine/ExitEffect';
 import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
-import { preloadImage, getPreloadedImage } from "@/lib/imagePreloadCache";
+import { preloadImage } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
@@ -1690,8 +1694,8 @@ export class LyricDancePlayer {
   // ═══ Dynamite Wick Bar (always enabled) ═══
   private _globalWickBar: DynamiteWickBar | null = null;
   private _wickSeekOverlay: HTMLDivElement | null = null;
-  public beatVisEnabled = false;
-  public renderMode: "lyric" | "beat" = "lyric";
+  private _beatBarVisible = false;
+  private _intensityScale = 1.0;
   public textRenderMode: "dom" | "canvas" | "both" = "canvas";
   public wickBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
@@ -1829,9 +1833,6 @@ export class LyricDancePlayer {
 
   // Perf
   private fpsAccum = { t: 0, frames: 0, fps: 60 };
-  private bootMode: "minimal" | "full" = "full";
-  private fullModeEnabled = false;
-  get isFullModeEnabled(): boolean { return this.fullModeEnabled; }
   private perfMarks: {
     tInitStart: number;
     tFirstFrameDrawn: number | null;
@@ -1845,20 +1846,15 @@ export class LyricDancePlayer {
   };
   private perfDebugEnabled = false;
   private frameBudget = { dtAvgMs: 16.67, fpsAvg: 60, spikeFrames: 0, frames: 0 };
-  private _firstPaintMarked = false;
   private _fontStabilized = false;
   private _fontLayoutReflowPending = false;
   private _handleVisibilityChange: () => void;
   private _handlePageShow: (e: PageTransitionEvent) => void;
   private _bgCacheDebounce: ReturnType<typeof setTimeout> | null = null;
-  private _pendingUpgradeTimeout: number | null = null;
   private _pendingCanPlayHandler: (() => void) | null = null;
-  /** Audio is waiting for scene compilation to finish before playing */
-  private _audioDeferredUntilReady = false;
   private _playPromise: Promise<void> | null = null;
   private _exportFrameCount?: number;
   private options?: {
-    bootMode?: "minimal" | "full";
     preloadedImages?: HTMLImageElement[];
     externalAudio?: HTMLAudioElement;
   };
@@ -1869,12 +1865,18 @@ export class LyricDancePlayer {
     textCanvas: HTMLCanvasElement,
     container: HTMLDivElement,
     options?: {
-      bootMode?: "minimal" | "full";
       preloadedImages?: HTMLImageElement[];
       externalAudio?: HTMLAudioElement;
     },
   ) {
     this.data = data;
+    const opts = {
+      ...DEFAULT_VIDEO_OPTIONS,
+      ...(data.cinematic_direction?.options ?? {}),
+    };
+    this._beatBarVisible = opts.beatVisualizer;
+    this.wickBarEnabled = opts.wickBar;
+    this._intensityScale = opts.intensity === "hard" ? 1.5 : 1.0;
     // Normalize: DB stores lyrics as 'lines', engine uses 'lyrics' internally
     if (!this.data.lyrics?.length && (this.data as any).lines?.length) {
       this.data = { ...this.data, lyrics: (this.data as any).lines };
@@ -1923,8 +1925,6 @@ export class LyricDancePlayer {
       }
     };
     this.audio.addEventListener("loadedmetadata", onMetadata);
-    this.bootMode = options?.bootMode ?? "minimal";
-
     this._handleVisibilityChange = this._handleVisibilityChangeImpl.bind(this);
     document.addEventListener("visibilitychange", this._handleVisibilityChange);
     this._handlePageShow = (e: PageTransitionEvent) => {
@@ -1966,12 +1966,6 @@ export class LyricDancePlayer {
       this.ambientParticleEngine.setSystem('dust'); // always start with something
       this.ambientParticleEngine.setDensityMultiplier(0.6);
     }
-  }
-
-  private markFirstPaintOnce(): void {
-    if (this._firstPaintMarked) return;
-    this._firstPaintMarked = true;
-    performance.mark("engine:firstPaint");
   }
 
   /**
@@ -2018,21 +2012,12 @@ export class LyricDancePlayer {
   // Compatibility with existing React shell
   async init(): Promise<void> {
     this.perfDebugEnabled = Boolean((window as Window & { __LYRIC_DANCE_DEBUG_PERF?: boolean }).__LYRIC_DANCE_DEBUG_PERF);
-    this.beatVisEnabled = false;
     this.emojiStreamEnabled = true;
-    this.wickBarEnabled = false;
-    this._firstPaintMarked = false;
     this._fontLayoutReflowPending = false;
     performance.clearMarks("engine:start");
-    performance.clearMarks("engine:firstPaint");
-    performance.clearMarks("engine:initDone");
-    performance.clearMarks("engine:fontReady");
-    performance.clearMeasures("engine:ttfp");
     performance.mark("engine:start");
     this.perfMarks.tInitStart = performance.now();
 
-    // Always kick font stabilization in the background — no gate on bootMode.
-    // This ensures Montserrat / custom font is ready well before first vocal line.
     this.kickFontStabilizationLoad();
 
     const cw = this.container?.offsetWidth || this.canvas.offsetWidth || 960;
@@ -2048,32 +2033,12 @@ export class LyricDancePlayer {
 
     this.displayWidth = this.width;
     this.displayHeight = this.height;
-    this.drawMinimalFirstFrame();
-    if (this._firstPaintMarked) {
-      performance.measure("engine:ttfp", "engine:start", "engine:firstPaint");
-    }
-    performance.mark("engine:initDone");
 
-    if (this.bootMode === "minimal") {
-      // ── MINIMAL BOOT ──
-      // First frame is already painted. Do NOT start RAF or audio here.
-      // Everything waits for play() — user gesture, zero wasted CPU/network.
-      //
-      // Start loading section images immediately (fire-and-forget).
-      // Images are likely already in the preloadImage cache from feed prefetch.
-      // This populates chapterImages so the first rendered frame has a background,
-      // instead of waiting for the full mode upgrade delay (100ms + idle + compile).
-      this.loadSectionImages().then(() => {
-        // Redraw first frame with the loaded image if still in minimal mode
-        if (!this.destroyed && !this.fullModeEnabled && !this.playing) {
-          this.drawMinimalFirstFrame();
-        }
-      }).catch(() => {});
-      return;
-    }
-
-    // ── FULL BOOT (explicit opt-in only) ──
-    await this.prepareFullMode();
+    await this.ensureTimelineReady();
+    this.buildBgCache();
+    this.deriveVisualSystems();
+    this.buildChapterSims();
+    this.loadSectionImages().catch(() => {});
     this.startPlaybackClock();
   }
 
@@ -2090,12 +2055,7 @@ export class LyricDancePlayer {
     if (this.destroyed) return;
     this.perfMarks.tClockStart = this.perfMarks.tClockStart ?? performance.now();
     this.primeAudio();
-    // Full boot: scene is already compiled by prepareFullMode()
-    if (this.fullModeEnabled) {
-      this._safePlay();
-    } else {
-      this._audioDeferredUntilReady = true;
-    }
+    this._safePlay();
     this.playing = true;
     this.startHealthMonitor();
     if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
@@ -2108,31 +2068,6 @@ export class LyricDancePlayer {
     if (this.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
       this.audio.load();
     }
-  }
-
-  scheduleFullModeUpgrade(): void {
-    if (
-      this.destroyed
-      || this.fullModeEnabled
-      || this._bakePromise
-      || this._pendingUpgradeTimeout != null
-    ) {
-      return;
-    }
-
-    const schedule = (cb: () => void) =>
-      requestAnimationFrame(() => requestAnimationFrame(cb));
-
-    this._pendingUpgradeTimeout = schedule(() => {
-      this._pendingUpgradeTimeout = null;
-      if (this.destroyed || this.fullModeEnabled) return;
-      void this.prepareFullMode();
-    });
-  }
-
-  private async prepareFullMode(): Promise<void> {
-    await this.ensureTimelineReady();
-    this.enableFullVisualMode();
   }
 
   private async ensureTimelineReady(): Promise<void> {
@@ -2288,55 +2223,6 @@ export class LyricDancePlayer {
     }
   }
 
-  private enableFullVisualMode(): void {
-    if (this.destroyed || this.fullModeEnabled) return;
-    this.buildBgCache();
-    this.deriveVisualSystems();
-    this.buildChapterSims();
-    this.loadSectionImages().catch(() => {
-      // image upgrade best-effort
-    });
-    this.fullModeEnabled = true;
-    // ═══ DEFERRED AUDIO: scene is now ready — start audio if play() was called earlier ═══
-    if (this._audioDeferredUntilReady && this.playing) {
-      this._audioDeferredUntilReady = false;
-      this._startAudioPlayback();
-      this.startHealthMonitor();
-    }
-    this.perfMarks.tFullModeEnabled = performance.now();
-  }
-
-  private drawMinimalFirstFrame(): void {
-    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
-    this.ctx.clearRect(0, 0, this.width, this.height);
-
-    const isLight = this.themeOverride === 'light';
-    this.ctx.fillStyle = isLight ? '#f5f5f5' : '#0a0a0a';
-    this.ctx.fillRect(0, 0, this.width, this.height);
-
-    // Preview image: show the first section image or album art while scene compiles.
-    // The feed prefetches section images (useFeedPosts → preloadImage). If cached,
-    // draw it now so the card isn't a black rectangle during the compilation gap.
-    const previewUrl =
-      this.data?.section_images?.[0]
-      ?? this.data?.cover_image_url
-      ?? (this.data as any)?.album_art_url
-      ?? null;
-
-    if (previewUrl) {
-      const img = getPreloadedImage(previewUrl);
-      if (img && img.naturalWidth > 0) {
-        this._drawImageCoverCropped(this.ctx, img, 0, 0, this.width, this.height);
-        // Dark scrim for text readability when real frames take over
-        this.ctx.fillStyle = isLight ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.55)';
-        this.ctx.fillRect(0, 0, this.width, this.height);
-      }
-    }
-
-    this.perfMarks.tFirstFrameDrawn = this.perfMarks.tFirstFrameDrawn ?? performance.now();
-    this.markFirstPaintOnce();
-  }
-
   getBootMetrics(): {
     ttffMs: number | null;
     startLatencyMs: number | null;
@@ -2403,15 +2289,6 @@ export class LyricDancePlayer {
     // Full play: audio + visuals
     this.primeAudio();
 
-    // ═══ AUDIO GATE: don't start audio before scene is compiled ═══
-    if (!this.fullModeEnabled) {
-      this._audioDeferredUntilReady = true;
-      void this.prepareFullMode();
-      if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
-      this.rafHandle = requestAnimationFrame(this.tick);
-      return;
-    }
-
     this._startAudioPlayback();
     this.startHealthMonitor();
 
@@ -2454,7 +2331,6 @@ export class LyricDancePlayer {
   }
 
   seek(timeSec: number): void {
-    this._audioDeferredUntilReady = false;
     this._wallClockOrigin = null;
     this.audio.currentTime = timeSec;
     const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
@@ -2488,6 +2364,14 @@ export class LyricDancePlayer {
       return startAt + wallElapsed;
     }
     return this.audio.currentTime;
+  }
+
+  public applyOptions(options: Partial<VideoOptions>): void {
+    if (options.beatVisualizer !== undefined) this._beatBarVisible = options.beatVisualizer;
+    if (options.wickBar !== undefined) this.wickBarEnabled = options.wickBar;
+    if (options.intensity !== undefined) {
+      this._intensityScale = options.intensity === "hard" ? 1.5 : 1.0;
+    }
   }
 
   // ═══ WebCodecs export API ═══
@@ -2546,7 +2430,7 @@ export class LyricDancePlayer {
     this._bgSnapshotSection = -999;
     this._bgSnapshotMomentIdx = -1;
     this._bgLastBakeMs = 0;
-    // Force-compile scene if resize didn't trigger it (e.g. fullMode not yet enabled)
+    // Force-compile scene if resize didn't trigger it.
     if (!this.compiledScene && this.payload) {
       this.compiledScene = compileScene(this.payload, { viewportWidth: width, viewportHeight: height });
       this._buildChunkCacheFromScene(this.compiledScene);
@@ -2561,12 +2445,11 @@ export class LyricDancePlayer {
         this._buildChunkCacheFromScene(this.compiledScene);
         this._markCompiledViewport(width, height);
       }
-      if (!this.fullModeEnabled && this.payload) {
-        this.enableFullVisualMode();
+      if (this.payload) {
+        this.buildBgCache();
+        this.deriveVisualSystems();
+        this.buildChapterSims();
       }
-    }
-    if (!this.fullModeEnabled && this.payload) {
-      this.enableFullVisualMode();
     }
     this.emojiStreamEnabled = true;
 
@@ -2579,7 +2462,6 @@ export class LyricDancePlayer {
     if (!this.compiledScene) {
       console.error('[LyricDancePlayer] EXPORT: compiledScene is NULL — lyrics will not render.', {
         payload: !!this.payload,
-        fullMode: this.fullModeEnabled,
         width,
         height,
       });
@@ -2601,7 +2483,6 @@ export class LyricDancePlayer {
       payloadWords: this.payload?.words?.length ?? 0,
       payloadLines: this.payload?.lines?.length ?? 0,
       payloadPhrases: (this.payload?.cinematic_direction as any)?.phrases?.length ?? 0,
-      fullMode: this.fullModeEnabled,
       songStart: this.songStartSec,
       songEnd: this.songEndSec,
     });
@@ -2677,7 +2558,6 @@ export class LyricDancePlayer {
           totalChunks,
           visibleChunks,
           phraseGroups: this.compiledScene?.phraseGroups?.length ?? 0,
-          fullMode: this.fullModeEnabled,
           songStart: this.songStartSec,
           songEnd: this.songEndSec,
           activeGroupCursor: this._activeGroupCursor,
@@ -2757,7 +2637,7 @@ export class LyricDancePlayer {
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     // If bounds changed significantly, clear stale out-of-bounds particles.
     const boundsChanged = Math.abs(this.width - prevW) > 20 || Math.abs(this.height - prevH) > 20;
-    if (boundsChanged && this.fullModeEnabled) {
+    if (boundsChanged) {
       this.ambientParticleEngine?.clear();
       this.ambientParticleEngine?.setSystem(this.activeSectionTexture || 'dust');
     }
@@ -3115,14 +2995,6 @@ export class LyricDancePlayer {
     this.bgCacheCount = 0;
 
     // Cancel pending deferred work
-    if (this._pendingUpgradeTimeout != null) {
-      if (typeof window.cancelIdleCallback === "function") {
-        window.cancelIdleCallback(this._pendingUpgradeTimeout);
-      } else {
-        window.clearTimeout(this._pendingUpgradeTimeout);
-      }
-      this._pendingUpgradeTimeout = null;
-    }
     if (this._bgCacheDebounce) {
       clearTimeout(this._bgCacheDebounce);
       this._bgCacheDebounce = null;
@@ -3131,8 +3003,6 @@ export class LyricDancePlayer {
       this.audio.removeEventListener("canplay", this._pendingCanPlayHandler);
       this._pendingCanPlayHandler = null;
     }
-    this._audioDeferredUntilReady = false;
-
     this.audio.pause();
     this._playPromise = null;
     if (!this.options?.externalAudio) {
@@ -3826,12 +3696,7 @@ export class LyricDancePlayer {
     this._updateQualityTier(performance.now());
     const qTier = this._qualityTier;
 
-    // ── During minimal-boot upgrade gap: keep the first frame visible ──
     if (!precomputedFrame) {
-      if (!this.fullModeEnabled) {
-        this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
-        this.drawMinimalFirstFrame();
-      }
       return;
     }
 
@@ -3881,7 +3746,8 @@ export class LyricDancePlayer {
           bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0,
           songProgress, bs?.hitType ?? 'none', bs?.brightness ?? 0.5, bs?.isDownbeat ?? false,
         );
-      } else if (this.beatVisEnabled && this._globalBeatVis) {
+      }
+      if (this._beatBarVisible && this._globalBeatVis) {
         const bs = this._lastBeatState;
         this._globalBeatVis.update(bs?.energy ?? 0, bs?.pulse ?? 0, bs?.hitStrength ?? 0, bs?.phase ?? 0, bs?.beatIndex ?? 0);
       }
@@ -3900,8 +3766,7 @@ export class LyricDancePlayer {
         || this._bgSnapshot.height !== Math.floor(this.height * this._effectiveDpr))
       : false;
     const snapshotStale =
-      this.renderMode === "beat"
-      || curSection !== this._bgSnapshotSection
+      curSection !== this._bgSnapshotSection
       || curMomentIdx !== this._bgSnapshotMomentIdx
       || qTier !== this._bgSnapshotQTier
       || (nowMsBg - this._bgLastBakeMs > this._bgRebakeIntervalMs)
@@ -3936,19 +3801,11 @@ export class LyricDancePlayer {
           if (timeToEnd < 1.5 && timeToEnd > 0) crossfade = 1 - (timeToEnd / 1.5);
         }
       }
-      if (this.renderMode === "beat" && crossfade > 0 && nextImgIdx !== imgIdx) {
-        const nextEnergy = this._resolveCurrentMoment(
-          (nextImgIdx / Math.max(1, this.chapterImages.length)) * (this.audio?.duration ?? 1),
-        )?.energy ?? 0.5;
-        if (nextEnergy > 0.7) {
-          crossfade = crossfade > 0.05 ? 1 : 0;
-        }
-      }
       this._drawChapterImageToCtx(snapCtx, imgIdx, nextImgIdx, crossfade);
       // Grade-aware scrim — reduce scrim when mood grade already darkens the image
-      const baseScrim = this.renderMode === "beat"
-        ? 0
-        : (this._sectionScrimOpacity[imgIdx] ?? 0);
+      const baseScrimSoft = this._sectionScrimOpacity[imgIdx] ?? 0;
+      const baseScrimHard = 0;
+      const baseScrim = baseScrimSoft + (baseScrimHard - baseScrimSoft) * (this._intensityScale - 1.0);
       const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
       const sections = (cd?.sections as any[]) ?? [];
       const sectionMood = sections[imgIdx]?.visualMood as string | undefined;
@@ -3958,7 +3815,7 @@ export class LyricDancePlayer {
         ? Math.max(0, 1 - ((0.45 - sectionGrade.brightness) / 0.20))
         : 1.0;
       const scrimOpacity = baseScrim * gradeCompensation;
-      if (this.renderMode === "beat") {
+      if (this._intensityScale > 1.2) {
         const hitStrength = this._lastBeatState?.hitStrength ?? 0;
         if (hitStrength > 0.6) {
           const flashAlpha = Math.min(0.15, (hitStrength - 0.6) * 0.375);
@@ -4015,40 +3872,37 @@ export class LyricDancePlayer {
     // ═══ Beat visualizer strip — drawn every frame on main canvas (not in snapshot) ═══
     // Single lightweight drawImage of 320×64 offscreen canvas. Costs ~0.1ms/frame.
     // Must be outside snapshot path to stay synced to real-time beat state.
-    if (this.beatVisEnabled || this.wickBarEnabled) {
+    if (this.wickBarEnabled && this._globalWickBar) {
       const bs = this._lastBeatState;
       const bsEnergy = bs?.energy ?? 0;
       const bsPulse = bs?.pulse ?? 0;
-      const activeCnv = this.wickBarEnabled && this._globalWickBar
-        ? this._globalWickBar.canvas
-        : this._globalBeatVis?.canvas ?? null;
-
-      if (activeCnv) {
-        if (this.wickBarEnabled) {
-          // Wick bar: 18% height, smooth, slightly higher base alpha for flame visibility
-          const visAlpha = Math.min(0.95, 0.50 + bsEnergy * 0.30 + bsPulse * 0.15);
-          if (visAlpha > 0.01) {
-            const visH = this.height * 0.18;
-            const visTop = this.height - visH;
-            this.ctx.globalAlpha = visAlpha;
-            this.ctx.imageSmoothingEnabled = false;
-            this.ctx.drawImage(activeCnv, 0, visTop, this.width, visH);
-            this.ctx.imageSmoothingEnabled = true;
-            this.ctx.globalAlpha = 1;
-          }
-        } else {
-          const baseAlpha = this.isExporting ? 0.45 : 0.30;
-          const visAlpha = Math.min(0.85, baseAlpha + bsEnergy * 0.40 + bsPulse * 0.15);
-          if (visAlpha > 0.01) {
-            const visH = this.height * 0.28;
-            const visTop = this.height - visH;
-            this.ctx.globalAlpha = visAlpha;
-            this.ctx.imageSmoothingEnabled = false;
-            this.ctx.drawImage(activeCnv, 0, visTop, this.width, visH);
-            this.ctx.imageSmoothingEnabled = true;
-            this.ctx.globalAlpha = 1;
-          }
-        }
+      const wickAlpha = Math.min(0.95, 0.50 + bsEnergy * 0.30 + bsPulse * 0.15);
+      if (wickAlpha > 0.01) {
+        const wickH = this.height * 0.18;
+        const wickTop = this.height - wickH;
+        this.ctx.globalAlpha = wickAlpha;
+        this.ctx.imageSmoothingEnabled = false;
+        this.ctx.drawImage(this._globalWickBar.canvas, 0, wickTop, this.width, wickH);
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.globalAlpha = 1;
+      }
+    }
+    if (this._beatBarVisible && this._globalBeatVis) {
+      const bs = this._lastBeatState;
+      const bsEnergy = bs?.energy ?? 0;
+      const bsPulse = bs?.pulse ?? 0;
+      const baseAlpha = this.isExporting ? 0.45 : 0.30;
+      const beatAlpha = Math.min(0.85, baseAlpha + bsEnergy * 0.40 + bsPulse * 0.15);
+      if (beatAlpha > 0.01) {
+        const beatH = this.height * 0.18;
+        const beatTop = this.wickBarEnabled
+          ? this.height - (this.height * 0.18) - beatH
+          : this.height - beatH;
+        this.ctx.globalAlpha = beatAlpha;
+        this.ctx.imageSmoothingEnabled = false;
+        this.ctx.drawImage(this._globalBeatVis.canvas, 0, beatTop, this.width, beatH);
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.globalAlpha = 1;
       }
     }
 
@@ -5142,7 +4996,7 @@ export class LyricDancePlayer {
       const chapterStart = chapterIdx * chapterDur;
       const localT = Math.max(0, Math.min(1, ((this.audio?.currentTime ?? 0) - chapterStart) / chapterDur));
       const eased = localT * localT * (3 - 2 * localT);
-      if (this.renderMode === "beat" && kb) {
+      if (kb) {
         const beatEnergyNow = this._lastBeatState?.energy ?? 0;
         const beatPulseNow = this._lastBeatState?.pulse ?? 0;
         const driftT = (localT * 2) % 1;
@@ -5506,7 +5360,8 @@ export class LyricDancePlayer {
           bs?.brightness ?? 0.5,
           bs?.isDownbeat ?? false,
         );
-      } else if (this.beatVisEnabled && this._globalBeatVis) {
+      }
+      if (this._beatBarVisible && this._globalBeatVis) {
         const bs = this._lastBeatState;
         this._globalBeatVis.update(
           bs?.energy ?? 0,       // RMS energy — goes to 0 during silence
@@ -5555,7 +5410,7 @@ export class LyricDancePlayer {
     // ═══ INTENSITY ROUTER: derive motion profile from audio signal ═══
     const frameDt = Math.max(0.001, Math.min(0.1, this._frameDt * 16.67 / 1000));
     if (beatState) {
-      this._motionProfile = this._intensityRouter.update(beatState, frameDt, this.renderMode);
+      this._motionProfile = this._intensityRouter.update(beatState, frameDt, this._intensityScale);
     }
     const mp: MotionProfile = this._motionProfile ?? {
       intensity: 0,
@@ -5608,12 +5463,12 @@ export class LyricDancePlayer {
     this._textBeatNodY = 0;
 
     // Brightness flash and vignette also scale per-beat
-    const beatFlashMult = this.renderMode === "beat" ? 1.5 : 1.0;
+    const beatFlashMult = this._intensityScale;
     const beatFlash = pulseEnvelope * beatDynamic * mp.intensity * beatFlashMult;
-    const flashAlpha = this.renderMode === "beat" ? 0.8 : 0.5;
+    const flashAlpha = 0.5 + 0.6 * (this._intensityScale - 1.0);
     this._bgBeatBrightnessBoost += (beatFlash - this._bgBeatBrightnessBoost) * flashAlpha;
 
-    const vignettePulseScale = this.renderMode === "beat" ? 0.40 : 0.20;
+    const vignettePulseScale = 0.20 + 0.40 * (this._intensityScale - 1.0);
     const vignetteBeat = pulseEnvelope * beatDynamic * mp.intensity * vignettePulseScale;
     this._vignetteBeatPulse += (vignetteBeat - this._vignetteBeatPulse) * 0.35;
 
@@ -5999,8 +5854,8 @@ export class LyricDancePlayer {
     // Low energy (quiet verse) → higher alpha → heavier vignette → intimate
     // High energy (loud chorus) → lower alpha → lighter vignette → expansive
     // Range: 0.35 (loud) to 0.75 (quiet)
-    const vignetteRange = this.renderMode === "beat" ? 0.60 : 0.40;
-    const vignetteBase = this.renderMode === "beat" ? 0.85 : 0.75;
+    const vignetteRange = 0.40 + 0.40 * (this._intensityScale - 1.0);
+    const vignetteBase = 0.75 + 0.20 * (this._intensityScale - 1.0);
     const baseAlpha = (vignetteBase - this._vignetteEnergy * vignetteRange) * strength;
     const alpha = Math.max(0, baseAlpha - this._vignetteBeatPulse);
     if (alpha < 0.02) return;

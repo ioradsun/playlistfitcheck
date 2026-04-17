@@ -3,8 +3,6 @@ import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer
 import { withInitLimit, withPriorityInitLimit } from "@/engine/initQueue";
 
 interface Options {
-  bootMode?: "minimal" | "full";
-  eagerUpgrade?: boolean;
   onReady?: (player: LyricDancePlayer) => void;
   priority?: boolean;
 }
@@ -26,8 +24,6 @@ export function useLyricDancePlayer(
   options: Options = {},
 ): UseLyricDancePlayerReturn {
   const {
-    bootMode = "minimal",
-    eagerUpgrade = false,
     onReady,
     priority = true,
   } = options;
@@ -59,16 +55,13 @@ export function useLyricDancePlayer(
     let cancelled = false;
     setPlayerReady(false);
 
-    const p = new LyricDancePlayer(next, canvasRef.current, textCanvasRef.current, containerRef.current, {
-      bootMode,
-    });
+    const p = new LyricDancePlayer(next, canvasRef.current, textCanvasRef.current, containerRef.current);
     playerRef.current = p;
     setPlayer(p);
 
     const queue = priority ? withPriorityInitLimit : withInitLimit;
     queue(() => p.init()).then(() => {
       if (cancelled) return;
-      if (eagerUpgrade) p.scheduleFullModeUpgrade();
       setPlayerReady(true);
       onReadyRef.current?.(p);
     }).catch(() => {
@@ -83,7 +76,7 @@ export function useLyricDancePlayer(
       setPlayer((prev) => (prev === p ? null : prev));
       setPlayerReady(false);
     };
-  }, [bootMode, canvasRef, containerRef, data, eagerUpgrade, priority, textCanvasRef]);
+  }, [canvasRef, containerRef, data, priority, textCanvasRef]);
 
   return {
     player,
