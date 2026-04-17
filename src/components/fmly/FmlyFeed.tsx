@@ -82,17 +82,44 @@ function FeedList({
 
   const postIds = posts.map((p) => p.id);
   const feedWindow = useFeedWindow(posts.length, postIds);
-  const { primaryId, closestIndex } = usePrimaryArbiter(
+  const [explicitPrimaryId, setExplicitPrimaryId] = useState<string | null>(null);
+  const explicitSetAtScrollY = useRef<number | null>(null);
+  const { primaryId: scrollPrimaryId, closestIndex } = usePrimaryArbiter(
     scrollContainer,
     feedWindow.cardRefs,
     feedWindow.renderedIds,
     postIds,
   );
+  const primaryId = explicitPrimaryId ?? scrollPrimaryId;
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
     if (el) feedWindow.cardRefs.current.set(id, el);
     else feedWindow.cardRefs.current.delete(id);
   }, [feedWindow.cardRefs]);
+
+  const explicitPrimary = useCallback((postId: string | null) => {
+    explicitSetAtScrollY.current = scrollContainer
+      ? scrollContainer.scrollTop
+      : window.scrollY;
+    setExplicitPrimaryId(postId);
+  }, [scrollContainer]);
+
+  const handleRequestPrimary = useCallback((postId: string) => {
+    explicitPrimary(postId);
+    // Smooth-scroll tapped card to viewport center
+    const el = feedWindow.cardRefs.current.get(postId);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const vpCenter = window.innerHeight / 2;
+    const cardCenter = rect.top + rect.height / 2;
+    const offset = cardCenter - vpCenter;
+
+    if (scrollContainer) {
+      scrollContainer.scrollBy({ top: offset, behavior: "smooth" });
+    } else {
+      window.scrollBy({ top: offset, behavior: "smooth" });
+    }
+  }, [explicitPrimary, feedWindow.cardRefs, scrollContainer]);
 
   // Sync virtual window to the arbiter's measurement.
   // Arbiter runs one scroll listener; we just consume its output.
@@ -116,6 +143,24 @@ function FeedList({
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [feedView, hasMore, loadMore, loadingMore]);
+
+  useEffect(() => {
+    if (!explicitPrimaryId) return;
+    const target = scrollContainer ?? window;
+    const getY = () => (scrollContainer ? scrollContainer.scrollTop : window.scrollY);
+
+    const onScroll = () => {
+      if (explicitSetAtScrollY.current === null) return;
+      const delta = Math.abs(getY() - explicitSetAtScrollY.current);
+      if (delta > 200) {
+        setExplicitPrimaryId(null);
+        explicitSetAtScrollY.current = null;
+      }
+    };
+
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [explicitPrimaryId, scrollContainer]);
 
   const topSpacerHeight = useMemo(() => {
     let sum = 0;
@@ -142,6 +187,7 @@ function FeedList({
           live={post.id === primaryId}
           registerRef={registerRef}
           onMeasure={feedWindow.onCardMeasure}
+          onRequestPrimary={handleRequestPrimary}
         />
       ))}
 

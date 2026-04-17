@@ -66,6 +66,9 @@ interface LyricDanceEmbedProps {
   previewImageUrl?: string | null;
   /** Enables full player behaviors; false renders static preview shell. */
   live?: boolean;
+  /** Invoked when the user taps a non-live card. Feed wrappers implement this
+   *  to promote the card to primary. Ignored when live=true (tap toggles mute). */
+  onRequestPrimary?: () => void;
 }
 
 export interface LyricDanceEmbedHandle {
@@ -98,6 +101,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     previewPaletteColor,
     previewImageUrl,
     live = true,
+    onRequestPrimary,
   } = props;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -105,7 +109,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTimeSecRef = useRef(0);
   const playerRef = useRef<LyricDancePlayer | null>(null);
-  const hasUnlockedRef = useRef(false);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playStartRef = useRef<number | null>(null);
   const totalDurationRef = useRef<number>(0);
@@ -533,15 +536,21 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   // 11. Interaction callbacks
   const handleCanvasTap = useCallback((e: React.MouseEvent) => {
-    if (!live) return;
     e.stopPropagation();
     unlockAudio();
-    hasUnlockedRef.current = true;
+
+    if (!live) {
+      // Non-live card: request promotion to primary. Feed wrapper handles the rest.
+      onRequestPrimary?.();
+      return;
+    }
+
+    // Live card: toggle mute. Unmuting resumes play.
     const next = !muted;
     player?.setMuted(next);
     if (!next) player?.play(true);
     setMuted(next);
-  }, [live, muted, player, setMuted]);
+  }, [live, muted, player, setMuted, onRequestPrimary]);
 
   const seekOnly = useCallback((timeSec: number) => {
     player?.seek(timeSec);
@@ -612,13 +621,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   // 12. Mode lifecycle effects (cardMode visibility, end-of-track handoff)
   useEffect(() => {
     if (!live) return;
-    if (playerReady && player && !hasUnlockedRef.current) {
-      hasUnlockedRef.current = true;
-      unlockAudio();
-      player.setMuted(false);
-      player.play(true);
-      setMuted(false);
-    }
+    if (!playerReady || !player) return;
+    unlockAudio();
+    player.setMuted(false);
+    player.play(true);
+    setMuted(false);
   }, [live, playerReady, player, setMuted]);
 
   useEffect(() => {
@@ -717,7 +724,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             ? `radial-gradient(ellipse at 50% 40%, ${previewPaletteColor}33 0%, #0a0a0a 70%)`
             : "#0a0a0a",
         }}
-        onClick={live && cardMode === "listen" ? handleCanvasTap : undefined}
+        onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
         {/* Poster layer — mounted for card lifetime; canvas crossfades on top. */}
         <img
