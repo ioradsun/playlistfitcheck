@@ -1855,8 +1855,6 @@ export class LyricDancePlayer {
   private _pendingCanPlayHandler: (() => void) | null = null;
   /** Audio is waiting for scene compilation to finish before playing */
   private _audioDeferredUntilReady = false;
-  /** Canvas was swapped via setRenderTarget — reveal after first draw in tick(). */
-  private _pendingCanvasReveal = false;
   private _playPromise: Promise<void> | null = null;
   private _exportFrameCount?: number;
   private options?: {
@@ -2831,16 +2829,7 @@ export class LyricDancePlayer {
 
     const cw = container?.offsetWidth || bgCanvas.offsetWidth || this.width || 960;
     const ch = container?.offsetHeight || bgCanvas.offsetHeight || this.height || 540;
-    // INVARIANT: this.resize() must always run — setting canvas.width implicitly
-    // clears the Canvas 2D buffer, which prevents stale pixels from a previous
-    // slot owner flashing when opacity is revealed.
-    // canvasPool.releaseCanvasSlotLogical relies on this to skip its own clear.
-    // Do NOT "optimize" this by skipping resize when dimensions are unchanged.
     if (cw > 0 && ch > 0) this.resize(cw, ch);
-
-    // Canvas is blank after pool reuse — keep hidden (opacity 0) until
-    // the first tick() draws content, then reveal automatically.
-    this._pendingCanvasReveal = true;
   }
 
   /**
@@ -3290,14 +3279,9 @@ export class LyricDancePlayer {
     // Attempt to re-acquire context (iOS may have reclaimed it under memory pressure)
     const testCtx = this.bgCanvas.getContext("2d", { alpha: false });
     if (!testCtx) {
-      console.warn("[LyricDancePlayer] Canvas context lost, triggering recovery");
+      console.warn("[LyricDancePlayer] Canvas context lost, stopping playback");
       this.playing = false;
       this.destroyed = true;
-      window.dispatchEvent(
-        new CustomEvent("crowdfit:context-lost", {
-          detail: { postId: (this.data as any).id ?? "" },
-        }),
-      );
       return;
     }
     this.ctx = testCtx;
@@ -3489,14 +3473,6 @@ export class LyricDancePlayer {
       this.update(deltaMs, smoothedTime, frame, beatState);
       this.draw(smoothedTime, frame);
 
-      // Canvas was swapped via setRenderTarget — now that draw() has painted
-      // actual content, reveal it. The poster image (z-index 0) naturally
-      // hides behind the canvas (z-index 1) once opacity flips to "1".
-      if (this._pendingCanvasReveal) {
-        this._pendingCanvasReveal = false;
-        this.canvas.style.opacity = "1";
-        if (this.textCanvas) this.textCanvas.style.opacity = "1";
-      }
     } catch (err) {
       console.error('[LyricEngine] tick crash:', err);
     } finally {

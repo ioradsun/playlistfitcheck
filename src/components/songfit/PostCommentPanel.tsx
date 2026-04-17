@@ -10,7 +10,7 @@ import {
   type EmojiKey,
 } from "@/components/shared/panel/panelConstants";
 import { CardBottomBar } from "@/components/songfit/CardBottomBar";
-import { audioController } from "@/lib/audioController";
+import { liveCard } from "@/lib/liveCard";
 
 interface Comment {
   id: string;
@@ -95,12 +95,12 @@ export function PostCommentPanel({
 }: Props) {
   const { user } = useAuth();
   const sessionId = getSessionId();
-  const { effectivePrimaryId } = useSyncExternalStore(
-    audioController.subscribe,
-    audioController.getSnapshot,
-    audioController.getSnapshot,
+  const currentLiveCardId = useSyncExternalStore(
+    liveCard.subscribe,
+    liveCard.getSnapshot,
+    liveCard.getSnapshot,
   );
-  const isLive = effectivePrimaryId === postId;
+  const isLive = currentLiveCardId === postId;
 
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);

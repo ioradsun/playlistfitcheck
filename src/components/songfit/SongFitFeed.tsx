@@ -12,14 +12,15 @@ import { Loader2, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useFeedPosts } from "./useFeedPosts";
 import { PlusMenu } from "./PlusMenu";
-import { SongFitPostCard } from "./SongFitPostCard";
 import { BillboardToggle } from "./BillboardToggle";
-import { audioController } from "@/lib/audioController";
 import { primeAudioPool } from "@/lib/audioPool";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { logImpression } from "@/lib/engagementTracking";
 import { cn } from "@/lib/utils";
-import { useScrollVelocity } from "@/hooks/useScrollVelocity";
+import { useFeedWindow } from "@/feed/useFeedWindow";
+import { usePrimaryArbiter } from "@/feed/usePrimaryArbiter";
+import { FeedCard } from "@/feed/FeedCard";
+import { LivePlayerMount } from "@/feed/LivePlayerMount";
 import type { ContentFilter } from "./types";
 
 // ── Skeleton ────────────────────────────────────────────────────────────────
@@ -58,350 +59,68 @@ function FeedSkeleton({ reelsMode }: { reelsMode: boolean }) {
   );
 }
 
-// ── Observed card: two IntersectionObservers ────────────────────────────────
-// 1. Wide margin (200px): drives cold/warm lifecycle
-// 2. Tight margin (center 20%): reports "I'm at center" to FeedList
-const ObservedCard = memo(function ObservedCard({
-  post,
-  rank,
-  onRefresh,
-  isBillboard,
-  signalData,
-  lyricDanceData,
-  reelsMode,
-  isFirst,
-  onCenterEnter,
-  onCenterLeave,
-  cardRefsMap,
-  onMeasure,
-  fastScrolling,
-}: {
-  post: any;
-  rank?: number;
-  onRefresh: () => void;
-  isBillboard?: boolean;
-  signalData?: any;
-  lyricDanceData?: any;
-  reelsMode?: boolean;
-  isFirst?: boolean;
-  onCenterEnter: (postId: string) => void;
-  onCenterLeave: (postId: string) => void;
-  cardRefsMap: MutableRefObject<Map<string, HTMLDivElement>>;
-  onMeasure?: (postId: string, height: number) => void;
-  fastScrolling: boolean;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const loggedRef = useRef(false);
-  const onMeasureRef = useRef(onMeasure);
-  const onCenterEnterRef = useRef(onCenterEnter);
-  const onCenterLeaveRef = useRef(onCenterLeave);
-
-  useEffect(() => {
-    onMeasureRef.current = onMeasure;
-  }, [onMeasure]);
-
-  useEffect(() => {
-    onCenterEnterRef.current = onCenterEnter;
-    onCenterLeaveRef.current = onCenterLeave;
-  }, [onCenterEnter, onCenterLeave]);
-
-  // Register DOM ref for geometric center scoring
-  useEffect(() => {
-    const el = ref.current;
-    if (el) cardRefsMap.current.set(post.id, el);
-    return () => {
-      cardRefsMap.current.delete(post.id);
-    };
-  }, [post.id, cardRefsMap]);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !onMeasureRef.current) return;
-    const measure = () => onMeasureRef.current?.(post.id, el.getBoundingClientRect().height);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [post.id]);
-
-  // Wide observer: visibility (with debounced exit to prevent edge thrashing)
-  const visTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingStateRef = useRef<boolean | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        const target = entry.isIntersecting;
-        pendingStateRef.current = target;
-        if (visTimerRef.current) clearTimeout(visTimerRef.current);
-        visTimerRef.current = setTimeout(() => {
-          visTimerRef.current = null;
-          const next = pendingStateRef.current;
-          if (next !== null) {
-            setVisible(next);
-            if (next && !loggedRef.current) {
-              loggedRef.current = true;
-              logImpression(post.id);
-            }
-          }
-          pendingStateRef.current = null;
-        }, 120);
-      },
-      { rootMargin: reelsMode ? "10% 0px" : "200px 0px" },
-    );
-
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      if (visTimerRef.current) {
-        clearTimeout(visTimerRef.current);
-        visTimerRef.current = null;
-      }
-    };
-  }, [post.id, reelsMode]);
-
-  // Tight observer: center detection — only the middle 30% of viewport
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) onCenterEnterRef.current(post.id);
-        else onCenterLeaveRef.current(post.id);
-      },
-      { rootMargin: reelsMode ? "-45% 0px -45% 0px" : "-35% 0px -35% 0px" },
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [post.id, reelsMode]);
-
-  return (
-    <div ref={ref} className={cn("shrink-0", reelsMode && "h-[100dvh] snap-start")}>
-      <SongFitPostCard
-        post={post}
-        rank={rank}
-        onRefresh={onRefresh}
-        isBillboard={isBillboard}
-        signalData={signalData}
-        lyricDanceData={lyricDanceData}
-        visible={visible}
-        fastScrolling={fastScrolling}
-        reelsMode={reelsMode}
-        isFirst={isFirst}
-      />
-    </div>
-  );
-});
-
 // ── Feed list ───────────────────────────────────────────────────────────────
 function FeedList({
   posts,
   feedView,
-  signalMap,
   loadingMore,
   hasMore,
   loadMore,
-  onRefresh,
   lyricDataMap,
   reelsMode,
-  fastScrolling,
 }: {
   posts: any[];
   feedView: string;
-  signalMap: any;
   loadingMore: boolean;
   hasMore: boolean;
   loadMore: () => Promise<void>;
-  onRefresh: () => void;
   lyricDataMap: Map<string, any>;
   reelsMode: boolean;
-  fastScrolling: boolean;
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const centerSetRef = useRef<Set<string>>(new Set());
-  const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cardRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(() =>
-    typeof window !== "undefined" ? window.innerHeight : 0,
-  );
-  const measuredHeightsRef = useRef<Map<string, number>>(new Map());
-  const topSpacerRef = useRef<HTMLDivElement>(null);
-  const bottomSpacerRef = useRef<HTMLDivElement>(null);
-  const WINDOW_RADIUS = 1;
-  const windowStart = Math.max(0, activeIndex - WINDOW_RADIUS);
-  const windowEnd = Math.min(posts.length - 1, activeIndex + WINDOW_RADIUS);
-  const renderedPosts = posts.slice(windowStart, windowEnd + 1);
-  const postsRef = useRef(posts);
-  postsRef.current = posts;
+  const scrollContainer = typeof document !== "undefined"
+    ? document.getElementById("songfit-scroll-container")
+    : null;
 
-  const lastPrimaryRef = useRef<string | null>(null);
-  const lastPrimaryAtRef = useRef(0);
-  const hysteresisRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const postIds = posts.map((p) => p.id);
+  const feedWindow = useFeedWindow(posts.length, postIds);
+  const primaryId = usePrimaryArbiter(scrollContainer, feedWindow.cardRefs, feedWindow.renderedIds);
 
-  /**
-   * reconcilePrimary — the single source of truth for feed activation.
-   *
-   * Eligible = centered (in tight observer zone) AND registered (player ready).
-   * Hysteresis = if no eligible candidate exists, keep the current primary for
-   * 300ms as long as it's still registered and still mounted. This rides out
-   * transient observer churn from spacer↔card height mismatches and scroll
-   * direction changes.
-   *
-   * Viewport center is used for geometric comparison. Verified: all
-   * IntersectionObservers in this file use root: undefined (viewport).
-   * getBoundingClientRect() returns viewport-relative coordinates. Both are
-   * in the same coordinate frame, so window.innerHeight / 2 is the correct
-   * center. If a future change adds a custom observer root (e.g. the scroll
-   * container), this must switch to that container's bounding rect center.
-   */
-  const reconcilePrimary = useCallback(() => {
-    if (hysteresisRef.current) {
-      clearTimeout(hysteresisRef.current);
-      hysteresisRef.current = null;
-    }
+  const liveCanvasSlot = useRef<HTMLDivElement | null>(null);
+  const [currentTimeSec, setCurrentTimeSec] = useState(0);
 
-    const vpCenter = window.innerHeight / 2;
-    let bestId: string | null = null;
-    let bestDist = Infinity;
-    for (const id of centerSetRef.current) {
-      if (!audioController.isRegistered(id)) continue;
-      const el = cardRefsMap.current.get(id);
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      const dist = Math.abs(rect.top + rect.height / 2 - vpCenter);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestId = id;
-      }
-    }
-
-    if (bestId) {
-      lastPrimaryRef.current = bestId;
-      lastPrimaryAtRef.current = Date.now();
-      audioController.setAutoPrimary(bestId);
-      return;
-    }
-
-    const grace = 300;
-    const current = lastPrimaryRef.current;
-    const keepCurrent =
-      current !== null &&
-      audioController.isRegistered(current) &&
-      cardRefsMap.current.has(current) &&
-      Date.now() - lastPrimaryAtRef.current < grace;
-
-    if (keepCurrent) {
-      hysteresisRef.current = setTimeout(() => {
-        hysteresisRef.current = null;
-        reconcilePrimary();
-      }, grace);
-      return;
-    }
-
-    lastPrimaryRef.current = null;
-    audioController.setAutoPrimary(null);
-  }, []);
-
-  const scheduleReconcile = useCallback(() => {
-    if (settleRef.current) clearTimeout(settleRef.current);
-    const delay = reelsMode ? 0 : 80;
-    settleRef.current = setTimeout(() => {
-      settleRef.current = null;
-      reconcilePrimary();
-    }, delay);
-  }, [reelsMode, reconcilePrimary]);
-
-  // Purge stale centerSet entries from cards that left the virtual window.
-  // Their observers disconnected on unmount without firing onCenterLeave.
-  useEffect(() => {
-    const renderedIds = new Set(posts.slice(windowStart, windowEnd + 1).map((p) => p.id));
-    let purged = false;
-    for (const id of centerSetRef.current) {
-      if (!renderedIds.has(id)) {
-        centerSetRef.current.delete(id);
-        purged = true;
-      }
-    }
-    if (purged) scheduleReconcile();
-  }, [windowStart, windowEnd, posts, scheduleReconcile]);
-
-  const onCenterEnter = useCallback((postId: string) => {
-    const idx = postsRef.current.findIndex((p) => p.id === postId);
-    if (idx >= 0) setActiveIndex(idx);
-    centerSetRef.current.add(postId);
-    scheduleReconcile();
-  }, [scheduleReconcile]);
-
-  const onCenterLeave = useCallback((postId: string) => {
-    centerSetRef.current.delete(postId);
-    audioController.clearExplicitIf(postId);
-    scheduleReconcile();
-  }, [scheduleReconcile]);
-
-  // Re-reconcile when any player registers or unregisters.
-  // This closes the race where reconcile ran before a card's player was ready.
-  useEffect(() => {
-    return audioController.onRegistryChange(() => scheduleReconcile());
-  }, [scheduleReconcile]);
-
-  const onMeasure = useCallback((postId: string, height: number) => {
-    if (height > 0) measuredHeightsRef.current.set(postId, height);
-  }, []);
+  const registerRef = useCallback((id: string, el: HTMLElement | null) => {
+    if (el) feedWindow.cardRefs.current.set(id, el);
+    else feedWindow.cardRefs.current.delete(id);
+  }, [feedWindow.cardRefs]);
 
   useEffect(() => {
-    if (!reelsMode) return;
-    const onResize = () => setViewportHeight(window.innerHeight);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [reelsMode]);
+    const target = scrollContainer ?? document.scrollingElement ?? document.documentElement;
+    if (!target) return;
+    const onScroll = () => {
+      const vpCenter = window.innerHeight / 2;
+      let closest = feedWindow.activeIndex;
+      let closestDist = Infinity;
 
-  useEffect(() => {
-    if (windowStart <= 0) return;
-    const el = topSpacerRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setActiveIndex((idx) => Math.max(0, idx - 1));
+      for (let i = feedWindow.windowStart; i <= feedWindow.windowEnd; i += 1) {
+        const id = postIds[i];
+        const el = feedWindow.cardRefs.current.get(id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const dist = Math.abs((r.top + r.height / 2) - vpCenter);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = i;
         }
-      },
-      { rootMargin: reelsMode ? "-40% 0px -40% 0px" : "50px 0px -50% 0px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [reelsMode, windowStart]);
+      }
 
-  useEffect(() => {
-    if (windowEnd >= posts.length - 1) return;
-    const el = bottomSpacerRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setActiveIndex((idx) => Math.min(posts.length - 1, idx + 1));
-        }
-      },
-      { rootMargin: reelsMode ? "-40% 0px -40% 0px" : "-50% 0px 50px 0px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [reelsMode, windowEnd, posts.length]);
-
-  useEffect(() => {
-    return () => {
-      if (settleRef.current) clearTimeout(settleRef.current);
-      if (hysteresisRef.current) clearTimeout(hysteresisRef.current);
-      audioController.setAutoPrimary(null);
+      if (closest !== feedWindow.activeIndex) feedWindow.setActiveIndex(closest);
     };
-  }, []);
 
-  // Infinite scroll sentinel
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [feedWindow, postIds, scrollContainer]);
+
   useEffect(() => {
     if (feedView === "billboard" || !hasMore) return;
     const sentinel = sentinelRef.current;
@@ -415,63 +134,42 @@ function FeedList({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [feedView, hasMore, loadingMore, loadMore]);
-
-  const estimateHeightAtIndex = useCallback((idx: number): number => {
-    if (reelsMode) return viewportHeight || 0;
-    const post = postsRef.current[idx];
-    if (!post) return 420;
-    const measured = measuredHeightsRef.current.get(post.id);
-    if (measured) return measured;
-    // Use median of all measured heights — much closer to reality than 420px
-    const all = Array.from(measuredHeightsRef.current.values());
-    if (all.length > 0) {
-      all.sort((a, b) => a - b);
-      return all[Math.floor(all.length / 2)];
-    }
-    return 420;
-  }, [reelsMode, viewportHeight]);
+  }, [feedView, hasMore, loadMore, loadingMore]);
 
   const topSpacerHeight = useMemo(() => {
     let sum = 0;
-    for (let i = 0; i < windowStart; i++) sum += estimateHeightAtIndex(i);
+    for (let i = 0; i < feedWindow.windowStart; i += 1) sum += feedWindow.estimateHeight(i);
     return sum;
-  }, [windowStart, estimateHeightAtIndex]);
+  }, [feedWindow]);
 
   const bottomSpacerHeight = useMemo(() => {
     let sum = 0;
-    const count = postsRef.current.length;
-    for (let i = windowEnd + 1; i < count; i++) sum += estimateHeightAtIndex(i);
+    for (let i = feedWindow.windowEnd + 1; i < posts.length; i += 1) sum += feedWindow.estimateHeight(i);
     return sum;
-  }, [windowEnd, estimateHeightAtIndex]);
+  }, [feedWindow, posts.length]);
+
+  const renderedPosts = posts.slice(feedWindow.windowStart, feedWindow.windowEnd + 1);
+  const primaryPost = posts.find((post) => post.id === primaryId) ?? null;
+  const primaryLyricData = primaryPost?.project_id ? lyricDataMap.get(primaryPost.project_id) ?? null : null;
 
   return (
     <div className={reelsMode ? "" : "pb-24"}>
-      {windowStart > 0 && <div ref={topSpacerRef} style={{ height: topSpacerHeight }} />}
+      {feedWindow.windowStart > 0 && <div style={{ height: topSpacerHeight }} />}
 
-      {renderedPosts.map((post, offset) => {
-        const idx = windowStart + offset;
-        return (
-        <ObservedCard
+      {renderedPosts.map((post) => (
+        <FeedCard
           key={post.id}
           post={post}
-          rank={feedView === "billboard" ? idx + 1 : undefined}
-          onRefresh={onRefresh}
-          isBillboard={feedView === "billboard"}
-          signalData={feedView === "billboard" ? signalMap[post.id] : undefined}
-          lyricDanceData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
-          reelsMode={reelsMode}
-          isFirst={idx === 0}
-          cardRefsMap={cardRefsMap}
-          onCenterEnter={onCenterEnter}
-          onCenterLeave={onCenterLeave}
-          onMeasure={onMeasure}
-          fastScrolling={fastScrolling}
+          lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
+          isLive={post.id === primaryId}
+          currentTimeSec={post.id === primaryId ? currentTimeSec : 0}
+          registerRef={registerRef}
+          onMeasure={feedWindow.onCardMeasure}
+          liveCanvasSlot={post.id === primaryId ? liveCanvasSlot : undefined}
         />
-      );
-      })}
+      ))}
 
-      {windowEnd < posts.length - 1 && <div ref={bottomSpacerRef} style={{ height: bottomSpacerHeight }} />}
+      {feedWindow.windowEnd < posts.length - 1 && <div style={{ height: bottomSpacerHeight }} />}
 
       {hasMore && feedView !== "billboard" && <div ref={sentinelRef} className="h-1" />}
 
@@ -479,6 +177,14 @@ function FeedList({
         <div className="flex justify-center py-5">
           <Loader2 size={18} className="animate-spin text-muted-foreground" />
         </div>
+      )}
+
+      {primaryLyricData && (
+        <LivePlayerMount
+          data={primaryLyricData}
+          slotRef={liveCanvasSlot}
+          onTimeUpdate={setCurrentTimeSec}
+        />
       )}
     </div>
   );
@@ -499,8 +205,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const feed = useFeedPosts();
-  const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
-  const { isFastScrolling } = useScrollVelocity(scrollContainer);
   const hasSearchQuery = feed.searchTerm.trim().length > 0;
   const searchUiVisible = reelsMode ? (searchOpen || searchFocused || hasSearchQuery) : (searchFocused || hasSearchQuery);
   const displayPosts = hasSearchQuery
@@ -539,15 +243,6 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
   }, [feed]);
 
   // Unlock audio on first touch anywhere in the feed
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    setScrollContainer(document.getElementById("songfit-scroll-container"));
-  }, []);
-
-  useEffect(() => {
-    audioController.setFastScrolling(isFastScrolling);
-  }, [isFastScrolling]);
-
   useEffect(() => {
     const handler = () => {
       unlockAudio();
@@ -807,14 +502,11 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
         <FeedList
           posts={filteredPosts}
           feedView={feed.feedView}
-          signalMap={feed.signalMap}
           loadingMore={hasSearchQuery ? false : feed.loadingMore}
           hasMore={hasSearchQuery ? false : feed.hasMore}
           loadMore={hasSearchQuery ? async () => {} : feed.loadMore}
-          onRefresh={feed.refresh}
           lyricDataMap={feed.lyricDataMap}
           reelsMode={reelsMode}
-          fastScrolling={isFastScrolling}
         />
       )}
 
