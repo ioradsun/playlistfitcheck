@@ -53,7 +53,18 @@ export const FeedCard = memo(function FeedCard({
     <div ref={rootRef} className="px-2 pb-3">
       <div
         className="relative overflow-hidden rounded-2xl"
-        style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.04)" }}
+        style={{
+          background: "#0a0a0a",
+          border: "1px solid rgba(255,255,255,0.04)",
+          // GPU layer promotion — scroll becomes a composite-only operation,
+          // no per-pixel paint work as the card moves through the viewport.
+          // Cost: ~4-8MB GPU memory per card × ~7 mounted = 30-50MB.
+          willChange: "transform",
+          transform: "translateZ(0)",
+          // Contain paint work to this subtree — a repaint inside the card
+          // (e.g., canvas redraw, text update) doesn't invalidate adjacent cards.
+          contain: "layout paint",
+        }}
       >
         <div className="relative" style={{ height: 320 }}>
           <LyricDanceEmbed

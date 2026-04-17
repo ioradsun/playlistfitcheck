@@ -30,6 +30,7 @@ export function usePrimaryArbiter(
   const lastScrollY = useRef(0);
   const lastScrollT = useRef(performance.now());
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafPendingRef = useRef<number | null>(null);
   const velocityRef = useRef(0);
 
   useEffect(() => {
@@ -102,10 +103,20 @@ export function usePrimaryArbiter(
       lastScrollY.current = y;
       lastScrollT.current = now;
 
-      const m = measure();
-      setResult((prev) =>
-        prev.closestIndex === m.closestIndex ? prev : { ...prev, closestIndex: m.closestIndex }
-      );
+      // Measurement + state update is rAF-batched. During fast fling (iOS momentum
+      // especially), multiple scroll events fire per frame. Batching to one measure
+      // per paint cycle removes redundant layout reads and React reconciliations
+      // without changing observable behavior — browser paints once per frame anyway.
+      // Velocity stays on every event (needs every sample for accuracy).
+      if (rafPendingRef.current === null) {
+        rafPendingRef.current = requestAnimationFrame(() => {
+          rafPendingRef.current = null;
+          const m = measure();
+          setResult((prev) =>
+            prev.closestIndex === m.closestIndex ? prev : { ...prev, closestIndex: m.closestIndex }
+          );
+        });
+      }
       scheduleSettle();
     };
 
@@ -115,6 +126,10 @@ export function usePrimaryArbiter(
     return () => {
       target.removeEventListener("scroll", onScroll);
       if (settleRef.current) clearTimeout(settleRef.current);
+      if (rafPendingRef.current !== null) {
+        cancelAnimationFrame(rafPendingRef.current);
+        rafPendingRef.current = null;
+      }
       liveCard.set(null);
     };
   }, [scrollContainer, cardRefs]);
