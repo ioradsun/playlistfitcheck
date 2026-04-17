@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import type { FmlyPost } from "@/components/fmly/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
@@ -11,6 +11,8 @@ interface Props {
   live: boolean;
   registerRef: (id: string, el: HTMLElement | null) => void;
   onMeasure: (id: string, height: number) => void;
+  /** Called when user taps a non-primary card. Parent handles promotion. */
+  onRequestPrimary?: (postId: string) => void;
 }
 
 export const FeedCard = memo(function FeedCard({
@@ -19,6 +21,7 @@ export const FeedCard = memo(function FeedCard({
   live,
   registerRef,
   onMeasure,
+  onRequestPrimary,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -41,6 +44,9 @@ export const FeedCard = memo(function FeedCard({
   const lyricDanceUrl = lp?.artist_slug && lp?.url_slug
     ? `/${lp.artist_slug}/${lp.url_slug}/lyric-dance`
     : null;
+  const handleRequestPrimary = useCallback(() => {
+    onRequestPrimary?.(post.id);
+  }, [onRequestPrimary, post.id]);
 
   return (
     <div ref={rootRef} className="px-2 pb-3">
@@ -68,6 +74,7 @@ export const FeedCard = memo(function FeedCard({
             }
             previewImageUrl={lp?.album_art_url ?? lp?.section_images?.[0] ?? null}
             live={live}
+            onRequestPrimary={handleRequestPrimary}
           />
         </div>
       </div>
