@@ -835,8 +835,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         )}
       </div>
 
-      {live && cardMode === "listen" && (
-        <div className="w-full flex-shrink-0" style={{ background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
+      <div className="w-full flex-shrink-0" style={{ height: 44, background: "#0a0a0a" }} onClick={(e) => e.stopPropagation()}>
+        {live && cardMode === "listen" ? (
           <LyricInteractionLayer
             moments={moments}
             fireHeat={fireHeat}
@@ -878,8 +878,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               setCardMode("moments");
             }}
           />
-        </div>
-      )}
+        ) : null}
+      </div>
 
       {live && (
         <ViralClipModal
