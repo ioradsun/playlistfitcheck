@@ -1,5 +1,5 @@
 /**
- * useFeedPosts — all CrowdFit feed data in one hook.
+ * useFeedPosts — all FMLY feed data in one hook.
  *
  * Responsibilities:
  *  - Initial fetch (with optional prefetch consumption)
@@ -388,7 +388,7 @@ export function useFeedPosts(): FeedState {
   // ── Realtime: count new posts ─────────────────────────────────────────
   useEffect(() => {
     const channel = supabase
-      .channel("crowdfit-new-posts")
+      .channel("fmly-new-posts")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "feed_posts", filter: "status=eq.live" },
