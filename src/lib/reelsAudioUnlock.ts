@@ -1,8 +1,4 @@
-/**
- * Tracks whether the user has provided a gesture that unlocks audio.play().
- * Call unlockAudio() from inside a touch/click handler.
- * Call isAudioUnlocked() to check before auto-playing.
- */
+import { getSharedAudio } from "@/lib/sharedAudio";
 
 let _unlocked = false;
 const _callbacks: Array<() => void> = [];
@@ -15,13 +11,19 @@ export function unlockAudio(): void {
   if (_unlocked) return;
   _unlocked = true;
 
-  // Play a silent wav from gesture context to warm the browser's audio policy.
-  // iOS Safari especially needs this before any other Audio.play() will work.
+  // Prime the shared audio element from gesture context.
+  // Playing it muted unlocks it for all future play() calls, including unmuted ones,
+  // across the entire session — without needing another gesture.
   try {
-    const silent = new Audio();
-    silent.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-    silent.volume = 0;
-    silent.play().then(() => silent.pause()).catch(() => {});
+    const audio = getSharedAudio();
+    audio.muted = true;
+    audio.play().then(() => {
+      audio.pause();
+      // Leave muted=true so subsequent src changes don't blare
+      // until sync logic explicitly unmutes.
+    }).catch(() => {
+      // Play blocked (gesture not in frame?). _unlocked flag stays true — we tried.
+    });
   } catch {
     // no-op
   }

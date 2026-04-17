@@ -20,6 +20,7 @@ import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 import { LyricTextLayer } from "@/components/lyric/LyricTextLayer";
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
+import { getSharedAudio } from "@/lib/sharedAudio";
 import { getPreloadedImage } from "@/lib/imagePreloadCache";
 import { useResolvedTypography } from "@/hooks/useResolvedTypography";
 
@@ -218,7 +219,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     let cancelled = false;
     setPlayerReady(false);
 
-    const p = new LyricDancePlayer(next, canvasRef.current, textCanvasRef.current, containerRef.current);
+    const p = new LyricDancePlayer(
+      next,
+      canvasRef.current,
+      textCanvasRef.current,
+      containerRef.current,
+      { externalAudio: getSharedAudio() },
+    );
     playerRef.current = p;
     setPlayer(p);
 
