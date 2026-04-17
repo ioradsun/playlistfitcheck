@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef } from "react";
+import type { ResolvedTypography } from "@/lib/fontResolver";
 
 type TimedText = { start: number; end: number; text: string };
 type TimedWord = { word: string; start: number; end: number };
@@ -17,7 +18,7 @@ interface LyricTextLayerProps {
   lines: TimedText[];
   words?: TimedWord[];
   phrases?: Phrase[];
-  typographyPlan?: { primary?: string; case?: string; baseWeight?: string; heroStyle?: string } | null;
+  typography?: ResolvedTypography | null;
   currentTimeSec: number;
   ownsText: boolean;
 }
@@ -28,7 +29,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
   lines,
   words,
   phrases,
-  typographyPlan,
+  typography,
   currentTimeSec,
   ownsText,
 }: LyricTextLayerProps) {
@@ -82,12 +83,20 @@ export const LyricTextLayer = memo(function LyricTextLayer({
 
   const alignment = phrase?.bias === "left" ? "flex-start" : phrase?.bias === "right" ? "flex-end" : "center";
   const textAlign = phrase?.bias ?? "center";
-  const baseWeight = Number(typographyPlan?.baseWeight) || 700;
-  const baseStyle = {
-    fontFamily: typographyPlan?.primary,
-    fontWeight: baseWeight,
-    textTransform: typographyPlan?.case === "upper" ? "uppercase" : undefined,
-  };
+  const baseStyle = typography
+    ? {
+        fontFamily: typography.fontFamily,
+        fontWeight: typography.fontWeight,
+        textTransform: typography.textTransform,
+        letterSpacing: `${typography.letterSpacing}em`,
+      }
+    : {
+        fontFamily: '"Montserrat", sans-serif',
+        fontWeight: 700 as number,
+        textTransform: "none" as const,
+        letterSpacing: "0.2em",
+      };
+  const heroWeight = typography?.heroWeight ?? 800;
 
   const parts = heroRegex ? visibleText.split(heroRegex) : [visibleText];
 
@@ -96,8 +105,20 @@ export const LyricTextLayer = memo(function LyricTextLayer({
       <div role="region" aria-live="off" aria-label="Lyrics" style={{ maxWidth: "86%", overflow: "hidden", wordBreak: "normal", textAlign: textAlign as "left" | "center" | "right", fontSize: "clamp(20px, 4.2vw, 46px)", lineHeight: 1.2, color: "#fff", opacity: previewText ? 0.5 : 1, transition: showTransition ? "opacity 120ms" : "none", textWrap: "balance", textShadow: "0 1px 20px rgba(0,0,0,.45)" }}>
         {parts.map((part, idx) => {
           const isHero = heroWords.some((w) => part.toLowerCase() === w.toLowerCase());
-          if (!isHero) return <span key={`${part}-${idx}`} style={baseStyle}>{part}</span>;
-          return <span key={`${part}-${idx}`} style={{ ...baseStyle, fontWeight: Math.max(800, baseWeight), fontStyle: typographyPlan?.heroStyle?.includes("italic") ? "italic" : undefined }}>{part}</span>;
+          if (!isHero) {
+            return <span key={`${part}-${idx}`} style={baseStyle}>{part}</span>;
+          }
+          return (
+            <span
+              key={`${part}-${idx}`}
+              style={{
+                ...baseStyle,
+                fontWeight: heroWeight,
+              }}
+            >
+              {part}
+            </span>
+          );
         })}
       </div>
     </div>
