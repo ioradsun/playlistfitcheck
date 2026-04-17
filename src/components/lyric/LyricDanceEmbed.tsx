@@ -9,6 +9,7 @@ import { MomentPanel } from "@/components/lyric/MomentPanel";
 import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
 import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
+import { LyricTextLayer } from "@/components/lyric/LyricTextLayer";
 
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { audioController } from "@/lib/audioController";
@@ -208,6 +209,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     player.beatVisEnabled = isInst;
     player.renderMode = isInst ? "beat" : "lyric";
   }, [player, data]);
+
+  useEffect(() => {
+    if (!player) return;
+    player.textRenderMode = 'dom';
+    return () => { player.textRenderMode = 'canvas'; };
+  }, [player]);
 
   useEffect(() => {
     if (!player || !playerReady || !isFeedEmbed) return;
@@ -456,6 +463,15 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
                 <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }} />
               </>
             )}
+
+            <LyricTextLayer
+              lines={((data ?? prefetchedData) as any)?.lines ?? []}
+              words={((data ?? prefetchedData) as any)?.words}
+              phrases={((data ?? prefetchedData) as any)?.cinematic_direction?.phrases}
+              typographyPlan={((data ?? prefetchedData) as any)?.cinematic_direction?.typographyPlan ?? null}
+              currentTimeSec={currentTimeSec}
+              ownsText={true}
+            />
 
             {((isFeedEmbed && isPrimary && feedMuted) || (!isFeedEmbed && muted)) && (
               <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
