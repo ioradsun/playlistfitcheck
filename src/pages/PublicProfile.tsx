@@ -18,8 +18,8 @@ import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
-import type { SongFitPost } from "@/components/songfit/types";
-import { PostCommentPanel } from "@/components/songfit/PostCommentPanel";
+import type { FmlyPost } from "@/components/fmly/types";
+import { PostCommentPanel } from "@/components/fmly/PostCommentPanel";
 
 interface ReviewSummary {
   total: number;
@@ -60,7 +60,7 @@ const PublicProfile = () => {
   
   const [profile, setProfile] = useState<PublicProfileData | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
-  const [submissions, setSubmissions] = useState<SongFitPost[]>([]);
+  const [submissions, setSubmissions] = useState<FmlyPost[]>([]);
   const [saveCounts, setSaveCounts] = useState<Record<string, number>>({});
   const [reviewSummaries, setReviewSummaries] = useState<Record<string, ReviewSummary>>({});
   const [notFound, setNotFound] = useState(false);
@@ -97,7 +97,7 @@ const PublicProfile = () => {
       .limit(50)
       .then(async ({ data }) => {
         if (!data) return;
-        const posts = data as unknown as SongFitPost[];
+        const posts = data as unknown as FmlyPost[];
         setSubmissions(posts);
         const postIds = posts.map(p => p.id);
         if (postIds.length === 0) return;

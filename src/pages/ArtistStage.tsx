@@ -52,7 +52,9 @@ interface SpotifyTrack {
   popularity: number;
 }
 
-interface CrowdFitPost {
+interface FmlyPost {
+  // TODO: reconcile this local ArtistStage type with shared FmlyPost once shapes align.
+
   id: string;
   project_id: string | null;
   fires_count: number;
@@ -101,7 +103,7 @@ export default function ArtistStage() {
   const [profile, setProfile] = useState<ArtistProfile | null>(null);
   const [page, setPage] = useState<ArtistPage | null>(null);
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
-  const [crowdFitPosts, setCrowdFitPosts] = useState<CrowdFitPost[]>([]);
+  const [fmlyPosts, setFmlyPosts] = useState<FmlyPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("music");
@@ -182,7 +184,7 @@ export default function ArtistStage() {
           .order("engagement_score", { ascending: false })
           .limit(10)
           .then(({ data: posts }) => {
-            if (posts) setCrowdFitPosts(posts as unknown as CrowdFitPost[]);
+            if (posts) setFmlyPosts(posts as unknown as FmlyPost[]);
           });
 
         setLoading(false);
@@ -214,12 +216,12 @@ export default function ArtistStage() {
   };
 
   // --------------- Mini player ---------------
-  const playTrack = (track: SpotifyTrack | CrowdFitPost) => {
-    const isCrowdFit = "project_id" in track;
+  const playTrack = (track: SpotifyTrack | FmlyPost) => {
+    const isFmlyPost = "project_id" in track;
     setMiniTrack({
-      id: isCrowdFit ? ((track as CrowdFitPost).lyric_projects?.spotify_track_id ?? "") : (track as SpotifyTrack).id,
-      title: isCrowdFit ? ((track as CrowdFitPost).lyric_projects?.title ?? "") : (track as SpotifyTrack).name,
-      artist: isCrowdFit ? "" : (track as SpotifyTrack).artists.map(a => a.name).join(", "),
+      id: isFmlyPost ? ((track as FmlyPost).lyric_projects?.spotify_track_id ?? "") : (track as SpotifyTrack).id,
+      title: isFmlyPost ? ((track as FmlyPost).lyric_projects?.title ?? "") : (track as SpotifyTrack).name,
+      artist: isFmlyPost ? "" : (track as SpotifyTrack).artists.map(a => a.name).join(", "),
     });
   };
 
@@ -227,7 +229,7 @@ export default function ArtistStage() {
   const { r, g, b } = hexToRgb(accent);
   const accentRgb = `${r}, ${g}, ${b}`;
   const heroImage = profile?.avatar_url;
-  const featuredArt = page?.featured_track_art ?? crowdFitPosts[0]?.lyric_projects?.album_art_url ?? heroImage;
+  const featuredArt = page?.featured_track_art ?? fmlyPosts[0]?.lyric_projects?.album_art_url ?? heroImage;
 
   const themeFont = page?.theme === "editorial" ? "font-serif" : page?.theme === "modern" ? "font-mono" : "font-sans";
 
@@ -248,8 +250,8 @@ export default function ArtistStage() {
     );
   }
 
-  const featuredTrackId = page?.featured_track_id ?? crowdFitPosts[0]?.lyric_projects?.spotify_track_id ?? null;
-  const featuredTrackTitle = page?.featured_track_title ?? crowdFitPosts[0]?.lyric_projects?.title ?? "Play";
+  const featuredTrackId = page?.featured_track_id ?? fmlyPosts[0]?.lyric_projects?.spotify_track_id ?? null;
+  const featuredTrackTitle = page?.featured_track_title ?? fmlyPosts[0]?.lyric_projects?.title ?? "Play";
   const featuredTrackUrl = page?.featured_track_url ?? (featuredTrackId ? `https://open.spotify.com/track/${featuredTrackId}` : null);
 
   const heroYtId = page?.hero_content_type === "youtube" && page.hero_content_url
@@ -456,10 +458,10 @@ export default function ArtistStage() {
                 <p className="text-xs uppercase tracking-widest text-white/30 font-semibold">
                   On CrowdFit
                 </p>
-                {crowdFitPosts.length === 0 ? (
+                {fmlyPosts.length === 0 ? (
                   <p className="text-white/30 text-sm text-center py-8">No songs on CrowdFit yet.</p>
                 ) : (
-                  crowdFitPosts.map((post, i) => {
+                  fmlyPosts.map((post, i) => {
                     const postTrackId = post.lyric_projects?.spotify_track_id;
                     const isFeatured = postTrackId === featuredTrackId;
                     const isPlaying = miniTrack?.id === postTrackId;

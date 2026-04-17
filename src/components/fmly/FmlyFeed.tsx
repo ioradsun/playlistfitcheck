@@ -1,8 +1,9 @@
 /**
- * SongFitFeed — CrowdFit feed.
+ * FmlyFeed — the FMLY feed.
  *
- * Clean rewrite. IntersectionObserver for infinite scroll + card lifecycle.
- * Supports reels mode (full-screen snap scroll) and standard mode.
+ * Uses usePrimaryArbiter (single scroll-driven center-distance check) to pick
+ * one card as LIVE at a time. Renders FeedPrimaryCard (full LyricDanceEmbed)
+ * for the primary card, FeedPosterCard (live=false shell) for the rest.
  * PostCommentPanel is the sole comment UX (inline in card).
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -13,13 +14,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useFeedPosts } from "./useFeedPosts";
 import { PlusMenu } from "./PlusMenu";
 import { BillboardToggle } from "./BillboardToggle";
-import { primaryAudio } from "@/audio/primaryAudio";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { cn } from "@/lib/utils";
-import { useFeedWindow } from "@/feed/useFeedWindow";
-import { usePrimaryArbiter } from "@/feed/usePrimaryArbiter";
-import { FeedPrimaryCard } from "@/feed/FeedPrimaryCard";
-import { FeedPosterCard } from "@/feed/FeedPosterCard";
+import { useFeedWindow } from "@/components/fmly/feed/useFeedWindow";
+import { usePrimaryArbiter } from "@/components/fmly/feed/usePrimaryArbiter";
+import { FeedPrimaryCard } from "@/components/fmly/feed/FeedPrimaryCard";
+import { FeedPosterCard } from "@/components/fmly/feed/FeedPosterCard";
 import type { ContentFilter } from "./types";
 
 // ── Skeleton ────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ function FeedList({
 }) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const scrollContainer = typeof document !== "undefined"
-    ? document.getElementById("songfit-scroll-container")
+    ? document.getElementById("fmly-feed-scroll")
     : null;
 
   const postIds = posts.map((p) => p.id);
@@ -186,11 +186,11 @@ function FeedList({
 }
 
 // ── Main feed ───────────────────────────────────────────────────────────────
-interface SongFitFeedProps {
+interface FmlyFeedProps {
   reelsMode?: boolean;
 }
 
-export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
+export function FmlyFeed({ reelsMode = false }: FmlyFeedProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [plusOpen, setPlusOpen] = useState(false);
@@ -235,14 +235,13 @@ export function SongFitFeed({ reelsMode = false }: SongFitFeedProps) {
 
   const handleLoadNewDrops = useCallback(() => {
     feed.consumeNewDrops();
-    document.getElementById("songfit-scroll-container")?.scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById("fmly-feed-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
   }, [feed]);
 
   // Unlock audio on first touch anywhere in the feed
   useEffect(() => {
     const handler = () => {
       unlockAudio();
-      primaryAudio.prime();
       // One-shot: remove after first fire
       document.removeEventListener("touchstart", handler);
       document.removeEventListener("click", handler);

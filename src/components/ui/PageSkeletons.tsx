@@ -40,7 +40,7 @@ const PostCardSkeleton = () => (
   </div>
 );
 
-export const CrowdFitSkeleton = ({ variant }: { variant: Variant }) => (
+export const FmlyFeedSkeleton = ({ variant }: { variant: Variant }) => (
   <div className="w-full max-w-2xl mx-auto space-y-4">
     <div className="border-b border-border/40 flex">
       <div className="flex-1 flex items-center justify-center py-3">
@@ -485,7 +485,7 @@ const Padded =
   );
 
 const skeletonRegistry: Record<string, SkeletonEntry> = {
-  songfit:  Padded(CrowdFitSkeleton),
+  fmly:  Padded(FmlyFeedSkeleton),
   lyric:    LyricFitSkeleton,          // manages its own padding internally
   hitfit:   Padded(HitFitSkeleton),
   mix:      MixFitSkeleton,

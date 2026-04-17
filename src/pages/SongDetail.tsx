@@ -7,10 +7,10 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { LyricDanceEmbed, type LyricDanceEmbedHandle } from "@/components/lyric/LyricDanceEmbed";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
-import { LazySpotifyEmbed } from "@/components/songfit/LazySpotifyEmbed";
+import { LazySpotifyEmbed } from "@/components/fmly/LazySpotifyEmbed";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Music, Share2 } from "lucide-react";
-import type { SongFitPost } from "@/components/songfit/types";
+import type { FmlyPost } from "@/components/fmly/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { MilestoneCard } from "@/components/dashboard/MilestoneCard";
 
@@ -388,7 +388,7 @@ function SectionLyrics({
 
 // ── Now Streaming Drill-Down ─────────────────────────────────────────────
 
-function NowStreamingDrillDown({ post, navigate }: { post: SongFitPost; navigate: (path: any) => void }) {
+function NowStreamingDrillDown({ post, navigate }: { post: FmlyPost; navigate: (path: any) => void }) {
   const [events, setEvents] = useState<Array<{ event_type: string; created_at: string; user_id: string }>>([]);
   const [comments, setComments] = useState<Array<{ id: string; content: string; created_at: string; user_id: string; likes_count: number }>>([]);
   const [commentProfiles, setCommentProfiles] = useState<Record<string, { display_name: string | null; avatar_url: string | null }>>({});
@@ -690,7 +690,7 @@ const SongDetail = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [post, setPost] = useState<SongFitPost | null>(null);
+  const [post, setPost] = useState<FmlyPost | null>(null);
   const [danceData, setDanceData] = useState<LyricDanceData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -788,7 +788,7 @@ const SongDetail = () => {
         setLoading(false);
         return;
       }
-      setPost(postRow as unknown as SongFitPost);
+      setPost(postRow as unknown as FmlyPost);
       setLoading(false);
 
       if ((postRow as any).project_id) {

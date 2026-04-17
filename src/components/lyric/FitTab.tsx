@@ -454,7 +454,7 @@ export function FitTab({
               .eq("user_id", user.id);
           }
         }
-        window.dispatchEvent(new Event("songfit:dance-published"));
+        window.dispatchEvent(new Event("fmly:dance-published"));
         toast.success("Published to FMLY!");
       }
     } catch (e: any) {

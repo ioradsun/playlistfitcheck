@@ -114,7 +114,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
         } catch {
           // ignore
         }
-        window.dispatchEvent(new CustomEvent("crowdfit:vote"));
+        window.dispatchEvent(new CustomEvent("fmly:vote"));
       })();
       return;
     }
@@ -153,7 +153,7 @@ export function useCardVote(postId: string, options: Options = {}): CardVoteStat
         // ignore
       }
       incrementSessionReviewCount();
-      window.dispatchEvent(new CustomEvent("crowdfit:vote"));
+      window.dispatchEvent(new CustomEvent("fmly:vote"));
     };
     persistVote();
   };

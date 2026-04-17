@@ -9,7 +9,7 @@ import {
   EMOJIS,
   type EmojiKey,
 } from "@/components/shared/panel/panelConstants";
-import { CardBottomBar } from "@/components/songfit/CardBottomBar";
+import { CardBottomBar } from "@/components/fmly/CardBottomBar";
 import { liveCard } from "@/lib/liveCard";
 
 interface Comment {

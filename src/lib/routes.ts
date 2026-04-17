@@ -19,7 +19,7 @@ export const ROUTES = {
 
 /** Map from internal tool key → route path */
 export const TOOL_TO_PATH: Record<string, string> = {
-  songfit:   ROUTES.fmly,
+  fmly:   ROUTES.fmly,
   dreamfit:  ROUTES.fmlyMatters,
   lyric:     ROUTES.director,
   hitfit:    ROUTES.ar,
@@ -31,7 +31,7 @@ export const TOOL_TO_PATH: Record<string, string> = {
 
 /** Map from route path → internal tool key (includes legacy paths for redirect support) */
 export const PATH_TO_TOOL_KEY: Record<string, string> = {
-  [ROUTES.fmly]:        "songfit",
+  [ROUTES.fmly]:        "fmly",
   [ROUTES.fmlyMatters]: "dreamfit",
   [ROUTES.director]:    "lyric",
   [ROUTES.ar]:          "hitfit",
@@ -40,8 +40,8 @@ export const PATH_TO_TOOL_KEY: Record<string, string> = {
   [ROUTES.plug]:        "playlist",
   [ROUTES.creative]:    "vibefit",
   // Legacy paths (for redirects)
-  "/CrowdFit":    "songfit",
-  "/SongFit":     "songfit",
+  "/CrowdFit":    "fmly",
+  "/SongFit":     "fmly",
   "/LyricFit":    "lyric",
   "/HitFit":      "hitfit",
   "/MixFit":      "mix",

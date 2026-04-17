@@ -1,4 +1,4 @@
-export interface SongFitPost {
+export interface FmlyPost {
   id: string;
   user_id: string;
   project_id: string | null;
@@ -37,7 +37,7 @@ export interface SongFitPost {
   current_rank?: number;
 }
 
-export interface SongFitComment {
+export interface FmlyComment {
   id: string;
   post_id: string;
   user_id: string;
@@ -45,7 +45,7 @@ export interface SongFitComment {
   parent_comment_id: string | null;
   created_at: string;
   profiles?: { display_name: string | null; avatar_url: string | null };
-  replies?: SongFitComment[];
+  replies?: FmlyComment[];
 }
 
 export interface CycleHistory {

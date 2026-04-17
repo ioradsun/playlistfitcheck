@@ -19,7 +19,7 @@
 import { useMemo } from "react";
 
 export type Tool =
-  | "songfit"
+  | "fmly"
   | "lyric"
   | "mix"
   | "hitfit"
@@ -70,7 +70,7 @@ export function useProjectScreen({
   return useMemo<ProjectScreen>(() => {
     const basePath = pathname.replace(/\/[0-9a-f-]{36}$/, "");
     const tool: Tool =
-      PATH_TO_TOOL[basePath] ?? PATH_TO_TOOL[pathname] ?? "songfit";
+      PATH_TO_TOOL[basePath] ?? PATH_TO_TOOL[pathname] ?? "fmly";
 
     // ── New project (no projectId in URL) ────────────────────────────────
     if (!projectId) {

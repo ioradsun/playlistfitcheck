@@ -1,16 +1,16 @@
 import { memo, useEffect, useRef } from "react";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
-import type { SongFitPost } from "@/components/songfit/types";
+import type { FmlyPost } from "@/components/fmly/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 
 interface Props {
-  post: SongFitPost;
+  post: FmlyPost;
   lyricData: LyricDanceData | null;
   registerRef: (id: string, el: HTMLElement | null) => void;
   onMeasure: (id: string, height: number) => void;
 }
 
-export const FeedPrimaryCard = memo(function FeedPrimaryCard({
+export const FeedPosterCard = memo(function FeedPosterCard({
   post,
   lyricData,
   registerRef,
@@ -60,7 +60,7 @@ export const FeedPrimaryCard = memo(function FeedPrimaryCard({
               ?? null
             }
             previewImageUrl={lp?.album_art_url ?? lp?.section_images?.[0] ?? null}
-            live
+            live={false}
           />
         </div>
       </div>
