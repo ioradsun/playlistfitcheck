@@ -43,8 +43,16 @@ function matchesView(p: FmlyPost, view: FeedView): boolean {
   return true;
 }
 
-function hydrateDefaults(p: FmlyPost): FmlyPost {
-  return { ...p, user_has_liked: false, user_has_saved: false, saves_count: 0 };
+function withInstrumentalFlag(p: FmlyPost): FmlyPost {
+  const lines = (p as any).lyric_projects?.lines;
+  return {
+    ...p,
+    is_instrumental: Array.isArray(lines) ? lines.length === 0 : true,
+  };
+}
+
+function hydratePosts(rows: FmlyPost[]): FmlyPost[] {
+  return rows.map(withInstrumentalFlag);
 }
 
 /**
@@ -167,7 +175,7 @@ async function scoreBillboard(
   }
 
   return {
-    posts: top40.map((s, i) => ({ ...s.post, current_rank: i + 1 })),
+    posts: hydratePosts(top40.map((s, i) => ({ ...s.post, current_rank: i + 1 }))),
     signalMap,
   };
 }
@@ -203,7 +211,7 @@ export function useFeedPosts(): FeedState {
   // ── Core state ──
   const [posts, setPosts] = useState<FmlyPost[]>(() => {
     const cached = getCachedFeed();
-    return cached?.length ? (cached as unknown as FmlyPost[]).map(hydrateDefaults) : [];
+    return cached?.length ? hydratePosts(cached as unknown as FmlyPost[]) : [];
   });
   const [loading, setLoading] = useState(() => !getCachedFeed()?.length);
   const [searchTerm, setSearchTerm] = useState("");
@@ -306,7 +314,7 @@ export function useFeedPosts(): FeedState {
 
     let allPosts = (raw ?? []) as unknown as FmlyPost[];
     const filtered = allPosts.filter((p) => matchesView(p, feedView));
-    const normalized = filtered.map(hydrateDefaults);
+    const normalized = hydratePosts(filtered);
 
     // ── Only update if data actually changed — prevents cache→fresh double render ──
     // On warm-cache visits, the prefetch returns the same posts that were already
@@ -359,7 +367,7 @@ export function useFeedPosts(): FeedState {
       nextPosts = nextPosts.filter((p) => matchesView(p, feedView));
 
       if (nextPosts.length > 0) {
-        const normalized = nextPosts.map(hydrateDefaults);
+        const normalized = hydratePosts(nextPosts);
 
         // Render new cards immediately
         setPosts((prev) => {
@@ -427,7 +435,7 @@ export function useFeedPosts(): FeedState {
           .order("created_at", { ascending: false })
           .limit(40);
 
-        const results = ((data ?? []) as unknown as FmlyPost[]).map(hydrateDefaults);
+        const results = hydratePosts((data ?? []) as unknown as FmlyPost[]);
         setSearchResults(results);
 
         const { nextMap, cachePatch, grew } = hydrateLyricRows(results, lyricDataMap);
