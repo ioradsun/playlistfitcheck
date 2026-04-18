@@ -91,6 +91,13 @@ const MIN_GROUP_DURATION = 0.5;
 const MAX_GROUP_SIZE = 5;
 const WEIGHT_STEPS = [300, 400, 700, 800];
 
+// ── Hero word scale bump ──
+// Hero words render at 1.15× the size of non-hero words in the same phrase.
+// Exported so fitTextToViewport can reserve horizontal headroom for hero words
+// during layout. Must stay in sync with the per-word baseFontSize multiplication
+// in the word compile loop.
+export const HERO_SCALE_BOOST = 1.15;
+
 
 function isFillerWord(word: string): boolean { return FILLER_WORDS.has(word.replace(/[^a-zA-Z]/g, '').toLowerCase()); }
 
@@ -722,8 +729,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
 
-    const hasHero = group.words.some(wm => wm.isHeroWord === true);
-
     // maxLines resolved by resolveLayout: <4 words = 1 line, 4+ = auto wrap
     const maxLines: number | undefined = (group as any)._resolvedMaxLines;
 
@@ -782,6 +787,28 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       : 0.88;
     const targetFill = compositionFill * sectionScaleMult * effectiveScaleMult;
 
+    // Build hero word indices for this phrase — used by fitTextToViewport to reserve
+    // horizontal headroom for the scale bump applied later in baseFontSize.
+    // NOTE: Hero detection is re-run in the word compile loop below for the
+    // `isHero` flag. This duplication is intentional scope-limiting — the two
+    // sites will be unified in a follow-up refactor. Both must compute the
+    // same predicate; if you change this, update the word compile loop too.
+    const heroWordIndices: number[] = [];
+    for (let wi = 0; wi < group.words.length; wi++) {
+      const wm = group.words[wi];
+      const holdDuration = Math.max(0, (wm.end ?? 0) - (wm.start ?? 0));
+      const isLongHold = holdDuration >= 0.5;
+      const isDirectiveHero = wm.isHeroWord === true;
+      const isHookWord = false; // isChorus was never written by any code
+      const heroScore =
+        (isDirectiveHero ? 0.4 : 0) +
+        (Math.min(1, holdDuration / 0.8) * 0.3) +
+        (isHookWord ? 0.2 : 0) +
+        (computeEmphasisFromDuration(holdDuration) * 0.1);
+      const isHeroCheck = heroScore >= 0.35 || isLongHold || isDirectiveHero;
+      if (isHeroCheck) heroWordIndices.push(wi);
+    }
+
     const layout = fitTextToViewport(
       measureCtx as MeasureContext,
       groupWords,
@@ -792,7 +819,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       {
         maxLines,
         textTransform: 'none', // already transformed above
-        hasHeroWord: hasHero,
+        heroWordIndices,
+        heroScaleBoost: HERO_SCALE_BOOST,
         targetFillRatio: targetFill,
       },
     );
@@ -839,7 +867,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       {
         maxLines: 1,
         textTransform: 'none',
-        hasHeroWord: false,
+        heroWordIndices: [],
         targetFillRatio: 0.55,
         slot: adlibSlot,
       },
@@ -979,11 +1007,11 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       const isHero = heroScore >= 0.35 || isLongHold || isDirectiveHero;
 
       const wordWeight = isHero ? Math.max(phraseWeight, resolvedTypo.heroWeight) : phraseWeight;
-      // Heroes always scale up — weight shift alone is too subtle
-      // center_word composition: even bigger (single word filling the screen)
-      const heroScaleBoost = isHero
-        ? (composition === 'center_word' ? 1.18 : 1.10)
-        : 1.0;
+      // Hero words scale up 1.15× relative to non-hero words in the same phrase.
+      // Weight shift alone is too subtle; scale bump makes hero unambiguous.
+      // Standardized across all compositions — was previously 1.18/1.10 which
+      // created inconsistent emphasis and made layout reservation more complex.
+      const heroScaleBoost = isHero ? HERO_SCALE_BOOST : 1.0;
 
       const wordFontFamily = baseTypography.fontFamily;
 

@@ -232,7 +232,24 @@ export function fitTextToViewport(
     slot?: Slot;
     /** Text transform (default 'none') */
     textTransform?: 'none' | 'uppercase';
-    /** Does this phrase contain a hero word that will scale up at draw time? */
+    /**
+     * Indices of words that will render at `heroScaleBoost` × base font size.
+     * When provided, layout measures these words at their scaled width so lines
+     * wrap correctly and line centering accounts for the scale bump.
+     * Empty array or omitted = all words at base size.
+     */
+    heroWordIndices?: number[];
+    /**
+     * Scale multiplier applied to hero words at draw time.
+     * Default 1.0 (no scaling). When a phrase has hero words, set this to
+     * match the compiler's HERO_SCALE_BOOST (currently 1.15).
+     */
+    heroScaleBoost?: number;
+    /**
+     * @deprecated Use heroWordIndices + heroScaleBoost instead.
+     * Kept for backwards compatibility — a boolean true is silently ignored
+     * since it doesn't specify which word is the hero.
+     */
     hasHeroWord?: boolean;
   },
 ): TextLayout {
@@ -241,13 +258,19 @@ export function fitTextToViewport(
   const minFont = options?.minFontPx ?? 16;
   const slot = options?.slot ?? null;
   const transform = options?.textTransform ?? 'none';
-  // hasHeroWord no longer affects layout — hero scale was removed
+  // Keep deprecated option accepted for callsite compatibility.
   void options?.hasHeroWord;
+
+  // Hero word handling. Words at `heroWordIndices` render at `heroScaleBoost × fontSize`
+  // at draw time. For layout, we treat them as if they were wider at base size so
+  // line wrap and centering produce correct positions when the scale bump is applied.
+  const heroIndices = options?.heroWordIndices ?? [];
+  const heroBoost = heroIndices.length > 0 ? (options?.heroScaleBoost ?? 1.0) : 1.0;
+  const heroSet = heroIndices.length > 0 ? new Set(heroIndices) : null;
 
   // ── Available space ──
   const edgePad = Math.max(6, Math.round(canvasW * EDGE_PAD_RATIO));
   const availW = (canvasW - edgePad * 2) * targetFill;
-  // Hero scale removed — no width reservation needed
   const layoutW = availW;
 
   const slotH = slot?.height ?? canvasH * 0.65;
@@ -276,6 +299,11 @@ export function fitTextToViewport(
   const measureWord = (word: string, size: number): number => {
     ctx.font = buildFont(size);
     return ctx.measureText(word).width;
+  };
+  const measureWordByIndex = (wordIndex: number, word: string, size: number): number => {
+    const w = measureWord(word, size);
+    if (heroSet && heroSet.has(wordIndex)) return w * heroBoost;
+    return w;
   };
 
   const getSpaceW = (size: number): number => {
@@ -307,11 +335,10 @@ export function fitTextToViewport(
     if (lo > hi) break;
     const mid = Math.floor((lo + hi) / 2);
 
-    // Measure all words at this size
+    // Measure all words at this size (including scaled hero headroom)
     const wordWidths: number[] = [];
-    ctx.font = buildFont(mid);
-    for (const w of displayWords) {
-      wordWidths.push(ctx.measureText(w).width);
+    for (let i = 0; i < displayWords.length; i++) {
+      wordWidths.push(measureWordByIndex(i, displayWords[i], mid));
     }
     const spaceW = getSpaceW(mid);
 
@@ -360,10 +387,12 @@ export function fitTextToViewport(
     const lineWordIndices = bestLines[li];
     const baselineY = blockTopY + (li + 0.7) * lineH; // 0.7 for baseline offset
 
-    // Measure line width for centering
+    // Measure line width for centering.
+    // Hero words are measured at scaled width so line wrap and centering
+    // account for their render-time scale bump.
     const wordWidths: number[] = [];
     for (const wi of lineWordIndices) {
-      wordWidths.push(ctx.measureText(displayWords[wi]).width);
+      wordWidths.push(measureWordByIndex(wi, displayWords[wi], fontSize));
     }
     let lineW = 0;
     for (let i = 0; i < wordWidths.length; i++) {

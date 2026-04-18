@@ -65,6 +65,7 @@ export function useLyricTextFit({
 
       const layout = fitTextToViewport(measureCtx, words, cw, ch, fontFamily, fontWeight, {
         minFontPx,
+        heroWordIndices: [],
         targetFillRatio: 0.88,
       });
 

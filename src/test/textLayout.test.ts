@@ -161,12 +161,14 @@ describe('fitTextToViewport', () => {
 
   // ── Hero headroom ──
 
-  it('hero word option reserves extra horizontal space', () => {
+  it('hero word indices reserve extra horizontal space', () => {
     const words = ['feel', 'the', 'FIRE', 'burning'];
     const normal = fitTextToViewport(mockCtx(), words, 1920, 1080, 'Montserrat', 600);
     const withHero = fitTextToViewport(mockCtx(), words, 1920, 1080, 'Montserrat', 600, {
-      hasHeroWord: true,
+      heroWordIndices: [2],
+      heroScaleBoost: 1.15,
     });
+    expect(withHero.fontSize).toBeLessThanOrEqual(normal.fontSize);
     // With hero headroom, font might be slightly smaller or wrapping might differ
     // The key guarantee: word positions still fit within canvas
     for (const wp of withHero.wordPositions) {
