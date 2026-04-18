@@ -37,7 +37,6 @@ const REVEAL_BUDGET: Record<RevealStyle, number> = {
 
 const REVEAL_PREF: readonly RevealStyle[] = ['stagger_slow', 'stagger_fast', 'instant'];
 const COMPOSITION_PREF: readonly Composition[] = ['stack', 'line'];
-const BIAS_PREF: readonly Bias[] = ['left', 'right', 'center'];
 
 export interface RevealInputs {
   durationSec: number;
@@ -106,15 +105,14 @@ export class VarietyEngine {
     return picked;
   }
 
-  pickBias(inputs: BiasInputs): Bias {
-    if (inputs.composition === 'center_word') {
-      this.commit('bias', 'center');
-      return 'center';
-    }
-    const recent = this.recent('bias');
-    const picked = pickFromEligible(BIAS_PREF, ['left', 'center', 'right'] as Bias[], recent);
-    this.commit('bias', picked);
-    return picked;
+  pickBias(_inputs: BiasInputs): Bias {
+    // Bias rotation is disabled — all phrases center-align. Product decision:
+    // horizontal rotation was intended for visual rhythm but broke reading
+    // rhythm. Stable horizontal anchor preserves comprehension across rapid
+    // phrase changes. The full rotation path is kept in git history and can
+    // be restored by reverting this change if the tradeoff ever shifts.
+    this.commit('bias', 'center');
+    return 'center';
   }
 
   pickExit(inputs: ExitInputs): ExitEffect {

@@ -100,23 +100,22 @@ describe('VarietyEngine composition', () => {
 });
 
 describe('VarietyEngine bias', () => {
-  it('forces center when composition is center_word', () => {
+  it('always returns center regardless of composition', () => {
     const v = new VarietyEngine();
     v.setSection(0);
+    expect(v.pickBias({ composition: 'line' })).toBe('center');
+    expect(v.pickBias({ composition: 'stack' })).toBe('center');
     expect(v.pickBias({ composition: 'center_word' })).toBe('center');
   });
 
-  it('rotates through left/center/right over non-center_word phrases', () => {
+  it('returns center consistently across many phrases', () => {
     const v = new VarietyEngine();
     v.setSection(0);
     const seq: string[] = [];
     for (let i = 0; i < 6; i++) {
       seq.push(v.pickBias({ composition: 'line' }));
     }
-    for (let i = 2; i < seq.length; i++) {
-      expect(!(seq[i] === seq[i - 1] && seq[i] === seq[i - 2])).toBe(true);
-    }
-    expect(new Set(seq).size).toBeGreaterThan(1);
+    expect(new Set(seq)).toEqual(new Set(['center']));
   });
 });
 
