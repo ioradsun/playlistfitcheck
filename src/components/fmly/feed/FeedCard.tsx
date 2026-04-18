@@ -3,6 +3,7 @@ import { LyricDanceShell } from "@/components/lyric/LyricDanceShell";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import type { FmlyPost } from "@/components/fmly/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { CARD_CONTENT_HEIGHT_PX } from "@/components/fmly/feed/constants";
 import { cn } from "@/lib/utils";
 
 const LazyLyricDanceEmbed = lazy(async () => {
@@ -17,7 +18,6 @@ interface Props {
    *  When false, it's a static shell (poster + DOM lyrics + header). */
   live: boolean;
   registerRef: (id: string, el: HTMLElement | null) => void;
-  onMeasure: (id: string, height: number) => void;
   /** Called when user taps a non-primary card. Parent handles promotion. */
   onRequestPrimary?: (postId: string) => void;
   /** When true, card renders full viewport height with snap-scroll alignment.
@@ -30,7 +30,6 @@ export const FeedCard = memo(function FeedCard({
   lyricData,
   live,
   registerRef,
-  onMeasure,
   onRequestPrimary,
   reelsMode = false,
 }: Props) {
@@ -40,16 +39,6 @@ export const FeedCard = memo(function FeedCard({
     registerRef(post.id, rootRef.current);
     return () => registerRef(post.id, null);
   }, [post.id, registerRef]);
-
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const measure = () => onMeasure(post.id, el.getBoundingClientRect().height);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [post.id, onMeasure]);
 
   const lp = post.lyric_projects;
   const lyricDanceUrl = lp?.artist_slug && lp?.url_slug
@@ -109,9 +98,6 @@ export const FeedCard = memo(function FeedCard({
           // seek scrubbing competes with the system home gesture and becomes
           // unreliable or fails entirely.
           paddingBottom: reelsMode ? "env(safe-area-inset-bottom, 0px)" : undefined,
-          // GPU layer promotion — scroll composites on the GPU instead of
-          // repainting per-pixel. ~4-8MB GPU memory per card × ~7 mounted = 30-50MB.
-          willChange: "transform",
           transform: "translateZ(0)",
           contain: "layout paint",
         }}
@@ -119,7 +105,7 @@ export const FeedCard = memo(function FeedCard({
         <div
           className="relative"
           style={{
-            height: reelsMode ? "100%" : 320,
+            height: reelsMode ? "100%" : CARD_CONTENT_HEIGHT_PX,
             width: "100%",
           }}
         >

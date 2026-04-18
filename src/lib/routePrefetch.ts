@@ -7,7 +7,6 @@ export const LyricFitTabImport = () => import("@/components/lyric/LyricFitTab");
 export const HitFitTabImport = () => import("@/components/hitfit/HitFitTab");
 export const ProFitTabImport = () => import("@/components/profit/ProFitTab");
 export const FmlyFeedImport = () => import("@/components/fmly/FmlyFeed");
-export const FmlyTabImport = () => FmlyFeedImport().then((m) => ({ FmlyTab: m.FmlyFeed }));
 export const DreamFitTabImport = () => import("@/components/dreamfit/DreamFitTab");
 export const VibeFitTabImport = () => import("@/components/vibefit/VibeFitTab");
 export const AppSidebarImport = () => import("@/components/AppSidebar");

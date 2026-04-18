@@ -11,6 +11,12 @@ import { usePrimaryArbiter } from "@/components/fmly/feed/usePrimaryArbiter";
 import { usePrefetchNearbyScenes } from "@/components/fmly/feed/usePrefetchNearbyScenes";
 import { FeedCard } from "@/components/fmly/feed/FeedCard";
 import { FeedHeader } from "@/components/fmly/feed/FeedHeader";
+import {
+  CARD_CONTENT_HEIGHT_PX,
+  CARD_TOTAL_HEIGHT_PX,
+  FEED_MAX_WIDTH_PX,
+  FMLY_BAR_HEIGHT_PX,
+} from "@/components/fmly/feed/constants";
 import type { ContentFilter } from "./types";
 
 function FeedSkeleton({ reelsMode }: { reelsMode: boolean }) {
@@ -27,8 +33,8 @@ function FeedSkeleton({ reelsMode }: { reelsMode: boolean }) {
               <div className="h-8 w-8 rounded-full bg-white/[0.04]" />
               <div className="h-3 w-32 rounded bg-white/[0.04]" />
             </div>
-            <div style={{ height: 320 }} />
-            <div className="flex items-stretch" style={{ height: 48 }}>
+            <div style={{ height: CARD_CONTENT_HEIGHT_PX }} />
+            <div className="flex items-stretch" style={{ height: FMLY_BAR_HEIGHT_PX }}>
               <div className="flex-1 flex items-center justify-center"><div className="h-3 w-16 rounded bg-white/[0.03]" /></div>
               <div className="w-px bg-white/[0.04] self-stretch my-3" />
               <div className="flex-1 flex items-center justify-center"><div className="h-3 w-16 rounded bg-white/[0.03]" /></div>
@@ -72,7 +78,7 @@ function FeedList({
   const supportsCV = typeof CSS !== "undefined" && CSS.supports("content-visibility: auto");
 
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
-  const feedWindow = useFeedWindow(posts.length, postIds);
+  const feedWindow = useFeedWindow(posts.length, postIds, reelsMode);
   const { primaryId, closestIndex } = usePrimaryArbiter(
     scrollContainer,
     feedWindow.cardRefs,
@@ -147,17 +153,8 @@ function FeedList({
     return () => io.disconnect();
   }, [onScrolledChange, reelsMode, scrollContainer]);
 
-  const topSpacerHeight = useMemo(() => {
-    let sum = 0;
-    for (let i = 0; i < feedWindow.windowStart; i += 1) sum += feedWindow.estimateHeight(i);
-    return sum;
-  }, [feedWindow]);
-
-  const bottomSpacerHeight = useMemo(() => {
-    let sum = 0;
-    for (let i = feedWindow.windowEnd + 1; i < posts.length; i += 1) sum += feedWindow.estimateHeight(i);
-    return sum;
-  }, [feedWindow, posts.length]);
+  const topSpacerHeight = feedWindow.windowStart * feedWindow.cardHeight;
+  const bottomSpacerHeight = Math.max(0, posts.length - 1 - feedWindow.windowEnd) * feedWindow.cardHeight;
 
   const renderedPosts = posts.slice(feedWindow.windowStart, feedWindow.windowEnd + 1);
 
@@ -170,7 +167,7 @@ function FeedList({
         <div
           key={post.id}
           style={post.id !== primaryId && !reelsMode && supportsCV
-            ? { contentVisibility: "auto", containIntrinsicSize: "0 420px" }
+            ? { contentVisibility: "auto", containIntrinsicSize: `0 ${CARD_TOTAL_HEIGHT_PX}px` }
             : undefined}
         >
           <FeedCard
@@ -178,7 +175,6 @@ function FeedList({
             lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
             live={post.id === primaryId}
             registerRef={registerRef}
-            onMeasure={feedWindow.onCardMeasure}
             onRequestPrimary={handleRequestPrimary}
             reelsMode={reelsMode}
           />
@@ -243,7 +239,10 @@ export function FmlyFeed({ reelsMode = false, onScrolledChange }: FmlyFeedProps)
   }, []);
 
   return (
-    <div className={reelsMode ? "w-full" : "w-full max-w-[470px] mx-auto"}>
+    <div
+      className={reelsMode ? "w-full" : "w-full mx-auto"}
+      style={reelsMode ? undefined : { maxWidth: FEED_MAX_WIDTH_PX }}
+    >
       <FeedHeader
         reelsMode={reelsMode}
         feed={feed}

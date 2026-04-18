@@ -7,7 +7,7 @@ import { preloadImage } from "@/lib/imagePreloadCache";
  * Consumed once by the corresponding component, then cleared.
  *
  * Embed routes (3-segment paths like /:artist/:song/lyric-dance) skip
- * feed, siteCopy, auth, and FmlyTab prefetches entirely — those
+ * feed, siteCopy, auth, and FmlyFeed prefetches entirely — those
  * pages never use them.
  */
 
@@ -252,7 +252,7 @@ export function consumeSiteCopyPrefetch() {
 }
 
 if (!_isEmbedRoute) {
-  import("./routePrefetch").then(({ FmlyTabImport }) => void FmlyTabImport());
+  import("./routePrefetch").then(({ FmlyFeedImport }) => void FmlyFeedImport());
   void import("../MainAppShell");
 }
 

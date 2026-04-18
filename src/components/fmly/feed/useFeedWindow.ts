@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CARD_TOTAL_HEIGHT_PX } from "@/components/fmly/feed/constants";
 
 const WINDOW_RADIUS = 3;
 
@@ -8,17 +9,17 @@ export interface FeedWindow {
   windowEnd: number;
   renderedIds: Set<string>;
   renderedIdsVersion: number;
-  onCardMeasure: (id: string, height: number) => void;
-  estimateHeight: (index: number) => number;
+  cardHeight: number;
   cardRefs: React.MutableRefObject<Map<string, HTMLElement>>;
   setActiveIndex: (index: number) => void;
 }
 
-export function useFeedWindow(postCount: number, postIds: string[]): FeedWindow {
+export function useFeedWindow(postCount: number, postIds: string[], reelsMode: boolean): FeedWindow {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [viewportH, setViewportH] = useState(
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  );
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const heights = useRef<Map<string, number>>(new Map());
-  const medianHeightRef = useRef(420);
 
   useEffect(() => {
     if (activeIndex > postCount - 1 && postCount > 0) {
@@ -39,18 +40,24 @@ export function useFeedWindow(postCount: number, postIds: string[]): FeedWindow 
 
   const renderedIdsVersion = windowStart * 100000 + windowEnd + postIds.length;
 
-  const onCardMeasure = useCallback((id: string, h: number) => {
-    if (h <= 0 || heights.current.has(id)) return;
-    heights.current.set(id, h);
-    const all = Array.from(heights.current.values()).sort((a, b) => a - b);
-    medianHeightRef.current = all[Math.floor(all.length / 2)] ?? 420;
-  }, []);
+  useEffect(() => {
+    if (!reelsMode) return;
+    let raf = 0;
+    const onResize = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setViewportH(window.innerHeight);
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [reelsMode]);
 
-  const estimateHeight = useCallback((i: number): number => {
-    const id = postIds[i];
-    if (!id) return 420;
-    return heights.current.get(id) ?? medianHeightRef.current;
-  }, [postIds]);
+  const cardHeight = reelsMode ? viewportH : CARD_TOTAL_HEIGHT_PX;
 
   return {
     activeIndex,
@@ -58,8 +65,7 @@ export function useFeedWindow(postCount: number, postIds: string[]): FeedWindow 
     windowEnd,
     renderedIds,
     renderedIdsVersion,
-    onCardMeasure,
-    estimateHeight,
+    cardHeight,
     cardRefs,
     setActiveIndex,
   };
