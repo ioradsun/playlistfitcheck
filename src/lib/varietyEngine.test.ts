@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   VarietyEngine,
   physicsEligibleReveals,
-  pickFromEligible,
   GENTLE_EXITS,
   DRAMATIC_EXITS,
 } from './varietyEngine';
@@ -23,37 +22,21 @@ describe('physicsEligibleReveals', () => {
   });
 });
 
-describe('pickFromEligible', () => {
-  it('prefers the first eligible not in recent', () => {
-    expect(pickFromEligible(['a', 'b', 'c'], ['a', 'b', 'c'], ['a'])).toBe('b');
-  });
-
-  it('falls back to preference order if all eligibles are recent', () => {
-    expect(pickFromEligible(['a', 'b'], ['a', 'b'], ['a', 'b'])).toBe('a');
-  });
-
-  it('respects eligibility even if preferred is not eligible', () => {
-    expect(pickFromEligible(['a', 'b'], ['b'], [])).toBe('b');
-  });
-});
-
 describe('VarietyEngine reveal', () => {
-  it('rotates through styles over 5 phrases with all eligible', () => {
+  it('uses all physics-eligible reveals before repeating', () => {
     const v = new VarietyEngine();
     v.setSection(0);
-    const seq: string[] = [];
-    for (let i = 0; i < 5; i++) {
-      seq.push(v.pickReveal({ durationSec: 3.0, wordCount: 2 }));
+    const seen = new Set<string>();
+    for (let i = 0; i < 3; i += 1) {
+      seen.add(v.pickReveal({ durationSec: 6, wordCount: 8 }));
     }
-    for (let i = 2; i < seq.length; i++) {
-      expect(!(seq[i] === seq[i - 1] && seq[i] === seq[i - 2])).toBe(true);
-    }
+    expect(seen.size).toBe(3);
   });
 
   it('accepts repeat when physics forces it', () => {
     const v = new VarietyEngine();
     v.setSection(0);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 5; i += 1) {
       const picked = v.pickReveal({ durationSec: 0.3, wordCount: 5 });
       expect(picked).toBe('instant');
     }
@@ -99,26 +82,6 @@ describe('VarietyEngine composition', () => {
   });
 });
 
-describe('VarietyEngine bias', () => {
-  it('always returns center regardless of composition', () => {
-    const v = new VarietyEngine();
-    v.setSection(0);
-    expect(v.pickBias({ composition: 'line' })).toBe('center');
-    expect(v.pickBias({ composition: 'stack' })).toBe('center');
-    expect(v.pickBias({ composition: 'center_word' })).toBe('center');
-  });
-
-  it('returns center consistently across many phrases', () => {
-    const v = new VarietyEngine();
-    v.setSection(0);
-    const seq: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      seq.push(v.pickBias({ composition: 'line' }));
-    }
-    expect(new Set(seq)).toEqual(new Set(['center']));
-  });
-});
-
 describe('VarietyEngine exit', () => {
   it('uses AI dramatic suggestion on climax phrase', () => {
     const v = new VarietyEngine();
@@ -136,17 +99,25 @@ describe('VarietyEngine exit', () => {
     expect(a).not.toBe(b);
   });
 
-  it('rotates gentle exits for non-climax phrases', () => {
+  it('uses every gentle option before repeating any', () => {
     const v = new VarietyEngine();
     v.setSection(0);
-    const seq: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      seq.push(v.pickExit({ aiClimax: false }));
+    const seen = new Set<string>();
+    for (let i = 0; i < 5; i += 1) {
+      seen.add(v.pickExit({ aiClimax: false }));
     }
-    for (const e of seq) expect(GENTLE_EXITS).toContain(e as any);
-    for (let i = 2; i < seq.length; i++) {
-      expect(!(seq[i] === seq[i - 1] && seq[i] === seq[i - 2])).toBe(true);
+    expect(seen.size).toBe(5);
+  });
+
+  it('cycles cleanly through the full pool on repeat', () => {
+    const v = new VarietyEngine();
+    v.setSection(0);
+    const picks: string[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      picks.push(v.pickExit({ aiClimax: false }));
     }
+    expect(new Set(picks.slice(0, 5)).size).toBe(5);
+    expect(new Set(picks.slice(5, 10)).size).toBe(5);
   });
 
   it('rejects non-dramatic AI suggestion on climax', () => {
@@ -155,5 +126,22 @@ describe('VarietyEngine exit', () => {
     const picked = v.pickExit({ aiClimax: true, aiDramaticExit: 'fade' as any });
     expect(DRAMATIC_EXITS).toContain(picked);
     expect(picked).not.toBe('fade');
+  });
+
+  it('resets history on setSection', () => {
+    const v = new VarietyEngine();
+    v.setSection(0);
+    v.pickExit({ aiClimax: false });
+    v.setSection(1);
+    const firstPickSection1 = v.pickExit({ aiClimax: false });
+    expect(firstPickSection1).toBe('fade');
+  });
+
+  it('only yields gentle exits for non-climax phrases', () => {
+    const v = new VarietyEngine();
+    v.setSection(0);
+    for (let i = 0; i < 8; i += 1) {
+      expect(GENTLE_EXITS).toContain(v.pickExit({ aiClimax: false }));
+    }
   });
 });

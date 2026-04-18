@@ -15,7 +15,6 @@ type Phrase = {
   heroWord?: string;
   heroWords?: string[];
   wordRange?: [number, number];
-  bias?: "left" | "center" | "right";
   composition?: "stack" | "line" | "center_word";
   revealStyle?: "instant" | "stagger_fast" | "stagger_slow";
   exitEffect?: ExitEffect;
@@ -109,12 +108,11 @@ export const LyricTextLayer = memo(function LyricTextLayer({
   });
 
   const composition = phrase?.composition ?? "line";
-  const bias = phrase?.bias ?? "center";
   const revealStyle = phrase?.revealStyle ?? "stagger_fast";
   const exitEffect: ExitEffect = phrase?.exitEffect ?? "fade";
 
-  const alignment = bias === "left" ? "flex-start" : bias === "right" ? "flex-end" : "center";
-  const textAlign: "left" | "center" | "right" = bias;
+  const alignment = "center";
+  const textAlign: "center" = "center";
 
   const baseStyle = typography
     ? {
@@ -176,7 +174,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
               textAlign,
               wordBreak: "normal",
               overflowWrap: "break-word",
-              ...getCompositionStyles(composition, bias),
+              ...getCompositionStyles(composition),
             }}
           >
             <PhraseBody
@@ -273,9 +271,7 @@ function PhraseBody({
 
 function getCompositionStyles(
   composition: "stack" | "line" | "center_word",
-  bias: "left" | "center" | "right",
 ): Record<string, unknown> {
-  const alignItems = bias === "left" ? "flex-start" : bias === "right" ? "flex-end" : "center";
 
   switch (composition) {
     case "stack":
@@ -283,7 +279,7 @@ function getCompositionStyles(
         display: "flex",
         flexDirection: "column",
         gap: "0.1em",
-        alignItems,
+        alignItems: "center",
       };
     case "center_word":
       return {

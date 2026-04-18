@@ -395,7 +395,6 @@ export interface CompiledPhraseGroup {
   exitDuration: number;
   lingerDuration: number;
   composition: 'stack' | 'line' | 'center_word';
-  bias: 'left' | 'center' | 'right';
   heroType: 'word' | 'phrase';
   revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
   holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
@@ -610,9 +609,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       return ps <= gs && pe >= ge;
     });
     const phraseComposition = matchedPhrase?.composition ?? 'line';
-    const phraseBias = matchedPhrase?.bias ?? 'center';
     (g as any)._composition = phraseComposition;
-    (g as any)._bias = phraseBias;
     if (phraseComposition === 'center_word') {
       g._resolvedMaxLines = 1;
     } else if (phraseComposition === 'stack') {
@@ -728,8 +725,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     (group as any)._matchPhrase = matchPhrase;
 
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
-    const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
-    // NOTE: matchPhrase.composition and matchPhrase.bias are variety-assigned in phraseEngine.
+    // NOTE: matchPhrase.composition is variety-assigned in phraseEngine.
     // Keep this fallback for backward compatibility with legacy cached cinematic direction data.
 
     // maxLines resolved by resolveLayout: <4 words = 1 line, 4+ = auto wrap
@@ -828,16 +824,11 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       },
     );
 
-    // Apply bias: shift word x-positions for left/right alignment
-    const biasDir = (group as any)._bias ?? 'center';
-    const biasOffset = biasDir === 'left' ? -REF_W * 0.12
-      : biasDir === 'right' ? REF_W * 0.12
-      : 0;
-
+    // Bias removed — phrases always render horizontally centered.
     groupLayouts.set(key, {
       fontSize: layout.fontSize,
       positions: layout.wordPositions.map(wp => ({
-        x: wp.x + biasOffset,
+        x: wp.x,
         y: wp.y,
         width: wp.width,
       })),
@@ -911,8 +902,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const groupDur = phraseAnimDurations(group.words.length, Math.round((group.end - group.start) * 1000));
     const matchPhrase = (group as any)._matchPhrase as CinematicPhrase | undefined;
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
-    const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
-    // NOTE: matchPhrase.composition and matchPhrase.bias are variety-assigned in phraseEngine.
+    // NOTE: matchPhrase.composition is variety-assigned in phraseEngine.
     // Keep this fallback for backward compatibility with legacy cached cinematic direction data.
     const groupSecIdx = getSectionForTime(group.start);
     const groupSecTypo = sectionTypoMap[groupSecIdx] ?? DEFAULT_SECTION_BEHAVIOR;
@@ -1053,7 +1043,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       exitDuration: exitVal,
       lingerDuration: lingerVal,
       composition,
-      bias,
       heroType,
       revealStyle,
       holdClass,

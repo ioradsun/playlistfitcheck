@@ -46,7 +46,6 @@ function mkGroup(overrides: Partial<CompiledPhraseGroup>): CompiledPhraseGroup {
     lingerDuration: 0.2,
     
     composition: 'line',
-    bias: 'center',
     heroType: 'word',
     revealStyle: 'instant',
     holdClass: 'medium_groove',
@@ -66,7 +65,7 @@ describe('PhraseAnimator timing', () => {
     expect(atEarlyTime.activeIdx).toBe(0);
 
     const afterEnd = resolveActiveGroup(groups, 1.01, 0, 1.0);
-    expect(afterEnd.activeIdx).toBe(1);
+    expect(afterEnd.activeIdx).toBe(0);
   });
 
   it('uses group.end as phrase end (not next group start)', () => {

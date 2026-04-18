@@ -99,11 +99,6 @@ export interface CinematicPhrase {
    */
   isCenterWord?: boolean;
   /**
-   * @deprecated Bias is now variety-assigned (left/center/right rotation).
-   * This field is accepted for backward-compat and ignored by the compiler.
-   */
-  bias?: 'left' | 'center' | 'right';
-  /**
    * AI signal: this phrase is a climax/emphasis moment and should use a dramatic exit.
    */
   isClimax?: boolean;

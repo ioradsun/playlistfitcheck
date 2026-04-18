@@ -1,12 +1,11 @@
 /**
  * varietyEngine.ts — Physics + anti-repetition + AI-hint variety selector.
  *
- * Picks per-phrase visual variation across four axes: reveal, composition, bias, exit.
+ * Picks per-phrase visual variation across three axes: reveal, composition, exit.
  */
 
 export type RevealStyle = 'instant' | 'stagger_fast' | 'stagger_slow';
 export type Composition = 'line' | 'stack' | 'center_word';
-export type Bias = 'left' | 'center' | 'right';
 export type ExitEffect =
   | 'fade' | 'drift_up' | 'shrink' | 'dissolve' | 'cascade'
   | 'burn' | 'scatter' | 'slam' | 'glitch';
@@ -49,24 +48,25 @@ export interface CompositionInputs {
   aiWantsCenterWord: boolean;
 }
 
-export interface BiasInputs {
-  composition: Composition;
-}
-
 export interface ExitInputs {
   aiClimax: boolean;
   aiDramaticExit?: ExitEffect;
 }
 
 interface AxisState {
-  reveal: RevealStyle[];
-  composition: Composition[];
-  bias: Bias[];
-  exit: ExitEffect[];
+  reveal: Map<RevealStyle, number>;
+  composition: Map<Composition, number>;
+  exit: Map<ExitEffect, number>;
+  step: number;
 }
 
 function emptyAxisState(): AxisState {
-  return { reveal: [], composition: [], bias: [], exit: [] };
+  return {
+    reveal: new Map(),
+    composition: new Map(),
+    exit: new Map(),
+    step: 0,
+  };
 }
 
 export class VarietyEngine {
@@ -75,74 +75,89 @@ export class VarietyEngine {
 
   setSection(sectionIndex: number): void {
     this.currentSection = sectionIndex;
-    if (!this.states.has(sectionIndex)) {
-      this.states.set(sectionIndex, emptyAxisState());
-    }
   }
 
   pickReveal(inputs: RevealInputs): RevealStyle {
     const eligible = physicsEligibleReveals(inputs.durationSec, inputs.wordCount);
-    const recent = this.recent('reveal');
-    const picked = pickFromEligible(REVEAL_PREF, eligible, recent);
-    this.commit('reveal', picked);
-    return picked;
+    return this.pickLRU('reveal', REVEAL_PREF, eligible);
   }
 
   pickComposition(inputs: CompositionInputs): Composition {
-    if (inputs.wordCount === 1) {
-      this.commit('composition', 'center_word');
-      return 'center_word';
+    if (inputs.wordCount === 1 || inputs.aiWantsCenterWord) {
+      return this.commit('composition', 'center_word');
     }
-    if (inputs.aiWantsCenterWord) {
-      this.commit('composition', 'center_word');
-      return 'center_word';
-    }
+
     const eligible: Composition[] = ['line'];
     if (inputs.wordCount >= 4) eligible.push('stack');
-    const recent = this.recent('composition');
-    const picked = pickFromEligible(COMPOSITION_PREF, eligible, recent);
-    this.commit('composition', picked);
-    return picked;
-  }
-
-  pickBias(_inputs: BiasInputs): Bias {
-    // Bias rotation is disabled — all phrases center-align. Product decision:
-    // horizontal rotation was intended for visual rhythm but broke reading
-    // rhythm. Stable horizontal anchor preserves comprehension across rapid
-    // phrase changes. The full rotation path is kept in git history and can
-    // be restored by reverting this change if the tradeoff ever shifts.
-    this.commit('bias', 'center');
-    return 'center';
+    return this.pickLRU('composition', COMPOSITION_PREF, eligible);
   }
 
   pickExit(inputs: ExitInputs): ExitEffect {
     if (inputs.aiClimax && inputs.aiDramaticExit && DRAMATIC_EXITS.includes(inputs.aiDramaticExit)) {
-      this.commit('exit', inputs.aiDramaticExit);
-      return inputs.aiDramaticExit;
+      return this.commit('exit', inputs.aiDramaticExit);
     }
     if (inputs.aiClimax) {
-      const recent = this.recent('exit').filter((e) => DRAMATIC_EXITS.includes(e));
-      const picked = pickFromEligible(DRAMATIC_EXITS, DRAMATIC_EXITS, recent);
-      this.commit('exit', picked);
-      return picked;
+      return this.pickLRU('exit', DRAMATIC_EXITS, DRAMATIC_EXITS);
     }
-    const recentGentle = this.recent('exit').filter((e) => GENTLE_EXITS.includes(e));
-    const picked = pickFromEligible(GENTLE_EXITS, GENTLE_EXITS, recentGentle);
-    this.commit('exit', picked);
-    return picked;
+    return this.pickLRU('exit', GENTLE_EXITS, GENTLE_EXITS);
   }
 
-  private recent<K extends keyof AxisState>(axis: K): AxisState[K] {
-    const s = this.states.get(this.currentSection) ?? emptyAxisState();
-    return s[axis];
+  private pickLRU<K extends 'reveal' | 'composition' | 'exit', V>(
+    axis: K,
+    preferenceOrder: readonly V[],
+    eligible: readonly V[],
+  ): V {
+    const state = this.getOrCreateState();
+    const usageMap = state[axis] as Map<V, number>;
+
+    const eligSet = new Set(eligible);
+    let bestValue: V | null = null;
+    let bestStep = Infinity;
+    let bestPrefIdx = Infinity;
+
+    for (let i = 0; i < preferenceOrder.length; i += 1) {
+      const value = preferenceOrder[i];
+      if (!eligSet.has(value)) continue;
+      const lastStep = usageMap.get(value) ?? -1;
+      if (lastStep < bestStep || (lastStep === bestStep && i < bestPrefIdx)) {
+        bestValue = value;
+        bestStep = lastStep;
+        bestPrefIdx = i;
+      }
+    }
+
+    if (bestValue === null) {
+      for (const value of eligible) {
+        const lastStep = usageMap.get(value) ?? -1;
+        if (lastStep < bestStep) {
+          bestValue = value;
+          bestStep = lastStep;
+        }
+      }
+    }
+
+    if (bestValue === null) {
+      throw new Error(`pickLRU: no eligible options for axis=${axis}`);
+    }
+
+    return this.commit(axis, bestValue);
   }
 
-  private commit<K extends keyof AxisState, V extends AxisState[K][number]>(axis: K, value: V): void {
-    if (!this.states.has(this.currentSection)) {
-      this.states.set(this.currentSection, emptyAxisState());
+  private commit<K extends 'reveal' | 'composition' | 'exit', V>(axis: K, value: V): V {
+    const state = this.getOrCreateState();
+    const usageMap = state[axis] as Map<V, number>;
+    usageMap.set(value, state.step);
+    state.step += 1;
+    return value;
+  }
+
+  private getOrCreateState(): AxisState {
+    let state = this.states.get(this.currentSection);
+    if (!state) {
+      state = emptyAxisState();
+      this.states.set(this.currentSection, state);
     }
-    const s = this.states.get(this.currentSection)!;
-    (s[axis] as unknown as V[]) = [value, ...(s[axis] as unknown as V[])].slice(0, 2);
+    return state;
   }
 }
 
@@ -152,20 +167,4 @@ export function physicsEligibleReveals(durationSec: number, wordCount: number): 
   if (hops * STAGGER_DELAY.stagger_fast <= durationSec * REVEAL_BUDGET.stagger_fast) out.push('stagger_fast');
   if (hops * STAGGER_DELAY.stagger_slow <= durationSec * REVEAL_BUDGET.stagger_slow) out.push('stagger_slow');
   return out;
-}
-
-export function pickFromEligible<T>(
-  preferenceOrder: readonly T[],
-  eligible: readonly T[],
-  recent: readonly T[],
-): T {
-  const eligSet = new Set(eligible);
-  const recentSet = new Set(recent.slice(0, 2));
-  for (const v of preferenceOrder) {
-    if (eligSet.has(v) && !recentSet.has(v)) return v;
-  }
-  for (const v of preferenceOrder) {
-    if (eligSet.has(v)) return v;
-  }
-  return eligible[0];
 }
