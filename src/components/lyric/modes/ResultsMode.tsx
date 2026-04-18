@@ -1,17 +1,10 @@
 import { useMemo, useState } from "react";
 import { Copy, Check, ExternalLink } from "lucide-react";
-import type { Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
 import { ModePanel } from "@/components/lyric/modes/ModePanel";
 
-interface Props {
-  moments: Moment[];
-  fireHeat: Record<string, { line: Record<number, number>; total: number }>;
-  spotifyTrackId: string | null;
-  postId: string | null;
-  lyricDanceUrl: string | null;
-}
+import type { ModeContext } from "./types";
 
 function Label({ children }: { children: string }) {
   return (
@@ -32,13 +25,8 @@ const ROW_STYLE = {
   padding: "0 10px",
 } as const;
 
-export function ResultsMode({
-  moments,
-  fireHeat,
-  spotifyTrackId,
-  postId,
-  lyricDanceUrl,
-}: Props) {
+export function ResultsMode({ ctx }: { ctx: ModeContext }) {
+  const { moments, fireHeat, spotifyTrackId, postId, lyricDanceUrl } = ctx;
   const [copied, setCopied] = useState(false);
 
   const parsed = lyricDanceUrl ? parseLyricDanceUrl(lyricDanceUrl) : null;
