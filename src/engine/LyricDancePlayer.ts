@@ -45,7 +45,7 @@ import { FinaleEffect } from "@/engine/FinaleEffect";
 import { ExitEffect } from '@/engine/ExitEffect';
 import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
-import { preloadImage } from "@/lib/imagePreloadCache";
+import { preloadImageForCanvas } from "@/lib/imagePreloadCache";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
@@ -4954,7 +4954,7 @@ export class LyricDancePlayer {
     const loadPromises = urls.map(async (url: string, i: number) => {
       if (!url) return;
       try {
-        const img = await preloadImage(url);
+        const img = await preloadImageForCanvas(url);
         this.chapterImages[i] = img;
         this._sectionScrimOpacity[i] = this._requiredScrimOpacity(
           this._sampleRegionLuminance(img, 90)

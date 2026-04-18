@@ -1,36 +1,44 @@
 /**
- * imagePreloadCache — Global deduplication for <img> preloads.
- * Call preloadImage(url) as early as you have the URL.
- * All subsequent calls for the same URL return the same promise/element.
+ * imagePreloadCache — Deduped image preloads.
+ *
+ * Two separate caches keyed by CORS mode:
+ *   • display cache   — no crossOrigin, matches plain <img> tags
+ *   • canvas cache    — crossOrigin="anonymous", safe for canvas pixel reads
+ *
+ * Browsers treat CORS and non-CORS requests as different cache entries.
+ * Mixing them means one fetches while the other stays warm but unused.
+ * Each code path picks the function matching how the image will be consumed.
  */
 
-const pending = new Map<string, Promise<HTMLImageElement>>();
-const resolved = new Map<string, HTMLImageElement>();
+type Priority = "high" | "low" | "auto";
 
-export function preloadImage(
+const displayPending = new Map<string, Promise<HTMLImageElement>>();
+const displayResolved = new Map<string, HTMLImageElement>();
+const canvasPending = new Map<string, Promise<HTMLImageElement>>();
+const canvasResolved = new Map<string, HTMLImageElement>();
+
+function load(
   url: string,
-  options?: { priority?: "high" | "low" | "auto" },
+  cors: boolean,
+  pending: Map<string, Promise<HTMLImageElement>>,
+  resolved: Map<string, HTMLImageElement>,
+  priority?: Priority,
 ): Promise<HTMLImageElement> {
   if (resolved.has(url)) return Promise.resolve(resolved.get(url)!);
   const existing = pending.get(url);
   if (existing) return existing;
 
-  const promise = new Promise<HTMLImageElement>((resolve) => {
+  const promise = new Promise<HTMLImageElement>((resolveP) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
-    if (options?.priority) {
-      (img as any).fetchPriority = options.priority;
-    }
-    img.onload = () => {
+    if (cors) img.crossOrigin = "anonymous";
+    if (priority) (img as { fetchPriority?: Priority }).fetchPriority = priority;
+    const done = () => {
       resolved.set(url, img);
       pending.delete(url);
-      resolve(img);
+      resolveP(img);
     };
-    img.onerror = () => {
-      resolved.set(url, img);
-      pending.delete(url);
-      resolve(img);
-    };
+    img.onload = done;
+    img.onerror = done;   // same shape as today — errored images resolve
     img.src = url;
   });
 
@@ -38,7 +46,38 @@ export function preloadImage(
   return promise;
 }
 
-/** Sync getter — returns the element only if already loaded, null otherwise. */
+/**
+ * Preload an image for plain <img> display.
+ * No CORS headers. Matches default browser <img> behavior so the browser
+ * HTTP cache entry is shared between this preload and the displayed <img>.
+ */
+export function preloadImage(
+  url: string,
+  options?: { priority?: Priority },
+): Promise<HTMLImageElement> {
+  return load(url, false, displayPending, displayResolved, options?.priority);
+}
+
+/**
+ * Preload an image for canvas pixel access (sampling, drawing, export).
+ * Sets crossOrigin="anonymous" so canvas reads don't throw a SecurityError.
+ * Requires the server to return Access-Control-Allow-Origin.
+ *
+ * Use this ONLY when the image will be drawn into a canvas AND its pixels
+ * read. For plain <img> display, use preloadImage() instead.
+ */
+export function preloadImageForCanvas(
+  url: string,
+  options?: { priority?: Priority },
+): Promise<HTMLImageElement> {
+  return load(url, true, canvasPending, canvasResolved, options?.priority);
+}
+
+/**
+ * Synchronous getter for the display cache. Returns the element if a
+ * preloadImage() for the same URL has resolved, null otherwise.
+ * Mirrors what the browser's HTTP cache is holding for a plain <img>.
+ */
 export function getPreloadedImage(url: string): HTMLImageElement | null {
-  return resolved.get(url) ?? null;
+  return displayResolved.get(url) ?? null;
 }
