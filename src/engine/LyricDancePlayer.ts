@@ -2977,7 +2977,7 @@ export class LyricDancePlayer {
    * Only recompiles the scene and rebuilds chunk/timing caches.
    */
   updateTranscript(lines: LyricLine[], words?: Array<{ word: string; start: number; end: number; speaker_id?: string }> | null): void {
-    this.data = { ...this.data, lyrics: lines };
+    this.data = { ...this.data, lyrics: lines as LyricDanceData["lyrics"] };
     if (words !== undefined) this.data = { ...this.data, words: words ?? undefined };
 
     // ── Reconcile edited line text back onto word-level tokens ────────────
