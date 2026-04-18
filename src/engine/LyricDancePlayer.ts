@@ -3432,29 +3432,7 @@ export class LyricDancePlayer {
           this.cameraRig.setAmplitudeScale(0);
           this.cameraRig.softReset();
         }
-        // DIAGNOSTIC: log camera + render state once per second.
-        // Remove when diagnosis is complete.
-        if (typeof window !== "undefined" && (window as any).__ENGINE_DIAG) {
-          const now = performance.now();
-          if (now - this._diagLastLogT > 1000) {
-            this._diagLastLogT = now;
-            const camState = (this.cameraRig as any).getCameraState?.() ?? {
-              zoom: (this.cameraRig as any)._currentZoom ?? "?",
-              shakeX: (this.cameraRig as any)._shakeX ?? "?",
-              shakeY: (this.cameraRig as any)._shakeY ?? "?",
-              rotation: (this.cameraRig as any)._rotation ?? "?",
-            };
-            console.log("[DIAG camera]", {
-              audioTime: this.audio.currentTime.toFixed(3),
-              width: this.width,
-              height: this.height,
-              dpr: this.dpr,
-              textVerticalBias: this._textVerticalBias,
-              cam: camState,
-              activeGroupCursor: this._activeGroupCursor,
-            });
-          }
-        }
+
 
       this.update(deltaMs, smoothedTime, frame, beatState);
       this.draw(smoothedTime, frame);
