@@ -508,7 +508,7 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
 }
 
-const BAKER_VERSION = 11;
+const BAKER_VERSION = 12;
 
 /**
  * Build a ScenePayload from raw data without requiring an engine instance.
