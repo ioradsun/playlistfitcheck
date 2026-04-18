@@ -5657,20 +5657,21 @@ export class LyricDancePlayer {
         chunk.y = word.layoutY + ws.heroOffsetY;
 
         // ── Word stagger entry ──
-        // Quiet sections: words fade in one by one (stagger_slow).
-        // Mid sections: words flow in quickly (stagger_fast).
-        // Loud sections: words hit together (instant → stagger = 0).
+        // Words POP in at their stagger time — no fade ramp.
+        // - revealStyle 'instant' (staggerSec === 0): all words visible from group.start.
+        // - revealStyle 'stagger_fast'/'stagger_slow' (staggerSec > 0): each word hidden
+        //   before its effective start time, then instantly visible at 1.0.
+        // Original design decision: phrases typically span 400ms-2s; a 150ms fade per
+        // word eats too much of the visible window and softens the rhythmic feel.
         let wordEntryAlpha = 1.0;
         if (!ws.soloHeroHidden) {
           const staggerSec = ((group as any).staggerDelay ?? 0);
-          const entryDur = (group as any).entryDuration ?? 0.15;
           if (staggerSec > 0 && wi > 0) {
             const wordEffectiveStart = group.start + (wi * staggerSec);
             if (tSec < wordEffectiveStart) {
               wordEntryAlpha = 0;
-            } else if (tSec < wordEffectiveStart + entryDur) {
-              wordEntryAlpha = (tSec - wordEffectiveStart) / entryDur;
             }
+            // No else-if ramp — word is fully visible (1.0) from its effective start.
           }
         }
         chunk.alpha = ws.soloHeroHidden ? 0 : wordEntryAlpha;
