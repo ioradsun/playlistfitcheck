@@ -8,15 +8,7 @@ import type { ModeContext } from "./types";
 
 export function EmpowermentMode({ ctx }: { ctx: ModeContext }) {
   const { danceId, data, setCardMode } = ctx;
-  const empowermentPromise = (
-    data as { empowerment_promise?: {
-      emotionalJob: string;
-      fromState: string;
-      toState: string;
-      promise: string;
-      hooks: string[];
-    } } | null
-  )?.empowerment_promise ?? null;
+  const empowermentPromise = data?.empowerment_promise ?? null;
   const onDismiss = () => setCardMode("moments");
   const { user } = useAuth();
   const hooks = useMemo(() => (empowermentPromise?.hooks ?? []).slice(0, 3), [empowermentPromise]);

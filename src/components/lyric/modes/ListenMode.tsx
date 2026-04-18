@@ -1,4 +1,4 @@
-import { VolumeX } from "lucide-react";
+import { Share2, VolumeX } from "lucide-react";
 import type { ModeContext } from "./types";
 
 /**
@@ -18,7 +18,7 @@ import type { ModeContext } from "./types";
  * across re-renders). This component attaches them to the DOM elements.
  */
 export function ListenMode({ ctx }: { ctx: ModeContext }) {
-  const { canvasRef, textCanvasRef, effectiveMuted, showMuteIndicator } = ctx;
+  const { canvasRef, textCanvasRef, muted, showMuteIndicator, onShareClip } = ctx;
 
   return (
     <>
@@ -32,7 +32,7 @@ export function ListenMode({ ctx }: { ctx: ModeContext }) {
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ zIndex: 2 }}
       />
-      {effectiveMuted && (
+      {muted && (
         <div
           style={{
             position: "absolute",
@@ -55,6 +55,30 @@ export function ListenMode({ ctx }: { ctx: ModeContext }) {
           <VolumeX size={20} color="white" />
         </div>
       )}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onShareClip();
+        }}
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          zIndex: 45,
+          width: 34,
+          height: 34,
+          borderRadius: 999,
+          border: "1px solid rgba(255,255,255,0.2)",
+          background: "rgba(0,0,0,0.35)",
+          color: "rgba(255,255,255,0.9)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        aria-label="Share clip"
+      >
+        <Share2 size={14} />
+      </button>
     </>
   );
 }

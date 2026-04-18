@@ -56,7 +56,7 @@ export interface ModeContext {
   profileMap: Record<string, { avatarUrl: string | null; displayName: string | null }>;
   comments: Comment[];
   currentTimeSec: number;
-  effectiveMuted: boolean;
+  muted: boolean;
   showMuteIndicator: boolean;
 
   // — State setters —
@@ -69,6 +69,8 @@ export interface ModeContext {
   onFireMoment: (lineIndex: number, timeSec: number, holdMs: number) => void;
   onPlayLine: (startSec: number, endSec: number) => void;
   onCommentAdded: (comment: Comment) => void;
+  /** Invoked by ListenMode's share button. Opens the viral-clip export modal. */
+  onShareClip: () => void;
 }
 
 /**
