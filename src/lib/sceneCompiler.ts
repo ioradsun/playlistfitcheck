@@ -22,7 +22,7 @@ import {
   type SectionBehavior,
   type HeroStyle,
 } from "@/lib/fontResolver";
-import { STAGGER_DELAY, type RevealStyle } from "@/lib/revealStyle";
+import { STAGGER_DELAY, type RevealStyle } from "@/lib/varietyEngine";
 
 
 export type LineBeatMap = {
@@ -729,6 +729,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
 
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
+    // NOTE: matchPhrase.composition and matchPhrase.bias are variety-assigned in phraseEngine.
+    // Keep this fallback for backward compatibility with legacy cached cinematic direction data.
 
     // maxLines resolved by resolveLayout: <4 words = 1 line, 4+ = auto wrap
     const maxLines: number | undefined = (group as any)._resolvedMaxLines;
@@ -910,6 +912,8 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     const matchPhrase = (group as any)._matchPhrase as CinematicPhrase | undefined;
     const composition = (group as any).composition ?? matchPhrase?.composition ?? 'line';
     const bias = (group as any).bias ?? matchPhrase?.bias ?? 'center';
+    // NOTE: matchPhrase.composition and matchPhrase.bias are variety-assigned in phraseEngine.
+    // Keep this fallback for backward compatibility with legacy cached cinematic direction data.
     const groupSecIdx = getSectionForTime(group.start);
     const groupSecTypo = sectionTypoMap[groupSecIdx] ?? DEFAULT_SECTION_BEHAVIOR;
     const energyTier: "groove" | "impact" | "intimate" | "lift" =
@@ -917,7 +921,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       groupSecTypo.weight === 'bold' ? 'lift' :
       groupSecTypo.weight === 'regular' ? 'groove' :
       'intimate';
-    // Reveal style is physics-derived upstream in phraseEngine.ts via deriveRevealStyle().
+    // Reveal style is variety-derived in phraseEngine.ts (no AI/fallback path here).
     const revealStyle: RevealStyle = matchPhrase?.revealStyle ?? 'instant';
     const holdClass = (group as any).holdClass ?? matchPhrase?.holdClass ?? 'medium_groove';
     const heroType: "phrase" | "word" = 'word';

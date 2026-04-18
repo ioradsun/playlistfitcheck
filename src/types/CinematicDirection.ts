@@ -82,19 +82,36 @@ export interface CinematicPhrase {
   heroWord?: string;
   /** Multiple hero words from section-level AI suggestion */
   heroWords?: string[];
-  /** Exit animation for this phrase */
-  exitEffect?: 'fade' | 'drift_up' | 'shrink' | 'dissolve' | 'cascade' | 'scatter' | 'slam' | 'glitch' | 'burn';
-  /** Layout composition */
-  composition?: 'stack' | 'line' | 'center_word';
-  /** Horizontal bias */
-  bias?: 'left' | 'center' | 'right';
   /**
-   * @deprecated Reveal style is physics-derived from phrase duration + word count
-   * via `deriveRevealStyle` in src/lib/revealStyle.ts. This field is accepted for
-   * backward-compat with cached AI outputs but is ignored by the compiler.
-   * New AI prompts should not request this field.
+   * @deprecated Reveal style is now variety-derived from phrase duration + word count.
+   * This field is accepted for backward-compat with cached AI outputs but is ignored
+   * by the compiler. New AI prompts should not request this field.
    */
   revealStyle?: 'instant' | 'stagger_fast' | 'stagger_slow';
+  /**
+   * @deprecated Composition is now variety-assigned (line vs stack rotation).
+   * The AI can still influence composition via `isCenterWord`.
+   * This field is accepted for backward-compat and ignored by the compiler.
+   */
+  composition?: 'stack' | 'line' | 'center_word';
+  /**
+   * AI signal: true when a single dominant word should use center_word treatment.
+   */
+  isCenterWord?: boolean;
+  /**
+   * @deprecated Bias is now variety-assigned (left/center/right rotation).
+   * This field is accepted for backward-compat and ignored by the compiler.
+   */
+  bias?: 'left' | 'center' | 'right';
+  /**
+   * AI signal: this phrase is a climax/emphasis moment and should use a dramatic exit.
+   */
+  isClimax?: boolean;
+  /**
+   * AI signal: specific dramatic exit for climax phrases.
+   * Kept as full union for backward-compat parsing of cached AI outputs.
+   */
+  exitEffect?: 'fade' | 'drift_up' | 'shrink' | 'dissolve' | 'cascade' | 'scatter' | 'slam' | 'glitch' | 'burn';
   /** Hold timing class */
   holdClass?: 'short_hit' | 'medium_groove' | 'long_emotional';
   /** Phrase text */
