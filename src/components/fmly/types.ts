@@ -3,22 +3,17 @@ export interface FmlyPost {
   user_id: string;
   project_id: string | null;
   caption: string;
-  tags_json: string[];
-  fires_count: number;
-  saves_count: number;
-  comments_count: number;
-  impressions: number;
   created_at: string;
   status: 'draft' | 'live' | 'expired' | 'cooldown' | 'eligible';
-  submitted_at: string;
-  expires_at: string | null;
-  cooldown_until: string | null;
-  cycle_number: number;
-  engagement_score: number;
-  peak_rank: number | null;
-  legacy_boost: number;
-  profiles?: { display_name: string | null; avatar_url: string | null; spotify_artist_id: string | null; wallet_address?: string | null; is_verified?: boolean };
+  profiles?: {
+    display_name: string | null;
+    avatar_url: string | null;
+    spotify_artist_id: string | null;
+    wallet_address?: string | null;
+    is_verified?: boolean;
+  };
   lyric_projects?: {
+    id: string;
     title: string;
     artist_name: string | null;
     artist_slug: string | null;
@@ -30,8 +25,12 @@ export interface FmlyPost {
     cinematic_direction: any;
     beat_grid: any;
     section_images: string[] | null;
+    auto_palettes?: any;
+    lines?: any;
+    words?: any;
+    physics_spec?: any;
+    empowerment_promise?: any;
   };
-  billboard_score?: number;
   current_rank?: number;
   is_instrumental?: boolean;
 }
