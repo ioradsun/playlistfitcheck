@@ -188,7 +188,7 @@ export function MomentPanel({
   }, []);
 
   return (
-    <div style={{ position: "absolute", inset: 0, overflowY: "auto", background: "#0a0a0a" }}>
+    <div style={{ position: "absolute", inset: 0, zIndex: 50, overflowY: "auto", background: "#0a0a0a" }}>
       <div style={{ maxWidth: 440, margin: "0 auto", padding: "8px 12px 32px", display: "flex", flexDirection: "column", gap: 8 }}>
         {moments.map((moment) => {
           const fireTotal = (momentFireCounts[moment.index] ?? 0) + (localFires[moment.index] ?? 0);
