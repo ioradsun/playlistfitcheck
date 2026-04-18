@@ -190,7 +190,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
 interface PhraseBodyProps {
   words: string[];
   heroWordSet: Set<string>;
-  baseStyle: Record<string, unknown>;
+  baseStyle: React.CSSProperties;
   heroWeight: number;
   heroScale: number;
   fillerOpacity: number;
@@ -223,16 +223,17 @@ function PhraseBody({
         const entryDelay = getWordEntryDelay(i, revealStyle);
         const wordExit = getWordExitVariant(exitEffect, i, words.length);
 
-        const wordStyle: Record<string, unknown> = {
+        const opacity = isPreview ? 0.5 : phraseHasHero && !isHero ? fillerOpacity : 1;
+        const wordStyle: React.CSSProperties = {
           ...baseStyle,
           display: "inline-block",
-          opacity: isPreview ? 0.5 : phraseHasHero && !isHero ? fillerOpacity : 1,
+          opacity,
           transformOrigin: "center",
         };
 
         if (isHero) {
           wordStyle.fontWeight = heroWeight;
-          wordStyle.scale = heroScale;
+          (wordStyle as { scale?: number }).scale = heroScale;
           wordStyle.zIndex = 2;
         }
 
@@ -241,7 +242,7 @@ function PhraseBody({
             key={`w-${i}-${word}`}
             style={wordStyle}
             initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: wordStyle.opacity as number, y: 0 }}
+            animate={{ opacity, y: 0 }}
             exit={wordExit.exit}
             transition={{
               opacity: { duration: 0.4, delay: entryDelay, ease: "easeOut" },
