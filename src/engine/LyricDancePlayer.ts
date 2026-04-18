@@ -21,6 +21,7 @@ import {
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
+import type { AudioAnalysis } from "@/engine/audioAnalyzer";
 import {
   compileScene,
   type CompiledScene,
