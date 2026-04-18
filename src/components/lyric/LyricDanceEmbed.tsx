@@ -249,6 +249,50 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [live, fetchedData, canvasRef, textCanvasRef, containerRef]);
 
+  // 4b. Container resize observation — keeps engine layout in sync with container size
+  // Fixes: text off-center or clipped after card transitions (reels mode primary change,
+  // scroll-driven mount), orientation change, browser resize. The engine's resize() method
+  // recompiles the scene for new viewport dimensions; this effect wires the DOM signal
+  // into that code path.
+  useEffect(() => {
+    if (!player) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    let rafPending = 0;
+    let lastAppliedW = player.width;
+    let lastAppliedH = player.height;
+
+    const applyResize = () => {
+      rafPending = 0;
+      if (!playerRef.current) return;
+      const w = container.offsetWidth || container.clientWidth;
+      const h = container.offsetHeight || container.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      // Threshold: ignore sub-pixel noise to avoid recompile thrash
+      if (Math.abs(w - lastAppliedW) < 2 && Math.abs(h - lastAppliedH) < 2) return;
+      lastAppliedW = w;
+      lastAppliedH = h;
+      playerRef.current.resize(w, h);
+    };
+
+    // Apply once synchronously on mount — handles the case where container
+    // had zero dimensions when init ran, so engine compiled for fallback 960x540.
+    // This reads current real dimensions and triggers an immediate recompile.
+    applyResize();
+
+    const ro = new ResizeObserver(() => {
+      if (rafPending) return;
+      rafPending = requestAnimationFrame(applyResize);
+    });
+    ro.observe(container);
+
+    return () => {
+      if (rafPending) cancelAnimationFrame(rafPending);
+      ro.disconnect();
+    };
+  }, [player]);
+
   // 5. Playback time tracking (RAF loop gated on visibility + playing)
   useEffect(() => {
     if (!live || !player) return;
