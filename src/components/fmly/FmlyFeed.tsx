@@ -18,6 +18,7 @@ import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { cn } from "@/lib/utils";
 import { useFeedWindow } from "@/components/fmly/feed/useFeedWindow";
 import { usePrimaryArbiter } from "@/components/fmly/feed/usePrimaryArbiter";
+import { usePrefetchNearbyScenes } from "@/components/fmly/feed/usePrefetchNearbyScenes";
 import { FeedCard } from "@/components/fmly/feed/FeedCard";
 import type { ContentFilter } from "./types";
 
@@ -91,6 +92,21 @@ function FeedList({
     postIds,
   );
   const primaryId = explicitPrimaryId ?? scrollPrimaryId;
+  const primaryIndex = useMemo(
+    () => (primaryId ? postIds.indexOf(primaryId) : null),
+    [postIds, primaryId],
+  );
+  const prefetchPosts = useMemo(
+    () => posts.map((post) => ({
+      lyric_project: (post.project_id ? lyricDataMap.get(post.project_id) : null) ?? (post as any).lyric_projects,
+    })),
+    [lyricDataMap, posts],
+  );
+
+  usePrefetchNearbyScenes({
+    posts: prefetchPosts,
+    primaryIndex,
+  });
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
     if (el) feedWindow.cardRefs.current.set(id, el);

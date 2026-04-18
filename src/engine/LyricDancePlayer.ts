@@ -508,6 +508,40 @@ function lerpColor(a: string, b: string, t: number): string {
 
 const BAKER_VERSION = 11;
 
+/**
+ * Build a ScenePayload from raw data without requiring an engine instance.
+ * Used by both the instance method (via wrapper) and precompilation.
+ *
+ * Does not reference audio, canvas, or any browser API. Pure function.
+ */
+function buildScenePayloadFromData(
+  data: LyricDanceData,
+  fallbackDuration?: number,
+): ScenePayload {
+  const lines = data.lyrics ?? [];
+  const fullStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
+  const fullEnd = lines.length
+    ? (lines[lines.length - 1].end ?? 0) + 1
+    : (data.beat_grid?._duration || fallbackDuration || 0);
+  const songStart = data.region_start != null ? data.region_start : fullStart;
+  const songEnd = data.region_end != null ? data.region_end : fullEnd;
+
+  return {
+    lines,
+    words: data.words ?? [],
+    bpm: data.beat_grid?.bpm ?? null,
+    beat_grid: data.beat_grid,
+    motion_profile_spec: data.motion_profile_spec,
+    frame_state: data.frame_state ?? null,
+    cinematic_direction: data.cinematic_direction ?? null,
+    auto_palettes: data.auto_palettes,
+    palette: data.palette ?? ["#0a0a0a", "#111111", "#ffffff"],
+    lineBeatMap: [],
+    songStart,
+    songEnd,
+  };
+}
+
 // ── Module-level compiled scene cache ───────────────────────────
 // Survives player destroy(). Cards that return to view after eviction
 // skip compileScene() entirely — near-zero reinit cost.
@@ -549,6 +583,50 @@ function sceneCacheSet(key: string, entry: SceneCacheEntry): void {
   if (_sceneCache.size > SCENE_CACHE_MAX) {
     const oldest = _sceneCache.keys().next().value;
     if (oldest) _sceneCache.delete(oldest);
+  }
+}
+
+/**
+ * Compile a scene and populate the module-level cache without booting an engine.
+ * Safe to call repeatedly for the same card — idempotent (cache hit skips).
+ * Safe to call on any data — no side effects beyond cache write.
+ */
+export function precompileSceneForData(
+  data: LyricDanceData,
+  width: number,
+  height: number,
+): 'cached' | 'compiled' | 'skipped' {
+  const danceId = data.id ?? data.song_slug ?? "";
+  if (!danceId) return 'skipped';
+  if (!data.lyrics?.length) return 'skipped';
+
+  const roundedW = Math.round(width || 960);
+  const roundedH = Math.round(height || 540);
+  const key = sceneCacheKey(danceId, roundedW, roundedH);
+
+  const existing = _sceneCache.get(key);
+  if (existing) {
+    if (data.cinematic_direction && !existing.hasCinematicDirection) {
+      _sceneCache.delete(key);
+    } else {
+      return 'cached';
+    }
+  }
+
+  try {
+    const payload = buildScenePayloadFromData(data);
+    const compiled = compileScene(payload, {
+      viewportWidth: roundedW,
+      viewportHeight: roundedH,
+    });
+    sceneCacheSet(key, {
+      scene: compiled,
+      chunks: new Map(),
+      hasCinematicDirection: !!data.cinematic_direction,
+    });
+    return 'compiled';
+  } catch {
+    return 'skipped';
   }
 }
 
@@ -4705,31 +4783,10 @@ export class LyricDancePlayer {
   // ────────────────────────────────────────────────────────────
 
   private buildScenePayload(): ScenePayload {
-    const lines = this.data.lyrics ?? [];
-    const fullStart = lines.length ? Math.max(0, (lines[0].start ?? 0) - 0.5) : 0;
-    const fullEnd = lines.length
-      ? (lines[lines.length - 1].end ?? 0) + 1
-      : (this.data.beat_grid?._duration || this.audio?.duration || 0);
-    // Region override: constrain to hook window if specified
-    const songStart = this.data.region_start != null ? this.data.region_start : fullStart;
-    const songEnd = this.data.region_end != null ? this.data.region_end : fullEnd;
-
-    const payload = {
-      lines,
-      words: this.data.words ?? [],
-      bpm: this.data.beat_grid?.bpm ?? null,
-      beat_grid: this.data.beat_grid,
-      motion_profile_spec: this.data.motion_profile_spec,
-      frame_state: this.data.frame_state ?? null,
-      cinematic_direction: this.data.cinematic_direction ?? null,
-      auto_palettes: this.data.auto_palettes,
-      palette: this.data.palette ?? ["#0a0a0a", "#111111", "#ffffff"],
-      lineBeatMap: [],
-      songStart,
-      songEnd,
-    };
-
-    return payload;
+    return buildScenePayloadFromData(
+      this.data,
+      this.audio?.duration ?? undefined,
+    );
   }
 
   private toLegacyChapters(direction: CinematicDirection | null | undefined): any[] {
