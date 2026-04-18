@@ -1,4 +1,4 @@
-import type { Transition } from "framer-motion";
+import type { TargetAndTransition, Transition } from "framer-motion";
 
 export type ExitEffect =
   | "fade"
