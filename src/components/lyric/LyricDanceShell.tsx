@@ -91,7 +91,6 @@ export const LyricDanceShell = memo(function LyricDanceShell({
           src={posterSrc}
           alt=""
           aria-hidden
-          crossOrigin="anonymous"
           decoding="async"
           fetchPriority="high"
           loading="eager"
