@@ -39,7 +39,7 @@ import {
   LyricFitTabImport,
   MixFitCheckImport,
   ProFitTabImport,
-  FmlyTabImport,
+  FmlyFeedImport,
   VibeFitTabImport,
 } from "@/lib/routePrefetch";
 import { importWithRetry } from "@/lib/importWithRetry";
@@ -64,14 +64,14 @@ const HitFitTab = lazy(() =>
 const ProFitTab = lazy(() =>
   ProFitTabImport().then((module) => ({ default: module.ProFitTab })),
 );
-const FmlyTab = lazy(() =>
+const FmlyFeed = lazy(() =>
   importWithRetry(
-    () => FmlyTabImport(),
+    () => FmlyFeedImport(),
     () =>
       import(
-        /* @vite-ignore */ `../components/fmly/FmlyTab.tsx?t=${Date.now()}`
-      ) as ReturnType<typeof FmlyTabImport>,
-  ).then((module) => ({ default: module.FmlyTab })),
+        /* @vite-ignore */ `../components/fmly/FmlyFeed.tsx?t=${Date.now()}`
+      ) as ReturnType<typeof FmlyFeedImport>,
+  ).then((module) => ({ default: module.FmlyFeed })),
 );
 const DreamFitTab = lazy(() =>
   DreamFitTabImport().then((module) => ({ default: module.DreamFitTab })),
@@ -222,16 +222,7 @@ const Index = () => {
   }, [reelsMode]);
 
   useEffect(() => {
-    if (!reelsMode) {
-      setReelsScrolled(false);
-      return;
-    }
-    const el = document.getElementById("fmly-feed-scroll");
-    if (!el) return;
-    const onScroll = () => setReelsScrolled(el.scrollTop > 50);
-    el.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => el.removeEventListener("scroll", onScroll);
+    if (!reelsMode) setReelsScrolled(false);
   }, [reelsMode]);
 
   // ── Unified project-fetch status (replaces lyricLoadingState + loadingProjectType) ──
@@ -1205,7 +1196,7 @@ const Index = () => {
             onTouchStart={reelsMode ? () => unlockAudio() : undefined}
           >
             <Suspense fallback={<PageSkeleton tool="fmly" mode="new" />}>
-              <FmlyTab reelsMode={reelsMode} />
+              <FmlyFeed reelsMode={reelsMode} onScrolledChange={setReelsScrolled} />
             </Suspense>
           </div>
         );

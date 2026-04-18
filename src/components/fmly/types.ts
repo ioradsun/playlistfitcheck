@@ -31,10 +31,9 @@ export interface FmlyPost {
     beat_grid: any;
     section_images: string[] | null;
   };
-  user_has_liked?: boolean;
-  user_has_saved?: boolean;
   billboard_score?: number;
   current_rank?: number;
+  is_instrumental?: boolean;
 }
 
 export interface FmlyComment {

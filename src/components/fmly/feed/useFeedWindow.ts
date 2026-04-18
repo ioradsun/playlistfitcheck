@@ -18,6 +18,7 @@ export function useFeedWindow(postCount: number, postIds: string[]): FeedWindow 
   const [activeIndex, setActiveIndex] = useState(0);
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const heights = useRef<Map<string, number>>(new Map());
+  const medianHeightRef = useRef(420);
 
   useEffect(() => {
     if (activeIndex > postCount - 1 && postCount > 0) {
@@ -36,30 +37,19 @@ export function useFeedWindow(postCount: number, postIds: string[]): FeedWindow 
     return s;
   }, [windowStart, windowEnd, postIds]);
 
-  const renderedIdsVersionRef = useRef(0);
-  const lastRenderedIdsKeyRef = useRef<string>("");
-  const renderedIdsVersion = useMemo(() => {
-    const key = Array.from(renderedIds).sort().join(",");
-    if (key !== lastRenderedIdsKeyRef.current) {
-      lastRenderedIdsKeyRef.current = key;
-      renderedIdsVersionRef.current += 1;
-    }
-    return renderedIdsVersionRef.current;
-  }, [renderedIds]);
+  const renderedIdsVersion = windowStart * 100000 + windowEnd + postIds.length;
 
   const onCardMeasure = useCallback((id: string, h: number) => {
-    if (h > 0) heights.current.set(id, h);
+    if (h <= 0 || heights.current.has(id)) return;
+    heights.current.set(id, h);
+    const all = Array.from(heights.current.values()).sort((a, b) => a - b);
+    medianHeightRef.current = all[Math.floor(all.length / 2)] ?? 420;
   }, []);
 
   const estimateHeight = useCallback((i: number): number => {
     const id = postIds[i];
     if (!id) return 420;
-    const measured = heights.current.get(id);
-    if (measured) return measured;
-    const all = Array.from(heights.current.values());
-    if (!all.length) return 420;
-    all.sort((a, b) => a - b);
-    return all[Math.floor(all.length / 2)];
+    return heights.current.get(id) ?? medianHeightRef.current;
   }, [postIds]);
 
   return {

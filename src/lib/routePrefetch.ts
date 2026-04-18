@@ -6,7 +6,8 @@ export const MixFitCheckImport = () => import("@/pages/MixFitCheck");
 export const LyricFitTabImport = () => import("@/components/lyric/LyricFitTab");
 export const HitFitTabImport = () => import("@/components/hitfit/HitFitTab");
 export const ProFitTabImport = () => import("@/components/profit/ProFitTab");
-export const FmlyTabImport = () => import("@/components/fmly/FmlyTab");
+export const FmlyFeedImport = () => import("@/components/fmly/FmlyFeed");
+export const FmlyTabImport = () => FmlyFeedImport().then((m) => ({ FmlyTab: m.FmlyFeed }));
 export const DreamFitTabImport = () => import("@/components/dreamfit/DreamFitTab");
 export const VibeFitTabImport = () => import("@/components/vibefit/VibeFitTab");
 export const AppSidebarImport = () => import("@/components/AppSidebar");
@@ -15,7 +16,7 @@ export const AdminPageImport = () => import("@/pages/Admin");
 export const ShareableLyricDanceImport = () => import("@/pages/ShareableLyricDance");
 
 const ROUTE_CHUNK_PREFETCH: Record<string, () => Promise<unknown>> = {
-  "/fmly": FmlyTabImport,
+  "/fmly": FmlyFeedImport,
   "/the-ar": HitFitTabImport,
   "/the-creative": VibeFitTabImport,
   "/the-manager": ProFitTabImport,
@@ -25,8 +26,8 @@ const ROUTE_CHUNK_PREFETCH: Record<string, () => Promise<unknown>> = {
   "/fmly-matters": DreamFitTabImport,
   "/admin": AdminPageImport,
   // Legacy paths
-  "/CrowdFit": FmlyTabImport,
-  "/SongFit": FmlyTabImport,
+  "/CrowdFit": FmlyFeedImport,
+  "/SongFit": FmlyFeedImport,
   "/HitFit": HitFitTabImport,
   "/VibeFit": VibeFitTabImport,
   "/ProFit": ProFitTabImport,
