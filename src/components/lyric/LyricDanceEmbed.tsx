@@ -424,7 +424,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       const userMap: Record<number, string[]> = {};
       const anonCount: Record<number, number> = {};
 
-      for (const fire of fires as Array<{ line_index: number | null; hold_ms: number | null; user_id: string | null }>) {
+      for (const fire of fires as unknown as Array<{ line_index: number | null; hold_ms: number | null; user_id: string | null }>) {
         const idx = fire.line_index ?? 0;
         const weight = fireWeight(fire.hold_ms ?? 0);
         agg["🔥"].line[idx] = (agg["🔥"].line[idx] ?? 0) + weight;
