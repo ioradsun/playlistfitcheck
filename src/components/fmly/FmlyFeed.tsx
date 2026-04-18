@@ -11,42 +11,9 @@ import { usePrimaryArbiter } from "@/components/fmly/feed/usePrimaryArbiter";
 import { usePrefetchNearbyScenes } from "@/components/fmly/feed/usePrefetchNearbyScenes";
 import { FeedCard } from "@/components/fmly/feed/FeedCard";
 import { FeedHeader } from "@/components/fmly/feed/FeedHeader";
-import {
-  CARD_CONTENT_HEIGHT_PX,
-  CARD_TOTAL_HEIGHT_PX,
-  FEED_MAX_WIDTH_PX,
-  FMLY_BAR_HEIGHT_PX,
-} from "@/components/fmly/feed/constants";
+import { SkeletonCard } from "@/components/fmly/feed/SkeletonCard";
+import { CARD_TOTAL_HEIGHT_PX, FEED_MAX_WIDTH_PX } from "@/components/fmly/feed/constants";
 import type { ContentFilter } from "./types";
-
-function FeedSkeleton({ reelsMode }: { reelsMode: boolean }) {
-  if (reelsMode) return <div className="h-[100dvh] snap-start bg-black" />;
-  return (
-    <div className="space-y-3 pt-3">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="px-2 pb-3">
-          <div
-            className="rounded-2xl overflow-hidden"
-            style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.04)" }}
-          >
-            <div className="flex items-center gap-2 px-3 py-2.5">
-              <div className="h-8 w-8 rounded-full bg-white/[0.04]" />
-              <div className="h-3 w-32 rounded bg-white/[0.04]" />
-            </div>
-            <div style={{ height: CARD_CONTENT_HEIGHT_PX }} />
-            <div className="flex items-stretch" style={{ height: FMLY_BAR_HEIGHT_PX }}>
-              <div className="flex-1 flex items-center justify-center"><div className="h-3 w-16 rounded bg-white/[0.03]" /></div>
-              <div className="w-px bg-white/[0.04] self-stretch my-3" />
-              <div className="flex-1 flex items-center justify-center"><div className="h-3 w-16 rounded bg-white/[0.03]" /></div>
-              <div className="w-px bg-white/[0.04] self-stretch my-3" />
-              <div className="w-16 flex items-center justify-center"><div className="h-3 w-3 rounded bg-white/[0.03]" /></div>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function FeedList({
   posts,
@@ -259,7 +226,9 @@ export function FmlyFeed({ reelsMode = false, onScrolledChange }: FmlyFeedProps)
       )}
 
       {displayLoading ? (
-        <FeedSkeleton reelsMode={reelsMode} />
+        Array.from({ length: reelsMode ? 1 : 3 }, (_, i) => (
+          <SkeletonCard key={i} reelsMode={reelsMode} />
+        ))
       ) : filteredPosts.length === 0 ? (
         <div className="space-y-3 py-16 text-center">
           <p className="text-sm text-muted-foreground">
