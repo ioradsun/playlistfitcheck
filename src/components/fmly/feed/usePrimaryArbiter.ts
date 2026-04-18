@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { liveCard } from "@/lib/liveCard";
 
 const SETTLE_MS = 80;
@@ -26,6 +26,10 @@ export function usePrimaryArbiter(
   const postIdsRef = useRef(postIds);
   renderedIdsRef.current = renderedIds;
   postIdsRef.current = postIds;
+  const renderedIdsKey = useMemo(
+    () => Array.from(renderedIds).sort().join(","),
+    [renderedIds],
+  );
 
   const lastScrollY = useRef(0);
   const lastScrollT = useRef(performance.now());
@@ -121,9 +125,13 @@ export function usePrimaryArbiter(
     };
 
     target.addEventListener("scroll", onScroll, { passive: true });
-    commitPrimary();
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) commitPrimary();
+    });
 
     return () => {
+      cancelled = true;
       target.removeEventListener("scroll", onScroll);
       if (settleRef.current) clearTimeout(settleRef.current);
       if (rafPendingRef.current !== null) {
@@ -132,7 +140,7 @@ export function usePrimaryArbiter(
       }
       liveCard.set(null);
     };
-  }, [scrollContainer, cardRefs]);
+  }, [scrollContainer, cardRefs, renderedIdsKey]);
 
   return result;
 }
