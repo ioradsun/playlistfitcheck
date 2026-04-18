@@ -6,6 +6,7 @@
  *
  * Called from LyricDancePlayer after main text draw.
  */
+import { stripDisplayPunctuation } from "@/lib/lyricTextFormat";
 
 export type ExitEffectType =
   | 'fade' | 'drift_up' | 'shrink' | 'dissolve'
@@ -22,13 +23,6 @@ const SPLIT_EFFECTS = new Set<ExitEffectType>(['cascade', 'scatter', 'slam']);
 const MAX_EXIT_DURATION = 1.0;  // 1s max
 const MIN_EXIT_DURATION = 0.3;  // 300ms min — shorter gaps get no exit
 const COMPLEX_MIN_GAP = 0.5;    // split effects need 500ms+
-
-/** Strip leading/trailing punctuation — matches LyricDancePlayer.stripDisplayPunctuation */
-function stripPunctuation(text: string): string {
-  return text
-    .replace(/^[^a-zA-Z0-9']+/, '')
-    .replace(/[^a-zA-Z0-9']+$/, '');
-}
 
 interface LetterData {
   char: string; x: number; cx: number; y: number; w: number; seed: number;
@@ -114,7 +108,7 @@ export class ExitEffect {
 
     // Cache words
     this._words = prevGroup.words.map(w => ({
-      text: stripPunctuation(w.text), x: w.layoutX, y: w.layoutY,
+      text: stripDisplayPunctuation(w.text), x: w.layoutX, y: w.layoutY,
       fontSize: w.baseFontSize, fontWeight: w.fontWeight,
       fontFamily: w.fontFamily, color: w.color,
     }));
@@ -125,7 +119,7 @@ export class ExitEffect {
       for (const word of this._words) {
         ctx.save();
         ctx.font = `${word.fontWeight} ${word.fontSize}px ${word.fontFamily}`;
-        const strippedText = stripPunctuation(word.text);
+        const strippedText = stripDisplayPunctuation(word.text);
         const chars = strippedText.split('');
         const wordW = ctx.measureText(strippedText).width;
         let charX = word.x - wordW / 2;

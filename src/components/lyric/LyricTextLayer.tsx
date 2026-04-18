@@ -1,6 +1,7 @@
 import { memo, useMemo, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { ResolvedTypography } from "@/lib/fontResolver";
+import { stripDisplayPunctuation } from "@/lib/lyricTextFormat";
 import { useLyricTextFit } from "@/hooks/useLyricTextFit";
 import { getPhraseExitVariant, getWordEntryDelay, getWordExitVariant, type ExitEffect } from "./lyricExitVariants";
 
@@ -70,11 +71,18 @@ export const LyricTextLayer = memo(function LyricTextLayer({
   const phrase = active?.phrase;
 
   const phraseWords = useMemo(() => {
+    let rawWords: string[];
     if (phrase?.wordRange && words?.length) {
       const [start, end] = phrase.wordRange;
-      return words.slice(Math.max(0, start), Math.max(start + 1, end + 1)).map((w) => w.word);
+      rawWords = words
+        .slice(Math.max(0, start), Math.max(start + 1, end + 1))
+        .map((w) => w.word);
+    } else {
+      rawWords = phraseText.split(/\s+/).filter(Boolean);
     }
-    return phraseText.split(/\s+/).filter(Boolean);
+    // Strip leading/trailing punctuation for video display — matches canvas
+    // rendering while leaving source lyric data unchanged for non-video views.
+    return rawWords.map(stripDisplayPunctuation).filter(Boolean);
   }, [phrase, words, phraseText]);
 
   const heroWordSet = useMemo(() => {
