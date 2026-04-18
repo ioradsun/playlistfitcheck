@@ -10,6 +10,11 @@
  * - One evaluateFrame() call per tick (not two).
  * - All catches log errors (no silent swallowing).
  * - All state on instance (no global singletons).
+ *
+ * DIAGNOSTIC DEBUG FLAGS (temporary, remove after bug diagnosis):
+ *   window.__ENGINE_DIAG = true   — enables seek, camera, phrase, and draw tracing
+ *   window.__engine               — live player instance (exposed by LyricDanceEmbed)
+ *   window.__enginePostId         — post id of the exposed engine
  */
 
 import {
@@ -1759,6 +1764,9 @@ export class LyricDancePlayer {
   private _evalFrame: ScaledKeyframe | null = null;
   private _evalChunks: ScaledKeyframe['chunks'] | null = null;
   private _lastEvalTime = 0;
+  private _diagLastLogT = 0;
+  private _diagLastLoggedGroup = -1;
+  private _diagLastDrawnGroup = -1;
 
   // Background cache
   private bgCaches: HTMLCanvasElement[] = [];
@@ -2423,6 +2431,18 @@ export class LyricDancePlayer {
   }
 
   seek(timeSec: number): void {
+    // DIAGNOSTIC: log seek input + resulting state. Remove after diagnosis.
+    if (typeof window !== "undefined" && (window as any).__ENGINE_DIAG) {
+      console.log("[DIAG seek] requested:", {
+        timeSec,
+        audioBefore: this.audio.currentTime.toFixed(3),
+        audioPaused: this.audio.paused,
+        playing: this.playing,
+        songStart: this.songStartSec,
+        songEnd: this.songEndSec,
+      });
+    }
+
     this._wallClockOrigin = null;
     this.audio.currentTime = timeSec;
     const t = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
@@ -2446,6 +2466,17 @@ export class LyricDancePlayer {
     this._historicalFires.forEach(f => {
       f.spawned = f.time_sec < this.audio.currentTime;
     });
+
+    // DIAGNOSTIC: log post-seek state on next RAF. Remove after diagnosis.
+    if (typeof window !== "undefined" && (window as any).__ENGINE_DIAG) {
+      requestAnimationFrame(() => {
+        console.log("[DIAG seek] after 1 raf:", {
+          audioNow: this.audio.currentTime.toFixed(3),
+          activeGroupCursor: this._activeGroupCursor,
+          chunksVisible: Array.from(this.chunks.values()).filter((c: any) => c.visible).length,
+        });
+      });
+    }
   }
 
   /** Returns the current effective playback time, using wall-clock fallback if audio is blocked. */
@@ -3431,6 +3462,29 @@ export class LyricDancePlayer {
           this.cameraRig.setAmplitudeScale(0);
           this.cameraRig.softReset();
         }
+        // DIAGNOSTIC: log camera + render state once per second.
+        // Remove when diagnosis is complete.
+        if (typeof window !== "undefined" && (window as any).__ENGINE_DIAG) {
+          const now = performance.now();
+          if (now - this._diagLastLogT > 1000) {
+            this._diagLastLogT = now;
+            const camState = (this.cameraRig as any).getCameraState?.() ?? {
+              zoom: (this.cameraRig as any)._currentZoom ?? "?",
+              shakeX: (this.cameraRig as any)._shakeX ?? "?",
+              shakeY: (this.cameraRig as any)._shakeY ?? "?",
+              rotation: (this.cameraRig as any)._rotation ?? "?",
+            };
+            console.log("[DIAG camera]", {
+              audioTime: this.audio.currentTime.toFixed(3),
+              width: this.width,
+              height: this.height,
+              dpr: this.dpr,
+              textVerticalBias: this._textVerticalBias,
+              cam: camState,
+              activeGroupCursor: this._activeGroupCursor,
+            });
+          }
+        }
 
       this.update(deltaMs, smoothedTime, frame, beatState);
       this.draw(smoothedTime, frame);
@@ -4199,6 +4253,37 @@ export class LyricDancePlayer {
         sx * camZoom,
         sy * camZoom,
       );
+      if (
+        typeof window !== "undefined" &&
+        (window as any).__ENGINE_DIAG &&
+        (chunk as any)._groupIndex !== this._diagLastDrawnGroup &&
+        (chunk as any)._wordIndexInGroup === 0
+      ) {
+        this._diagLastDrawnGroup = (chunk as any)._groupIndex;
+        console.log("[DIAG draw]", {
+          text: chunk.text,
+          chunkX: chunk.x,
+          chunkY: chunk.y,
+          rawDrawX,
+          rawDrawY,
+          centerX,
+          centerY,
+          drawX,
+          finalDrawY,
+          alpha: drawAlpha,
+          sx,
+          sy,
+          camZoom,
+          camShakeX,
+          camShakeY,
+          camRotation,
+          camCX,
+          camCY,
+          matrix: { a: ma, b: mb, c: mc, d: md, e: me, f: mf },
+          dpr,
+          textVerticalBias: this._textVerticalBias,
+        });
+      }
       this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
       // Hero glow: subtle white bloom behind hero words (quality tier >= 2 only)
@@ -5647,6 +5732,41 @@ export class LyricDancePlayer {
 
         chunk.id = word.id;
         chunk.text = stripDisplayPunctuation(word.text);
+        (chunk as any)._groupIndex = (group as any).groupIndex;
+        (chunk as any)._wordIndexInGroup = wi;
+
+        if (
+          typeof window !== "undefined" &&
+          (window as any).__ENGINE_DIAG &&
+          wi === 0 &&
+          (group as any).groupIndex !== this._diagLastLoggedGroup
+        ) {
+          this._diagLastLoggedGroup = (group as any).groupIndex;
+          const firstWord = group.words[0];
+          const lastWord = group.words[group.words.length - 1];
+          console.log("[DIAG phrase-group]", {
+            groupIndex: (group as any).groupIndex,
+            start: group.start.toFixed(3),
+            end: group.end.toFixed(3),
+            duration: (group.end - group.start).toFixed(3),
+            composition: (group as any).composition,
+            bias: (group as any).bias,
+            revealStyle: (group as any).revealStyle,
+            staggerDelay: (group as any).staggerDelay,
+            entryDuration: (group as any).entryDuration,
+            exitDuration: (group as any).exitDuration,
+            lingerDuration: (group as any).lingerDuration,
+            wordCount: group.words.length,
+            firstWordLayout: firstWord
+              ? { x: firstWord.layoutX, y: firstWord.layoutY, fontSize: firstWord.baseFontSize, text: firstWord.text }
+              : null,
+            lastWordLayout: lastWord
+              ? { x: lastWord.layoutX, y: lastWord.layoutY, text: lastWord.text }
+              : null,
+            canvasDims: { w: this.width, h: this.height },
+            expectedCenter: { x: this.width / 2, y: this.height / 2 },
+          });
+        }
 
         // Position: layout + animation offsets
         chunk.x = word.layoutX + ws.heroOffsetX;
