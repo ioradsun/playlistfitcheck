@@ -77,6 +77,7 @@ export function CardResultsPanel({
       style={{
         position: "absolute",
         inset: 0,
+        zIndex: 50,
         overflowY: "auto",
         overflowX: "hidden",
         background: "#0a0a0a",
