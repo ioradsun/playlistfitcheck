@@ -91,11 +91,31 @@ function hydrateLyricRows(
 }
 
 /**
+ * Inject <link rel="preload" as="image"> for a URL — elevates resource priority
+ * above all other page fetches. Deduped via a module-level Set.
+ */
+const injectedPreloadLinks = new Set<string>();
+function injectImagePreloadLink(url: string): void {
+  if (typeof document === "undefined" || !url || injectedPreloadLinks.has(url)) return;
+  injectedPreloadLinks.add(url);
+  const link = document.createElement("link");
+  link.rel = "preload";
+  link.as = "image";
+  link.href = url;
+  link.crossOrigin = "anonymous";
+  (link as any).fetchPriority = "high";
+  document.head.appendChild(link);
+}
+
+/**
  * Prioritize poster decodes for the top-of-feed cards.
+ * Top 3 also get <link rel="preload"> injected to elevate above all page resources.
  */
 function preloadFirstVisible(posts: FmlyPost[], count = 3): void {
   posts.slice(0, count).forEach((post) => {
     const lp = (post as any).lyric_projects;
+    const poster = lp?.section_images?.[0] || lp?.album_art_url;
+    if (poster) injectImagePreloadLink(poster);
     if (lp?.album_art_url) void preloadImage(lp.album_art_url, { priority: "high" });
     if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0], { priority: "high" });
   });
