@@ -77,9 +77,25 @@ export function FmlyBar({
     return best;
   }, [moments, momentFireCounts]);
 
-  const totalDuration = moments.length
-    ? moments[moments.length - 1].endSec
-    : (player?.audio?.duration || 1);
+  /**
+   * Timeline duration — the authoritative length of the scrub bar's span.
+   *
+   * Source precedence:
+   *   1. player.audio.duration — the true source once audio metadata is loaded.
+   *   2. moments[last].endSec — best-available proxy during initial load.
+   *   3. 0 — sentinel "not ready"; disables scrubbing.
+   *
+   * Using `|| 1` as a fallback (previous code) was a bug: NaN || 1 === 1, which
+   * caused every click to map 0-100% of bar width to 0-1 second of audio.
+   */
+  const audioDuration = player?.audio?.duration;
+  const totalDuration =
+    (typeof audioDuration === "number" && isFinite(audioDuration) && audioDuration > 0)
+      ? audioDuration
+      : moments.length
+        ? moments[moments.length - 1].endSec
+        : 0;
+  const ready = totalDuration > 0;
   const progressPct = Math.max(0, Math.min(100, (currentTimeSec / Math.max(0.0001, totalDuration)) * 100));
   progressPctRef.current = progressPct;
 
@@ -89,7 +105,9 @@ export function FmlyBar({
     const el = playheadRef.current;
     if (!el) return;
     el.style.left = `${progressPct}%`;
-    el.style.opacity = progressPct > 0 ? "1" : "0";
+    // Hide playhead when not ready OR playhead at position 0
+    // (position 0 is the pre-playback state — don't show a phantom mark).
+    el.style.opacity = (ready && progressPct > 0) ? "1" : "0";
   });
 
   const currentMomentIdx = useMemo(
@@ -482,10 +500,11 @@ export function FmlyBar({
               position: "absolute",
               inset: 0,
               zIndex: 1,
-              cursor: "pointer",
+              cursor: ready ? "pointer" : "default",
               touchAction: "none",
             }}
             onPointerDown={(e) => {
+              if (!ready) return;
               scrubbingRef.current = true;
               e.currentTarget.setPointerCapture(e.pointerId);
               const rect = e.currentTarget.getBoundingClientRect();
@@ -493,7 +512,7 @@ export function FmlyBar({
               onSeekTo(pct * totalDuration);
             }}
             onPointerMove={(e) => {
-              if (!scrubbingRef.current) return;
+              if (!scrubbingRef.current || !ready) return;
               const rect = e.currentTarget.getBoundingClientRect();
               const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
               onSeekTo(pct * totalDuration);
