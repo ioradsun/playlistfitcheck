@@ -156,7 +156,11 @@ export const LyricTextLayer = memo(function LyricTextLayer({
             exit={phraseVariant.exit}
             transition={phraseVariant.transition}
             style={{
-              width: "100%",
+              // width: auto + max-width: 100% lets the flex parent's justifyContent
+              // govern horizontal position. Short phrases center to their natural
+              // content width; long phrases wrap at the parent's content edge.
+              width: "auto",
+              maxWidth: "100%",
               fontSize: `${fit.fontSize}px`,
               lineHeight: 1.15,
               color: "#fff",

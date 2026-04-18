@@ -70,6 +70,11 @@ export const FeedCard = memo(function FeedCard({
         style={{
           background: "#0a0a0a",
           border: reelsMode ? "none" : "1px solid rgba(255,255,255,0.04)",
+          // In reels, inset the bottom so the FMLY bar (44px) sits above the
+          // iPhone home indicator zone (~34px on notched devices). Without this,
+          // seek scrubbing competes with the system home gesture and becomes
+          // unreliable or fails entirely.
+          paddingBottom: reelsMode ? "env(safe-area-inset-bottom, 0px)" : undefined,
           // GPU layer promotion — scroll composites on the GPU instead of
           // repainting per-pixel. ~4-8MB GPU memory per card × ~7 mounted = 30-50MB.
           willChange: "transform",
