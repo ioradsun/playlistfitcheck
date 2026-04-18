@@ -163,6 +163,17 @@ export default function ShareableLyricDance() {
     return () => { style.remove(); };
   }, []);
 
+  // ── Derived ────────────────────────────────────────────────────────────
+  const coverSongName = data?.title ?? "";
+  const coverArtist = profile?.display_name ?? data?.artist_name ?? "";
+  const coverAvatarUrl = profile?.avatar_url ?? null;
+  const palette = useMemo(() => {
+    const cd = data?.cinematic_direction;
+    if (cd?.sections && Array.isArray(cd.sections))
+      return cd.sections.map((s: any) => s.dominantColor ?? "#6B7A8E");
+    return ["#ffffff"];
+  }, [data]);
+
   // ── Not found ──────────────────────────────────────────────────────────
   if (notFound) {
     return (
@@ -175,17 +186,6 @@ export default function ShareableLyricDance() {
       </div>
     );
   }
-
-  // ── Derived ────────────────────────────────────────────────────────────
-  const coverSongName = data?.title ?? "";
-  const coverArtist = profile?.display_name ?? data?.artist_name ?? "";
-  const coverAvatarUrl = profile?.avatar_url ?? null;
-  const palette = useMemo(() => {
-    const cd = data?.cinematic_direction;
-    if (cd?.sections && Array.isArray(cd.sections))
-      return cd.sections.map((s: any) => s.dominantColor ?? "#6B7A8E");
-    return ["#ffffff"];
-  }, [data]);
   const ogImage = data?.section_images?.find((u: string | null) => !!u)
     ?? (data as any)?.album_art_url ?? "https://tools.fm/og/homepage.png";
   const ogTitle = isMarketingView
