@@ -3,6 +3,7 @@ import { Copy, Check, ExternalLink } from "lucide-react";
 import type { Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { buildShareUrl, parseLyricDanceUrl } from "@/lib/shareUrl";
+import { ModePanel } from "@/components/lyric/modes/ModePanel";
 
 interface Props {
   moments: Moment[];
@@ -31,7 +32,7 @@ const ROW_STYLE = {
   padding: "0 10px",
 } as const;
 
-export function CardResultsPanel({
+export function ResultsMode({
   moments,
   fireHeat,
   spotifyTrackId,
@@ -73,17 +74,7 @@ export function CardResultsPanel({
   }, [moments, fireHeat]);
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 50,
-        overflowY: "auto",
-        overflowX: "hidden",
-        background: "#0a0a0a",
-        padding: 0,
-      }}
-    >
+    <ModePanel scroll="y">
       <div
         style={{
           width: "100%",
@@ -193,6 +184,6 @@ export function CardResultsPanel({
         </div>
         )}
       </div>
-    </div>
+    </ModePanel>
   );
 }

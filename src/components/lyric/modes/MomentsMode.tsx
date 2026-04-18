@@ -6,6 +6,7 @@ import type { Moment } from "@/lib/buildMoments";
 import { useAuth } from "@/hooks/useAuth";
 import { MomentCard } from "@/components/lyric/MomentCard";
 import { createFireHold, fireWeight } from "@/lib/fireHold";
+import { ModePanel } from "@/components/lyric/modes/ModePanel";
 
 interface Comment {
   id: string;
@@ -15,7 +16,7 @@ interface Comment {
   user_id: string | null;
 }
 
-interface MomentPanelProps {
+interface MomentsModeProps {
   danceId: string;
   moments: Moment[];
   fireHeat: Record<string, { line: Record<number, number>; total: number }>;
@@ -31,7 +32,7 @@ interface MomentPanelProps {
   fireAnonCount: Record<number, number>;
 }
 
-export function MomentPanel({
+export function MomentsMode({
   danceId,
   moments,
   fireHeat,
@@ -45,7 +46,7 @@ export function MomentPanel({
   profileMap,
   fireUserMap,
   fireAnonCount,
-}: MomentPanelProps) {
+}: MomentsModeProps) {
   const { user } = useAuth();
   const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [expandedMoment, setExpandedMoment] = useState<number | null>(null);
@@ -188,7 +189,7 @@ export function MomentPanel({
   }, []);
 
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 50, overflowY: "auto", background: "#0a0a0a" }}>
+    <ModePanel scroll="y">
       <div style={{ maxWidth: 440, margin: "0 auto", padding: "8px 12px 32px", display: "flex", flexDirection: "column", gap: 8 }}>
         {moments.map((moment) => {
           const fireTotal = (momentFireCounts[moment.index] ?? 0) + (localFires[moment.index] ?? 0);
@@ -257,7 +258,7 @@ export function MomentPanel({
           );
         })}
       </div>
-    </div>
+    </ModePanel>
   );
 }
 

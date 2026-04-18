@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
+import { ModePanel } from "@/components/lyric/modes/ModePanel";
 
 interface Props {
   danceId: string | null;
@@ -15,7 +16,7 @@ interface Props {
   onDismiss: () => void;
 }
 
-export function EmpowermentModePanel({ danceId, empowermentPromise, onDismiss }: Props) {
+export function EmpowermentMode({ danceId, empowermentPromise, onDismiss }: Props) {
   const { user } = useAuth();
   const hooks = useMemo(() => (empowermentPromise?.hooks ?? []).slice(0, 3), [empowermentPromise]);
   const [counts, setCounts] = useState<number[]>([0, 0, 0]);
@@ -96,10 +97,11 @@ export function EmpowermentModePanel({ danceId, empowermentPromise, onDismiss }:
   };
 
   return (
-    <div
-      className="absolute inset-0 z-50 flex flex-col items-center justify-center px-6 py-8"
-      style={{ background: "#0a0a0a", fontFamily: "monospace", color: "rgba(255,255,255,0.88)" }}
-    >
+    <ModePanel>
+      <div
+        className="w-full h-full flex flex-col items-center justify-center px-6 py-8"
+        style={{ fontFamily: "monospace", color: "rgba(255,255,255,0.88)" }}
+      >
       {!empowermentPromise ? (
         <div className="text-center">
           <p className="text-sm text-white/80">empowerment mode</p>
@@ -146,6 +148,7 @@ export function EmpowermentModePanel({ danceId, empowermentPromise, onDismiss }:
           )}
         </div>
       )}
-    </div>
+      </div>
+    </ModePanel>
   );
 }
