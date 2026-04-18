@@ -132,9 +132,9 @@ export interface LyricDanceData {
   motion_profile_spec?: PhysicsSpec;
   physics_spec?: PhysicsSpec;
   beat_grid?: {
-    bpm?: number;
-    beats?: number[];
-    confidence?: number;
+    bpm: number;
+    beats: number[];
+    confidence: number;
     _duration?: number;
     _analysis?: unknown;
   } | null;
@@ -143,11 +143,7 @@ export interface LyricDanceData {
   artist_dna?: any;
   seed?: string;
   frame_state?: any;
-  cinematic_direction?: (CinematicDirection & {
-    phrases?: Array<{ start: number; end: number; text: string; [key: string]: unknown }>;
-    sections?: unknown[];
-    [key: string]: unknown;
-  }) | null;
+  cinematic_direction?: CinematicDirection | null;
   section_images?: (string | null)[] | null;
   auto_palettes?: string[][] | null;
   scene_context?: SceneContext | null;
