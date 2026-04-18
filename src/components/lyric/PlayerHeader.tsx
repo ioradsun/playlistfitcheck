@@ -45,6 +45,12 @@ interface PlayerHeaderProps {
   onProfileClick?: () => void;
   cardMode: CardMode;
   onModeChange: (mode: CardMode) => void;
+  /**
+   * Set of mode ids that are currently disabled. Disabled modes render dimmed
+   * and ignore onClick. Computed by LyricDanceEmbed by evaluating each mode's
+   * disabled predicate from the registry.
+   */
+  disabledModes?: ReadonlySet<CardMode>;
 }
 
 interface AvatarWithBadgesProps {
@@ -116,7 +122,8 @@ export function PlayerHeader({
   userId,
   onProfileClick,
   cardMode,
-  onModeChange
+  onModeChange,
+  disabledModes,
 }: PlayerHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
@@ -303,8 +310,7 @@ export function PlayerHeader({
             >
               {CARD_MODES.map((modeConfig, i) => {
                 const isActive = cardMode === modeConfig.id;
-                // PlayerHeader doesn't receive ModeContext yet, so disabled(ctx)
-                // is intentionally not evaluated here in this PR.
+                const isDisabled = disabledModes?.has(modeConfig.id) ?? false;
                 return (
                   <motion.button
                     key={modeConfig.id}
@@ -312,8 +318,10 @@ export function PlayerHeader({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.04 }}
+                    disabled={isDisabled}
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (isDisabled) return;
                       onModeChange(modeConfig.id);
                     }}
                     style={{
@@ -327,12 +335,17 @@ export function PlayerHeader({
                       flexShrink: 0,
                       background: "none",
                       border: "none",
-                      cursor: "pointer",
-                      color: isActive ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.25)",
+                      cursor: isDisabled ? "default" : "pointer",
+                      color: isActive
+                        ? "rgba(255,255,255,0.95)"
+                        : isDisabled
+                          ? "rgba(255,255,255,0.12)"
+                          : "rgba(255,255,255,0.25)",
                       transition: "color 150ms ease",
                       padding: 0,
                     }}
                     aria-label={modeConfig.label}
+                    aria-disabled={isDisabled}
                   >
                     {modeConfig.icon}
                     {isActive && (

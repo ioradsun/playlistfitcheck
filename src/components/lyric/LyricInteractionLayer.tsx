@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { LyricDancePlayer } from "@/engine/LyricDancePlayer";
 import type { Moment } from "@/lib/buildMoments";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
 import { getSessionId } from "@/lib/sessionId";
@@ -10,13 +11,15 @@ const BAR_HEIGHT = 44;
 interface FmlyBarProps {
   moments: Moment[];
   fireHeat: Record<string, { line: Record<number, number>; total: number }>;
-  player: any;
+  player: LyricDancePlayer | null;
   currentTimeSec: number;
-  onFireTap: () => void;
-  onFireHoldStart: () => void;
-  onFireHoldEnd: (holdMs: number) => void;
+  /**
+   * Invoked when user fires a moment. `holdMs` is 0 for a tap, otherwise the
+   * hold duration.
+   */
+  onFire: (lineIndex: number, holdMs: number) => void;
+  getLineIndex: () => number;
   onSeekTo: (sec: number) => void;
-  closingActive?: boolean;
   danceId?: string;
   comments?: Array<{ text: string; line_index: number | null }> ;
   onToastTap?: (momentIndex: number) => void;
@@ -27,11 +30,9 @@ export function FmlyBar({
   fireHeat,
   player,
   currentTimeSec,
-  onFireTap,
-  onFireHoldStart,
-  onFireHoldEnd,
+  onFire,
+  getLineIndex,
   onSeekTo,
-  closingActive = false,
   danceId,
   comments = [],
   onToastTap,
@@ -59,6 +60,7 @@ export function FmlyBar({
   const playheadRef = useRef<HTMLDivElement>(null);
   const toastMomentRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const momentFireCounts = useMemo(
     () => deriveMomentFireCounts(fireHeat, moments),
@@ -115,6 +117,17 @@ export function FmlyBar({
   useEffect(() => () => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
   }, []);
+
+  const clearHoldInterval = useCallback(() => {
+    if (holdIntervalRef.current) {
+      clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => {
+    clearHoldInterval();
+  }, [clearHoldInterval]);
 
   // ── Hydrate user fires from DB on mount ─────────────────────────────────
   useEffect(() => {
@@ -321,25 +334,35 @@ export function FmlyBar({
     setRenderTick((t) => t + 1);
   };
 
-  const handleFireTap = () => {
+  const handleFireTap = useCallback(() => {
+    clearHoldInterval();
     addUserFire(currentMomentIdx, 150);
     pendingPlayheadSpawnsRef.current.push({ count: 2, intensity: 0.3 });
-    onFireTap();
-  };
-  const handleFireHoldEnd = (holdMs: number) => {
+    if (!danceId) return;
+    player?.fireFire(0);
+    onFire(getLineIndex(), 0);
+  }, [clearHoldInterval, currentMomentIdx, danceId, getLineIndex, onFire, player]);
+  const handleFireHoldStart = useCallback(() => {
+    if (holdIntervalRef.current) return;
+    holdIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
+  }, [player]);
+  const handleFireHoldEnd = useCallback((holdMs: number) => {
+    clearHoldInterval();
     addUserFire(currentMomentIdx, holdMs);
     const intensity = Math.min(1.0, holdMs / 2000);
     pendingFireSpawnsRef.current.push({ count: Math.floor(4 + intensity * 8), intensity });
     pendingPlayheadSpawnsRef.current.push({ count: Math.floor(3 + intensity * 5), intensity });
-    onFireHoldEnd(holdMs);
-  };
+    if (!danceId) return;
+    player?.fireFire(holdMs);
+    onFire(getLineIndex(), holdMs);
+  }, [clearHoldInterval, currentMomentIdx, danceId, getLineIndex, onFire, player]);
 
   const handleDown = () => {
     setPressing(true);
     pendingFireSpawnsRef.current.push({ count: 5, intensity: 0.6 });
     pendingPlayheadSpawnsRef.current.push({ count: 3, intensity: 0.5 });
     player?.fireMoment?.(0);
-    onFireHoldStart();
+    handleFireHoldStart();
     fireHoldControllerRef.current?.start();
   };
 
@@ -528,7 +551,6 @@ export function FmlyBar({
               cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: 0,
-              opacity: closingActive ? 0.5 : undefined,
               transition: "background 0.3s ease",
               userSelect: "none",
               WebkitUserSelect: "none",

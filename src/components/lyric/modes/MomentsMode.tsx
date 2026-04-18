@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { MomentCard } from "@/components/lyric/MomentCard";
 import { createFireHold, fireWeight } from "@/lib/fireHold";
 import { ModePanel } from "@/components/lyric/modes/ModePanel";
+import type { Moment } from "@/lib/buildMoments";
 import type { ModeContext } from "./types";
 
 type Comment = ModeContext["comments"][number];
@@ -26,13 +27,9 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
     onCommentAdded,
   } = ctx;
 
-  const lines = Array.isArray((data as { lines?: unknown[] } | null)?.lines)
-    ? ((data as { lines?: unknown[] }).lines ?? [])
-    : [];
-  const words = lines.length > 0
-    ? ((data as { words?: Array<{ word: string; start: number; end: number }> } | null)?.words ?? [])
-    : [];
-  const isInstrumental = lines.length === 0;
+  const hasLines = Array.isArray(data?.lines) && data.lines.length > 0;
+  const words = hasLines ? (data?.words ?? []) : [];
+  const isInstrumental = !hasLines;
   const { user } = useAuth();
   const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [expandedMoment, setExpandedMoment] = useState<number | null>(null);
@@ -215,31 +212,29 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
 
               {isExpanded && mComments.length > 0 && (
                 <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6, padding: "0 6px" }}>
-                  {mComments.map((comment) => (
-                    (() => {
-                      const profile = comment.user_id ? profileMap[comment.user_id] : null;
-                      return (
-                        <div key={comment.id} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-                          {profile?.avatarUrl ? (
-                            <img src={profile.avatarUrl} style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0 }} />
-                          ) : (
-                            <div style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
-                          )}
-                          <span
-                            style={{
-                              borderLeft: "1px solid rgba(255,255,255,0.15)",
-                              paddingLeft: 8,
-                              fontSize: 11,
-                              fontFamily: "monospace",
-                              color: "rgba(255,255,255,0.4)",
-                            }}
-                          >
-                            {comment.text}
-                          </span>
-                        </div>
-                      );
-                    })()
-                  ))}
+                  {mComments.map((comment) => {
+                    const profile = comment.user_id ? profileMap[comment.user_id] : null;
+                    return (
+                      <div key={comment.id} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                        {profile?.avatarUrl ? (
+                          <img src={profile.avatarUrl} style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0 }} />
+                        ) : (
+                          <div style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+                        )}
+                        <span
+                          style={{
+                            borderLeft: "1px solid rgba(255,255,255,0.15)",
+                            paddingLeft: 8,
+                            fontSize: 11,
+                            fontFamily: "monospace",
+                            color: "rgba(255,255,255,0.4)",
+                          }}
+                        >
+                          {comment.text}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
