@@ -137,7 +137,7 @@ export interface LyricDanceData {
     beats: number[];
     confidence: number;
     _duration?: number;
-    _analysis?: unknown;
+    _analysis?: AudioAnalysis;
   } | null;
   palette?: string[] | null;
   system_type?: string;
