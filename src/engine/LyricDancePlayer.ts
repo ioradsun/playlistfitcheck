@@ -2150,6 +2150,12 @@ export class LyricDancePlayer {
     } catch {
       // Ignore readiness errors; normal play/seek paths will re-apply time.
     }
+    // Prime audio fetch in parallel with scene compile.
+    // audio.play() still waits for user gesture on iOS.
+    this.audio.preload = "auto";
+    if (this.audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
+      this.audio.load();
+    }
 
     await this.ensureTimelineReady();
     this.buildBgCache();
@@ -2220,7 +2226,7 @@ export class LyricDancePlayer {
           const payload = this.buildScenePayload();
           this.payload = payload;
           this.resolvePlayerState(payload);
-          await this.preloadFonts(); // near-zero — fontReadinessCache hit
+          void this.preloadFonts(); // fire-and-forget; reflow flag handles arrival
           this.songStartSec = payload.songStart;
           this.songEndSec = payload.songEnd;
           const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
@@ -2252,7 +2258,7 @@ export class LyricDancePlayer {
         const payload = this.buildScenePayload();
         this.payload = payload;
         this.resolvePlayerState(payload);
-        await this.preloadFonts();
+        void this.preloadFonts();
         this.songStartSec = payload.songStart;
         this.songEndSec = payload.songEnd;
 
