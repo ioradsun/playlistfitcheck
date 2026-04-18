@@ -231,13 +231,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     );
     playerRef.current = p;
     setPlayer(p);
-    // DIAGNOSTIC: expose live player for debug console access.
-    // Remove this block when diagnosis is complete.
-    if (typeof window !== "undefined") {
-      (window as any).__engine = p;
-      (window as any).__enginePostId = postId ?? danceId ?? "unknown";
-      console.log(`[DIAG] Engine exposed as window.__engine for post ${(window as any).__enginePostId}`);
-    }
 
     withPriorityInitLimit(() => p.init()).then(() => {
       if (cancelled) return;
