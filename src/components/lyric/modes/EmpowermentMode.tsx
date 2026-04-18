@@ -39,7 +39,7 @@ export function EmpowermentMode({ ctx }: { ctx: ModeContext }) {
       .then(({ data: rows }) => {
         if (cancelled || !rows) return;
         const nextCounts = [0, 0, 0];
-        for (const row of rows as Array<{ hook_index: number | string }>) {
+        for (const row of rows as unknown as Array<{ hook_index: number | string }>) {
           const hookIndex = Number(row.hook_index);
           if (Number.isInteger(hookIndex) && hookIndex >= 0 && hookIndex <= 2) {
             nextCounts[hookIndex] += 1;

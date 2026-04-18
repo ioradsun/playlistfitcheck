@@ -33,6 +33,12 @@ export interface FmlyPost {
   };
   current_rank?: number;
   is_instrumental?: boolean;
+  peak_rank?: number | null;
+  fires_count?: number;
+  comments_count?: number;
+  saves_count?: number;
+  impressions?: number;
+  engagement_score?: number;
 }
 
 export interface FmlyComment {

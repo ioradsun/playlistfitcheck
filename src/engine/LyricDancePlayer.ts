@@ -21,6 +21,7 @@ import {
 import type { LyricLine } from "@/components/lyric/LyricDisplay";
 import type { PhysicsSpec } from "@/engine/PhysicsIntegrator";
 import type { SceneContext } from "@/lib/sceneContexts";
+import type { AudioAnalysis } from "@/engine/audioAnalyzer";
 import {
   compileScene,
   type CompiledScene,
@@ -132,22 +133,18 @@ export interface LyricDanceData {
   motion_profile_spec?: PhysicsSpec;
   physics_spec?: PhysicsSpec;
   beat_grid?: {
-    bpm?: number;
-    beats?: number[];
-    confidence?: number;
+    bpm: number;
+    beats: number[];
+    confidence: number;
     _duration?: number;
-    _analysis?: unknown;
+    _analysis?: AudioAnalysis;
   } | null;
   palette?: string[] | null;
   system_type?: string;
   artist_dna?: any;
   seed?: string;
   frame_state?: any;
-  cinematic_direction?: (CinematicDirection & {
-    phrases?: Array<{ start: number; end: number; text: string; [key: string]: unknown }>;
-    sections?: unknown[];
-    [key: string]: unknown;
-  }) | null;
+  cinematic_direction?: CinematicDirection | null;
   section_images?: (string | null)[] | null;
   auto_palettes?: string[][] | null;
   scene_context?: SceneContext | null;
@@ -2980,7 +2977,7 @@ export class LyricDancePlayer {
    * Only recompiles the scene and rebuilds chunk/timing caches.
    */
   updateTranscript(lines: LyricLine[], words?: Array<{ word: string; start: number; end: number; speaker_id?: string }> | null): void {
-    this.data = { ...this.data, lyrics: lines };
+    this.data = { ...this.data, lyrics: lines as LyricDanceData["lyrics"] };
     if (words !== undefined) this.data = { ...this.data, words: words ?? undefined };
 
     // ── Reconcile edited line text back onto word-level tokens ────────────
