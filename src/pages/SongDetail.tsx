@@ -41,7 +41,7 @@ interface CommentRow {
   id: string;
   text: string;
   line_index: number | null;
-  submitted_at: string;
+  created_at: string;
 }
 interface LineInfo {
   lineIndex: number;
@@ -834,9 +834,9 @@ const SongDetail = () => {
       supabase.from("project_exposures" as any).select("session_id").eq("project_id", danceId),
       supabase
         .from("project_comments" as any)
-        .select("id, text, line_index, submitted_at")
+        .select("id, text, line_index, created_at")
         .eq("project_id", danceId)
-        .order("submitted_at", { ascending: true })
+        .order("created_at", { ascending: true })
         .limit(200),
       supabase
         .from("project_fires" as any)
