@@ -2127,6 +2127,17 @@ export class LyricDancePlayer {
     this.displayWidth = this.width;
     this.displayHeight = this.height;
 
+    // Reset shared audio state for this player's session.
+    // Shared audio can retain currentTime from a prior card lifecycle.
+    const startTime = this.data.region_start ?? 0;
+    try {
+      if (this.audio.currentTime !== startTime) {
+        this.audio.currentTime = startTime;
+      }
+    } catch {
+      // Ignore readiness errors; normal play/seek paths will re-apply time.
+    }
+
     await this.ensureTimelineReady();
     this.buildBgCache();
     this.deriveVisualSystems();

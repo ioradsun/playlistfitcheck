@@ -113,6 +113,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTimeSecRef = useRef(0);
+  const hasPlayedRef = useRef(false);
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playStartRef = useRef<number | null>(null);
@@ -296,6 +297,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   // 5. Playback time tracking (RAF loop gated on visibility + playing)
   useEffect(() => {
     if (!live || !player) return;
+
+    // Start each live session from a neutral UI time; the RAF loop will
+    // sync to audio.currentTime on the next frame.
+    setCurrentTimeSec(0);
+
     const audio = player.audio;
     let rafId = 0;
 
@@ -732,9 +738,26 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [cardMode, live]);
 
   useEffect(() => {
+    if (!live) {
+      hasPlayedRef.current = false;
+    }
+  }, [live]);
+
+  useEffect(() => {
     if (!live) return;
     if (!durationSec || !player) return;
-    if (currentTimeSec > durationSec + 2.2 && cardMode === "listen") {
+
+    // Only count playback as "real progress" once we've observed time
+    // advancing within the song's valid range for this live session.
+    if (currentTimeSec > 0.1 && currentTimeSec < durationSec) {
+      hasPlayedRef.current = true;
+    }
+
+    if (
+      hasPlayedRef.current &&
+      currentTimeSec > durationSec + 2.2 &&
+      cardMode === "listen"
+    ) {
       setCardMode("empowerment");
       player.audio.loop = false;
     }
