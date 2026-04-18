@@ -69,11 +69,13 @@ function resolveFromPlan(
     repaired = true;
   }
 
-  const heroStyle: HeroStyle = ['weight-shift', 'scale-only', 'none'].includes(plan.heroStyle)
-    ? plan.heroStyle
+  const heroStyle: HeroStyle = (['weight-shift', 'scale-only', 'none'] as const).includes(plan.heroStyle as HeroStyle)
+    ? (plan.heroStyle as HeroStyle)
     : 'weight-shift';
 
-  const accentDensity: AccentDensity = ['low', 'medium', 'high'].includes(plan.accentDensity) ? plan.accentDensity : 'low';
+  const accentDensity: AccentDensity = (['low', 'medium', 'high'] as const).includes(plan.accentDensity as AccentDensity)
+    ? (plan.accentDensity as AccentDensity)
+    : 'low';
 
   const baseWeight = pickWeight(primaryDef, plan.baseWeight ?? 'bold');
   const heroW = pickHeroWeight(primaryDef, baseWeight);
