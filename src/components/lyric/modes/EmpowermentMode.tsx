@@ -4,19 +4,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { getSessionId } from "@/lib/sessionId";
 import { ModePanel } from "@/components/lyric/modes/ModePanel";
 
-interface Props {
-  danceId: string | null;
-  empowermentPromise: {
-    emotionalJob: string;
-    fromState: string;
-    toState: string;
-    promise: string;
-    hooks: string[];
-  } | null;
-  onDismiss: () => void;
-}
+import type { ModeContext } from "./types";
 
-export function EmpowermentMode({ danceId, empowermentPromise, onDismiss }: Props) {
+export function EmpowermentMode({ ctx }: { ctx: ModeContext }) {
+  const { danceId, data, setCardMode } = ctx;
+  const empowermentPromise = (
+    data as { empowerment_promise?: {
+      emotionalJob: string;
+      fromState: string;
+      toState: string;
+      promise: string;
+      hooks: string[];
+    } } | null
+  )?.empowerment_promise ?? null;
+  const onDismiss = () => setCardMode("moments");
   const { user } = useAuth();
   const hooks = useMemo(() => (empowermentPromise?.hooks ?? []).slice(0, 3), [empowermentPromise]);
   const [counts, setCounts] = useState<number[]>([0, 0, 0]);

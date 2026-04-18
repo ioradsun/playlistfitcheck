@@ -2,51 +2,37 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "@/lib/sessionId";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
-import type { Moment } from "@/lib/buildMoments";
 import { useAuth } from "@/hooks/useAuth";
 import { MomentCard } from "@/components/lyric/MomentCard";
 import { createFireHold, fireWeight } from "@/lib/fireHold";
 import { ModePanel } from "@/components/lyric/modes/ModePanel";
+import type { ModeContext } from "./types";
 
-interface Comment {
-  id: string;
-  text: string;
-  line_index: number | null;
-  submitted_at: string;
-  user_id: string | null;
-}
+type Comment = ModeContext["comments"][number];
 
-interface MomentsModeProps {
-  danceId: string;
-  moments: Moment[];
-  fireHeat: Record<string, { line: Record<number, number>; total: number }>;
-  currentTimeSec: number;
-  words?: Array<{ word: string; start: number; end: number }>;
-  onFireMoment: (lineIndex: number, timeSec: number, holdMs: number) => void;
-  onPlayLine: (startSec: number, endSec: number) => void;
-  isInstrumental?: boolean;
-  comments: Comment[];
-  onCommentAdded: (comment: Comment) => void;
-  profileMap: Record<string, { avatarUrl: string | null; displayName: string | null }>;
-  fireUserMap: Record<number, string[]>;
-  fireAnonCount: Record<number, number>;
-}
+export function MomentsMode({ ctx }: { ctx: ModeContext }) {
+  const {
+    danceId,
+    moments,
+    fireHeat,
+    currentTimeSec,
+    data,
+    comments,
+    profileMap,
+    fireUserMap,
+    fireAnonCount,
+    onFireMoment,
+    onPlayLine,
+    onCommentAdded,
+  } = ctx;
 
-export function MomentsMode({
-  danceId,
-  moments,
-  fireHeat,
-  currentTimeSec,
-  words = [],
-  onFireMoment,
-  onPlayLine,
-  isInstrumental,
-  comments,
-  onCommentAdded,
-  profileMap,
-  fireUserMap,
-  fireAnonCount,
-}: MomentsModeProps) {
+  const lines = Array.isArray((data as { lines?: unknown[] } | null)?.lines)
+    ? ((data as { lines?: unknown[] }).lines ?? [])
+    : [];
+  const words = lines.length > 0
+    ? ((data as { words?: Array<{ word: string; start: number; end: number }> } | null)?.words ?? [])
+    : [];
+  const isInstrumental = lines.length === 0;
   const { user } = useAuth();
   const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
   const [expandedMoment, setExpandedMoment] = useState<number | null>(null);
@@ -187,6 +173,8 @@ export function MomentsMode({
   useEffect(() => () => {
     Object.values(fireHoldControllersRef.current).forEach((controller) => controller.destroy());
   }, []);
+
+  if (!danceId) return null;
 
   return (
     <ModePanel scroll="y">

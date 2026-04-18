@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo, useMemo, type ReactNode } from "react";
-import { Share2, VolumeX } from "lucide-react";
+import { Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withPriorityInitLimit } from "@/engine/initQueue";
@@ -12,10 +12,8 @@ import { isGlobalMuted } from "@/lib/globalMute";
 import { fireWeight } from "@/lib/fireHold";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
-import type { CardMode } from "@/components/lyric/PlayerHeader";
-import { MomentsMode } from "@/components/lyric/modes/MomentsMode";
-import { ResultsMode } from "@/components/lyric/modes/ResultsMode";
-import { EmpowermentMode } from "@/components/lyric/modes/EmpowermentMode";
+import { ModeDispatcher } from "@/components/lyric/modes/ModeDispatcher";
+import type { CardMode, Comment, ModeContext } from "@/components/lyric/modes/types";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 import { LyricTextLayer } from "@/components/lyric/LyricTextLayer";
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
@@ -90,8 +88,6 @@ export interface LyricDanceEmbedHandle {
   wickBarEnabled: boolean;
 }
 
-type Comment = { id: string; text: string; line_index: number | null; submitted_at: string; user_id: string | null };
-
 export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed(props, ref) {
   // 1. Props and refs
   const {
@@ -155,7 +151,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
 
-  const danceId: string = ((data ?? prefetchedData) as any)?.id ?? "";
+  const danceId: string | null = ((data ?? prefetchedData) as any)?.id ?? null;
   const effectiveMuted = muted;
 
   // 3. Data fetching (prefetched or Supabase)
@@ -603,8 +599,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [live, fireUserMap, comments]);
 
   // 11. Interaction callbacks
-  const handleCanvasTap = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCanvasTap = useCallback(() => {
     unlockAudio();
 
     if (!live) {
@@ -792,6 +787,62 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     },
   }), [player, moments, fireHeat, comments, data, prefetchedData]);
 
+  // ── Mode context: bundled shape consumed by ModeDispatcher ──
+  // All existing state, derived data, refs, and action callbacks flow through here.
+  // Modes destructure what they need; adding a prop to any mode is a one-file edit.
+  const modeCtx: ModeContext = useMemo(() => ({
+    cardMode,
+    live,
+    playerReady,
+    player,
+    data,
+    danceId,
+    postId: postId ?? null,
+    lyricDanceUrl,
+    spotifyTrackId: spotifyTrackId ?? null,
+    userId: userId ?? null,
+    canvasRef,
+    textCanvasRef,
+    moments,
+    fireHeat,
+    fireUserMap,
+    fireAnonCount,
+    profileMap,
+    comments,
+    currentTimeSec,
+    effectiveMuted,
+    showMuteIndicator,
+    setCardMode,
+    setComments,
+    handleCanvasTap,
+    seekOnly,
+    onFireMoment: (lineIndex, timeSec, holdMs) => {
+      if (!danceId) return;
+      player?.fireFire(holdMs);
+      emitFire(danceId, lineIndex, timeSec, holdMs, "feed", userId ?? null);
+    },
+    onPlayLine: (startSec, endSec) => {
+      if (!player) return;
+      player.audio.currentTime = Math.max(0, startSec - 0.01);
+      player.setRegion(startSec, endSec);
+      player.setMuted(false);
+      player.play();
+      if (panelPlayTimerRef.current) clearTimeout(panelPlayTimerRef.current);
+      const durationMs = (endSec - startSec) * 1000 + 150;
+      panelPlayTimerRef.current = setTimeout(() => {
+        player.setMuted(true);
+        panelPlayTimerRef.current = null;
+      }, durationMs);
+    },
+    onCommentAdded: (comment) => setComments((prev) =>
+      (prev.some((c) => c.id === comment.id) ? prev : [...prev, comment])),
+  }), [
+    cardMode, live, playerReady, player, data, danceId, postId, lyricDanceUrl,
+    spotifyTrackId, userId, moments, fireHeat, fireUserMap, fireAnonCount,
+    profileMap, comments, currentTimeSec, effectiveMuted, showMuteIndicator,
+    setCardMode, setComments, handleCanvasTap, seekOnly,
+  ]);
+
   // 13. Render
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
@@ -817,7 +868,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             ? `radial-gradient(ellipse at 50% 40%, ${previewPaletteColor}33 0%, #0a0a0a 70%)`
             : "#0a0a0a",
         }}
-        onClick={cardMode === "listen" ? handleCanvasTap : undefined}
+        onClick={cardMode === "listen" ? (e) => {
+          e.stopPropagation();
+          handleCanvasTap();
+        } : undefined}
       >
         {/* Poster layer — mounted for card lifetime; canvas crossfades on top. */}
         <img
@@ -858,100 +912,34 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           ownsText={!live || !playerReady}
         />
 
-        {live && cardMode === "listen" && (
-          <>
-            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />
-            <canvas ref={textCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }} />
+        <ModeDispatcher ctx={modeCtx} />
 
-            {effectiveMuted && (
-              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "rgba(0,0,0,0.5)", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", opacity: showMuteIndicator ? 0.8 : 0, transition: "opacity 0.3s ease", pointerEvents: "none", zIndex: 40 }}>
-                <VolumeX size={20} color="white" />
-              </div>
-            )}
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setViralClipOpen(true);
-              }}
-              style={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                zIndex: 45,
-                width: 34,
-                height: 34,
-                borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.2)",
-                background: "rgba(0,0,0,0.35)",
-                color: "rgba(255,255,255,0.9)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              aria-label="Share clip"
-            >
-              <Share2 size={14} />
-            </button>
-
-          </>
-        )}
-
-        {live && cardMode === "empowerment" && (
-          <EmpowermentMode
-            danceId={danceId ?? null}
-            empowermentPromise={
-              ((data ?? prefetchedData) as any)?.empowerment_promise ?? null
-            }
-            onDismiss={() => setCardMode("moments")}
-          />
-        )}
-
-        {live && cardMode === "moments" && (
-          <MomentsMode
-            danceId={danceId}
-            moments={moments}
-            fireHeat={fireHeat}
-            currentTimeSec={currentTimeSec}
-            words={(Array.isArray((data as any)?.lines) && (data as any).lines.length > 0)
-              ? ((data?.words as Array<{ word: string; start: number; end: number }>) ?? [])
-              : undefined}
-            isInstrumental={!Array.isArray((data as any)?.lines) || (data as any).lines.length === 0}
-            comments={comments}
-            onCommentAdded={(comment) => setComments((prev) => (prev.some((c) => c.id === comment.id) ? prev : [...prev, comment]))}
-            profileMap={profileMap}
-            fireUserMap={fireUserMap}
-            fireAnonCount={fireAnonCount}
-            onFireMoment={(lineIndex, timeSec, holdMs) => {
-              if (!danceId) return;
-              player?.fireFire(holdMs);
-              emitFire(danceId, lineIndex, timeSec, holdMs, "feed", userId ?? null);
+        {live && cardMode === "listen" ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setViralClipOpen(true);
             }}
-            onPlayLine={(startSec, endSec) => {
-              if (!player) return;
-              player.audio.currentTime = Math.max(0, startSec - 0.01);
-              player.setRegion(startSec, endSec);
-              player.setMuted(false);
-              player.play();
-              if (panelPlayTimerRef.current) clearTimeout(panelPlayTimerRef.current);
-              const durationMs = (endSec - startSec) * 1000 + 150;
-              panelPlayTimerRef.current = setTimeout(() => {
-                player.setMuted(true);
-                panelPlayTimerRef.current = null;
-              }, durationMs);
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              zIndex: 45,
+              width: 34,
+              height: 34,
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: "rgba(0,0,0,0.35)",
+              color: "rgba(255,255,255,0.9)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-          />
-        )}
-
-        {live && cardMode === "results" && (
-          <ResultsMode
-            moments={moments}
-            fireHeat={fireHeat}
-            spotifyTrackId={spotifyTrackId ?? null}
-            postId={postId ?? null}
-            lyricDanceUrl={lyricDanceUrl ?? null}
-          />
-        )}
+            aria-label="Share clip"
+          >
+            <Share2 size={14} />
+          </button>
+        ) : null}
       </div>
 
       <div
@@ -959,6 +947,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         style={{ background: "#0a0a0a" }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/*
+         * LyricInteractionLayer (bottom FMLY bar) is structurally outside the mode
+         * system — it's an embed-level frame element rendered in a separate flex child
+         * below the video container. The gate is on cardMode === "listen" because
+         * the interaction UI is only relevant in that mode, but the bar itself isn't
+         * a mode overlay. Moving it into ListenMode would require portals or DOM
+         * restructuring.
+         */}
         {live && cardMode === "listen" ? (
           <LyricInteractionLayer
             moments={moments}

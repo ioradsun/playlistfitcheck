@@ -2,19 +2,12 @@ import { useState, useRef, useEffect, type ReactNode, type RefObject } from "rea
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useFmlyNumber } from "@/hooks/useFmlyNumber";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Waves, LayoutList, BarChart2, ExternalLink, Sparkles } from "lucide-react";
+import { User, Mail, ExternalLink } from "lucide-react";
 import { useDmContext } from "@/hooks/useDmContext";
+import { CARD_MODES } from "@/components/lyric/modes/registry";
+import type { CardMode } from "@/components/lyric/modes/types";
 
-export type CardMode = "listen" | "moments" | "results" | "empowerment";
-
-const MODE_ICONS: Record<CardMode, ReactNode> = {
-  listen: <Waves size={14} />,
-  moments: <LayoutList size={14} />,
-  results: <BarChart2 size={14} />,
-  empowerment: <Sparkles size={14} />,
-};
-
-const MODES: CardMode[] = ["listen", "moments", "results", "empowerment"];
+export type { CardMode };
 
 function useClickOutside(
   refs: RefObject<Element | null>[],
@@ -308,19 +301,20 @@ export function PlayerHeader({
                 zIndex: 20,
               }}
             >
-              {MODES.map((mode, i) => {
-                const isActive = cardMode === mode;
-                const icon = MODE_ICONS[mode];
+              {CARD_MODES.map((modeConfig, i) => {
+                const isActive = cardMode === modeConfig.id;
+                // PlayerHeader doesn't receive ModeContext yet, so disabled(ctx)
+                // is intentionally not evaluated here in this PR.
                 return (
                   <motion.button
-                    key={mode}
+                    key={modeConfig.id}
                     type="button"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.04 }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onModeChange(mode);
+                      onModeChange(modeConfig.id);
                     }}
                     style={{
                       position: "relative",
@@ -338,9 +332,9 @@ export function PlayerHeader({
                       transition: "color 150ms ease",
                       padding: 0,
                     }}
-                    aria-label={mode}
+                    aria-label={modeConfig.label}
                   >
-                    {icon}
+                    {modeConfig.icon}
                     {isActive && (
                       <span
                         style={{
@@ -418,7 +412,7 @@ export function PlayerHeader({
           }}
           aria-label="Switch card mode"
         >
-          {MODE_ICONS[cardMode]}
+          {CARD_MODES.find((m) => m.id === cardMode)?.icon}
         </button>
       </div>
     </div>
