@@ -101,7 +101,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
 
   const fit = useLyricTextFit({
     containerRef: outerRef,
-    text: phraseText || "—",
+    text: ownsText ? phraseText || "—" : "—",
     fontFamily: primaryFontFamily,
     fontWeight: primaryFontWeight,
     maxFontPx: 72,
@@ -156,7 +156,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
       }}
     >
       <AnimatePresence mode="wait" initial={false}>
-        {phraseText && (
+        {ownsText && phraseText && (
           <motion.div
             key={phraseKey}
             initial={{ opacity: 1 }}
