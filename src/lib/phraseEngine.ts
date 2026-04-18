@@ -3,7 +3,6 @@ import {
   DRAMATIC_EXITS,
   type RevealStyle,
   type Composition,
-  type Bias,
   type ExitEffect,
 } from "@/lib/varietyEngine";
 
@@ -19,7 +18,6 @@ export interface PhraseBlock {
   heroWord: string;
   exitEffect: ExitEffect;
   composition: 'stack' | 'line' | 'center_word';
-  bias: 'left' | 'center' | 'right';
   revealStyle: RevealStyle;
   holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
 }
@@ -508,7 +506,6 @@ export function buildPhrases(
       durationSec,
       aiWantsCenterWord,
     });
-    const bias: Bias = variety.pickBias({ composition });
     const exitEffect: ExitEffect = variety.pickExit({
       aiClimax,
       aiDramaticExit: aiDramaticExit ?? undefined,
@@ -523,7 +520,6 @@ export function buildPhrases(
       heroWord,
       exitEffect,
       composition,
-      bias,
       revealStyle,
       holdClass,
       text: block.text,
