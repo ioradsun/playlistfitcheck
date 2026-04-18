@@ -3,8 +3,14 @@ import type { Moment } from "@/lib/buildMoments";
 import type { LyricDancePlayer, LyricDanceData } from "@/engine/LyricDancePlayer";
 
 /**
- * CardMode is derived from the registry (see registry.ts).
- * Don't declare it here directly — add modes by editing registry.ts.
+ * Every mode id in the registry must appear in this union, and every entry
+ * in this union must have a matching registry entry. TypeScript enforces
+ * consistency: the registry's ModeConfig["id"] field uses this type, so
+ * mismatches surface as compile errors.
+ *
+ * To add a mode:
+ *   1. Add its id to this union.
+ *   2. Add a ModeConfig entry to CARD_MODES in ./registry.ts.
  */
 export type CardMode = "listen" | "moments" | "results" | "empowerment";
 

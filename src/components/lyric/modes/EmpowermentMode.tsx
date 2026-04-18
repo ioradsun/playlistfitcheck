@@ -36,10 +36,10 @@ export function EmpowermentMode({ ctx }: { ctx: ModeContext }) {
       .from("project_angle_votes" as any)
       .select("hook_index")
       .eq("project_id", danceId)
-      .then(({ data }) => {
-        if (cancelled || !data) return;
+      .then(({ data: rows }) => {
+        if (cancelled || !rows) return;
         const nextCounts = [0, 0, 0];
-        for (const row of data as any[]) {
+        for (const row of rows as Array<{ hook_index: number | string }>) {
           const hookIndex = Number(row.hook_index);
           if (Number.isInteger(hookIndex) && hookIndex >= 0 && hookIndex <= 2) {
             nextCounts[hookIndex] += 1;

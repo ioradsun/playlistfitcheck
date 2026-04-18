@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo, useMemo, type MouseEvent, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withPriorityInitLimit } from "@/engine/initQueue";
@@ -11,6 +11,7 @@ import { fireWeight } from "@/lib/fireHold";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { ModeDispatcher } from "@/components/lyric/modes/ModeDispatcher";
+import { CARD_MODES } from "@/components/lyric/modes/registry";
 import type { CardMode, Comment, ModeContext } from "@/components/lyric/modes/types";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 import { LyricTextLayer } from "@/components/lyric/LyricTextLayer";
@@ -112,7 +113,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const currentTimeSecRef = useRef(0);
   const hasPlayedRef = useRef(false);
   const playerRef = useRef<LyricDancePlayer | null>(null);
-  const holdFireIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playStartRef = useRef<number | null>(null);
   const totalDurationRef = useRef<number>(0);
   const everUnmutedRef = useRef<boolean>(false);
@@ -573,7 +573,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [live, fireUserMap, comments]);
 
   // Interaction callbacks
-  const handleCanvasTap = useCallback(() => {
+  const handleCanvasTap = useCallback((e?: MouseEvent) => {
+    e?.stopPropagation();
     unlockAudio();
 
     if (!live) {
@@ -730,8 +731,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
   }, [currentTimeSec, durationSec, cardMode, live, player]);
 
-  useEffect(() => () => { if (holdFireIntervalRef.current) clearInterval(holdFireIntervalRef.current); }, []);
-
   useImperativeHandle(ref, () => ({
     getPlayer: () => player ?? null,
     getMoments: () => moments,
@@ -806,6 +805,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     setCardMode, setComments, handleCanvasTap, seekOnly,
   ]);
 
+  const disabledModes = useMemo(() => {
+    const set = new Set<CardMode>();
+    for (const mode of CARD_MODES) {
+      if (mode.disabled(modeCtx)) set.add(mode.id);
+    }
+    return set;
+  }, [modeCtx]);
+
   // Render
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
@@ -821,6 +828,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         onProfileClick={onProfileClick}
         cardMode={cardMode}
         onModeChange={setCardMode}
+        disabledModes={disabledModes}
       />
 
       <div
@@ -831,10 +839,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             ? `radial-gradient(ellipse at 50% 40%, ${previewPaletteColor}33 0%, #0a0a0a 70%)`
             : "#0a0a0a",
         }}
-        onClick={cardMode === "listen" ? (e) => {
-          e.stopPropagation();
-          handleCanvasTap();
-        } : undefined}
+        onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
         {/* Poster layer — mounted for card lifetime; canvas crossfades on top. */}
         <img
@@ -899,28 +904,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             currentTimeSec={currentTimeSec}
             danceId={danceId}
             comments={comments}
-            onFireTap={() => {
-              if (holdFireIntervalRef.current) {
-                clearInterval(holdFireIntervalRef.current);
-                holdFireIntervalRef.current = null;
-              }
-              if (!danceId) return;
-              player?.fireFire(0);
-              emitFire(danceId, getCurrentFireIndex(), player?.audio.currentTime ?? 0, 0, "feed", userId ?? null);
+            onFire={(lineIndex, holdMs) => {
+              modeCtx.onFireMoment(lineIndex, player?.audio.currentTime ?? 0, holdMs);
             }}
-            onFireHoldStart={() => {
-              if (holdFireIntervalRef.current) return;
-              holdFireIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
-            }}
-            onFireHoldEnd={(holdMs) => {
-              if (holdFireIntervalRef.current) {
-                clearInterval(holdFireIntervalRef.current);
-                holdFireIntervalRef.current = null;
-              }
-              if (!danceId) return;
-              player?.fireFire(holdMs);
-              emitFire(danceId, getCurrentFireIndex(), player?.audio.currentTime ?? 0, holdMs, "feed", userId ?? null);
-            }}
+            getLineIndex={getCurrentFireIndex}
             onSeekTo={seekOnly}
             onToastTap={(momentIdx) => {
               const m = moments[momentIdx];

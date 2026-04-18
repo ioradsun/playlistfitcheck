@@ -25,6 +25,14 @@ const ROW_STYLE = {
   padding: "0 10px",
 } as const;
 
+function barColor(pct: number, isHottest: boolean): string {
+  if (isHottest) return "rgba(255,255,255,0.4)";
+  if (pct > 0.6) return "rgba(255,255,255,0.2)";
+  if (pct > 0.2) return "rgba(255,255,255,0.1)";
+  if (pct > 0) return "rgba(255,255,255,0.06)";
+  return "rgba(255,255,255,0.03)";
+}
+
 export function ResultsMode({ ctx }: { ctx: ModeContext }) {
   const { moments, fireHeat, spotifyTrackId, postId, lyricDanceUrl } = ctx;
   const [copied, setCopied] = useState(false);
@@ -137,15 +145,7 @@ export function ResultsMode({ ctx }: { ctx: ModeContext }) {
                     flex: 1,
                     height: `${Math.max(15, Math.round(pct * 100))}%`,
                     borderRadius: 2,
-                    background: isHottest
-                      ? "rgba(255,255,255,0.4)"
-                      : pct > 0.6
-                        ? "rgba(255,255,255,0.2)"
-                        : pct > 0.2
-                          ? "rgba(255,255,255,0.1)"
-                          : pct > 0
-                            ? "rgba(255,255,255,0.06)"
-                            : "rgba(255,255,255,0.03)",
+                    background: barColor(pct, isHottest),
                     transition: "height 300ms ease, background 300ms ease",
                   }}
                 />
