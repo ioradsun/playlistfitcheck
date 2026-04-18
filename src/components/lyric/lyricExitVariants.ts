@@ -19,7 +19,7 @@ const DEFAULT_EXIT_DURATION = 0.5;
  * cascade and scatter are handled per-word (see wordExitVariants).
  */
 export function getPhraseExitVariant(effect: ExitEffect | undefined): {
-  exit: Record<string, unknown>;
+  exit: TargetAndTransition;
   transition: Transition;
 } {
   const e = effect ?? "fade";
@@ -95,7 +95,7 @@ export function getWordExitVariant(
   wordIndex: number,
   totalWords: number,
 ): {
-  exit: Record<string, unknown>;
+  exit: TargetAndTransition;
   transition: Transition;
 } {
   const stagger = 0.08; // 80ms between each word's exit
