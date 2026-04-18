@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { FmlyPost } from "@/components/fmly/types";
 import { precompileSceneForData, type LyricDanceData } from "@/engine/LyricDancePlayer";
 
 /**
@@ -20,7 +21,8 @@ type PrefetchItem = {
 };
 
 interface Options {
-  posts: Array<{ lyric_project?: LyricDanceData | null } | LyricDanceData>;
+  posts: FmlyPost[];
+  lyricDataMap: Map<string, LyricDanceData>;
   primaryIndex: number | null;
   viewportWidth?: number;
   viewportHeight?: number;
@@ -28,6 +30,7 @@ interface Options {
 
 export function usePrefetchNearbyScenes({
   posts,
+  lyricDataMap,
   primaryIndex,
   viewportWidth,
   viewportHeight,
@@ -48,9 +51,9 @@ export function usePrefetchNearbyScenes({
       for (const delta of [offset, -offset]) {
         const idx = primaryIndex + delta;
         if (idx < 0 || idx >= posts.length) continue;
-        const entry = posts[idx];
-        const data = (entry as { lyric_project?: LyricDanceData | null })?.lyric_project ?? (entry as LyricDanceData);
-        if (!data?.id && !data?.song_slug) continue;
+        const post = posts[idx];
+        const data = post.project_id ? lyricDataMap.get(post.project_id) ?? null : null;
+        if (!data?.id) continue;
         nextQueue.push({ data, width: w, height: h });
       }
     }
@@ -98,7 +101,7 @@ export function usePrefetchNearbyScenes({
         scheduledHandleRef.current = null;
       }
     };
-  }, [primaryIndex, posts, viewportWidth, viewportHeight]);
+  }, [lyricDataMap, primaryIndex, posts, viewportWidth, viewportHeight]);
 }
 
 interface IdleDeadline {

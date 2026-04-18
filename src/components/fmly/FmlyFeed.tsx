@@ -92,14 +92,7 @@ function FeedList({
     [postIds, primaryId],
   );
 
-  const prefetchPosts = useMemo(
-    () => posts.map((post) => ({
-      lyric_project: (post.project_id ? lyricDataMap.get(post.project_id) : null) ?? (post as any).lyric_projects,
-    })),
-    [lyricDataMap, posts],
-  );
-
-  usePrefetchNearbyScenes({ posts: prefetchPosts, primaryIndex });
+  usePrefetchNearbyScenes({ posts, lyricDataMap, primaryIndex });
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
     if (el) feedWindow.cardRefs.current.set(id, el);

@@ -30,10 +30,9 @@ import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 const PAGE_SIZE = 20;
 
 const POST_SELECT =
-  "*, profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified)," +
-  "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id," +
-  "palette, cinematic_direction, beat_grid, section_images, auto_palettes, lines, words," +
-  "physics_spec, empowerment_promise)";
+  "id, user_id, project_id, caption, created_at, status, " +
+  "profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified), " +
+  "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id, palette, cinematic_direction, beat_grid, section_images, auto_palettes, lines, words, physics_spec, empowerment_promise)";
 
 // ── Filter helpers ──────────────────────────────────────────────────────────
 function matchesView(p: FmlyPost, view: FeedView): boolean {
@@ -45,14 +44,13 @@ function matchesView(p: FmlyPost, view: FeedView): boolean {
 
 function withInstrumentalFlag(p: FmlyPost): FmlyPost {
   const lines = (p as any).lyric_projects?.lines;
-  return {
-    ...p,
-    is_instrumental: Array.isArray(lines) ? lines.length === 0 : true,
-  };
+  (p as FmlyPost).is_instrumental = Array.isArray(lines) ? lines.length === 0 : true;
+  return p;
 }
 
 function hydratePosts(rows: FmlyPost[]): FmlyPost[] {
-  return rows.map(withInstrumentalFlag);
+  for (const row of rows) withInstrumentalFlag(row);
+  return rows;
 }
 
 /**
@@ -188,21 +186,17 @@ export interface FeedState {
   setSearchTerm: (term: string) => void;
   searchResults: FmlyPost[];
   searchLoading: boolean;
-  isSearching: boolean;
   loadingMore: boolean;
   hasMore: boolean;
   pendingNewCount: number;
   feedView: FeedView;
   billboardMode: BillboardMode;
-  signalMap: Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }>;
   lyricDataMap: Map<string, LyricDanceData>;
 
   setFeedView: (v: FeedView) => void;
   setBillboardMode: (m: BillboardMode) => void;
   loadMore: () => Promise<void>;
-  refresh: () => void;
   consumeNewDrops: () => void;
-  setPosts: React.Dispatch<React.SetStateAction<FmlyPost[]>>;
 }
 
 export function useFeedPosts(): FeedState {
@@ -225,8 +219,6 @@ export function useFeedPosts(): FeedState {
   const [feedView, setFeedView] = useState<FeedView>("all");
   const [billboardMode, setBillboardMode] = useState<BillboardMode>("this_week");
 
-  // ── Billboard signals ──
-  const [signalMap, setSignalMap] = useState<Record<string, { total: number; replay_yes: number; saves_count: number; signal_velocity: number }>>({});
 
   // ── Lyric dance data ──
   const [lyricDataMap, setLyricDataMap] = useState<Map<string, LyricDanceData>>(() => {
@@ -290,9 +282,8 @@ export function useFeedPosts(): FeedState {
     
     if (feedView === "billboard") {
       if (posts.length === 0) setLoading(true);
-      const result = await scoreBillboard(billboardMode);
-      setPosts(result.posts);
-      setSignalMap(result.signalMap);
+      const { posts: billboardPosts } = await scoreBillboard(billboardMode);
+      setPosts(billboardPosts);
       setHasMore(false);
       setLoading(false);
       setPendingNewCount(0);
@@ -462,8 +453,6 @@ export function useFeedPosts(): FeedState {
   }, [fetchPosts]);
 
   // ── Public API ────────────────────────────────────────────────────────
-  const refresh = useCallback(() => void fetchPosts(), [fetchPosts]);
-
   const consumeNewDrops = useCallback(() => {
     setPendingNewCount(0);
     void fetchPosts();
@@ -476,19 +465,15 @@ export function useFeedPosts(): FeedState {
     setSearchTerm,
     searchResults,
     searchLoading,
-    isSearching: searchTerm.trim().length > 0,
     loadingMore,
     hasMore,
     pendingNewCount,
     feedView,
     billboardMode,
-    signalMap,
     lyricDataMap,
     setFeedView,
     setBillboardMode,
     loadMore,
-    refresh,
     consumeNewDrops,
-    setPosts,
   };
 }
