@@ -80,8 +80,10 @@ function FeedList({
   const scrollContainer = typeof document !== "undefined"
     ? document.getElementById("fmly-feed-scroll")
     : null;
+  const supportsCV = typeof CSS !== "undefined"
+    && CSS.supports("content-visibility: auto");
 
-  const postIds = posts.map((p) => p.id);
+  const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const feedWindow = useFeedWindow(posts.length, postIds);
   const [explicitPrimaryId, setExplicitPrimaryId] = useState<string | null>(null);
   const explicitSetAtScrollY = useRef<number | null>(null);
@@ -90,6 +92,7 @@ function FeedList({
     feedWindow.cardRefs,
     feedWindow.renderedIds,
     postIds,
+    feedWindow.renderedIdsVersion,
   );
   const primaryId = explicitPrimaryId ?? scrollPrimaryId;
   const primaryIndex = useMemo(
@@ -143,7 +146,7 @@ function FeedList({
     if (closestIndex >= 0 && closestIndex !== feedWindow.activeIndex) {
       feedWindow.setActiveIndex(closestIndex);
     }
-  }, [closestIndex, feedWindow]);
+  }, [closestIndex, feedWindow.activeIndex, feedWindow.setActiveIndex]);
 
   useEffect(() => {
     if (feedView === "billboard" || !hasMore) return;
@@ -196,16 +199,25 @@ function FeedList({
       {feedWindow.windowStart > 0 && <div style={{ height: topSpacerHeight }} />}
 
       {renderedPosts.map((post) => (
-        <FeedCard
+        <div
           key={post.id}
-          post={post}
-          lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
-          live={post.id === primaryId}
-          registerRef={registerRef}
-          onMeasure={feedWindow.onCardMeasure}
-          onRequestPrimary={handleRequestPrimary}
-          reelsMode={reelsMode}
-        />
+          style={post.id !== primaryId && !reelsMode && supportsCV
+            ? {
+              contentVisibility: "auto",
+              containIntrinsicSize: "0 420px",
+            }
+            : undefined}
+        >
+          <FeedCard
+            post={post}
+            lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
+            live={post.id === primaryId}
+            registerRef={registerRef}
+            onMeasure={feedWindow.onCardMeasure}
+            onRequestPrimary={handleRequestPrimary}
+            reelsMode={reelsMode}
+          />
+        </div>
       ))}
 
       {feedWindow.windowEnd < posts.length - 1 && <div style={{ height: bottomSpacerHeight }} />}
