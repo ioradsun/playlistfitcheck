@@ -4152,8 +4152,6 @@ export class LyricDancePlayer {
 
       // ═══ SINGLE COLOR MODEL: no colored halos behind words ═══
 
-      const drawAlpha = Number.isFinite(chunk.alpha) ? Math.max(0, Math.min(1, chunk.alpha)) : 1;
-
       const drawFont = `${fontWeight} ${safeFontSize}px ${family}`;
       if (drawFont !== this._lastFont) { this.ctx.font = drawFont; this._lastFont = drawFont; }
       // Per-phrase letter spacing — tight for impact, wide for emotional
@@ -4164,28 +4162,13 @@ export class LyricDancePlayer {
         this._lastLetterSpacing = lsStr;
       }
       const isAdlib = (chunk as any).isAdlib === true;
-      // Adlib fade envelope: fade in over 150ms, hold, fade out over 200ms.
-      // Makes ghost words breathe in/out instead of hard-popping.
-      let adlibAlpha = 0.35;
-      if (isAdlib && (chunk as any).wordDuration != null) {
-        const wStart = (chunk as any)._wordStart ?? 0;
-        const wEnd = wStart + ((chunk as any).wordDuration ?? 0.5);
-        const tNow = this._lastEvalTime ?? 0;
-        const fadeIn = 0.15;
-        const fadeOut = 0.2;
-        if (tNow < wStart) {
-          adlibAlpha = 0;
-        } else if (tNow < wStart + fadeIn) {
-          adlibAlpha = 0.35 * ((tNow - wStart) / fadeIn);
-        } else if (tNow > wEnd - fadeOut) {
-          adlibAlpha = 0.35 * Math.max(0, (wEnd - tNow) / fadeOut);
-        }
-      }
-      // Visual hierarchy: fillers recede, heroes pop
-      const isFiller = (chunk as any)._isFiller === true && !isAdlib;
-      const fillerDim = isFiller ? 0.72 : 1.0;
-      this.ctx.globalAlpha = isAdlib ? drawAlpha * adlibAlpha : drawAlpha * fillerDim;
-      this.ctx.fillStyle = isAdlib ? 'rgba(255,255,255,0.6)' : (chunk.color ?? '#ffffff');
+      // INVARIANT: all lyric text renders at 100% opaque pure white.
+      // - No entry fade ramp (words pop at stagger time via chunk.visibility gating)
+      // - No filler dim (hierarchy comes from fontWeight, not opacity)
+      // - No adlib alpha envelope (adlibs are also full-opacity white)
+      // - No per-word color variation (always pure white)
+      this.ctx.globalAlpha = 1.0;
+      this.ctx.fillStyle = '#ffffff';
 
       const dpr = this._effectiveDpr;
       const heroDrawX = Math.round(drawX * dpr) / dpr;
