@@ -5667,11 +5667,6 @@ export class LyricDancePlayer {
             } else if (tSec < wordEffectiveStart + entryDur) {
               wordEntryAlpha = (tSec - wordEffectiveStart) / entryDur;
             }
-          } else if (entryDur > 0.01) {
-            // No stagger but still fade in the whole phrase
-            if (tSec < group.start + entryDur) {
-              wordEntryAlpha = Math.max(0, (tSec - group.start) / entryDur);
-            }
           }
         }
         chunk.alpha = ws.soloHeroHidden ? 0 : wordEntryAlpha;
