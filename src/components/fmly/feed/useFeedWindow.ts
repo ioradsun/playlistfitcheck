@@ -14,7 +14,12 @@ export interface FeedWindow {
   setActiveIndex: (index: number) => void;
 }
 
-export function useFeedWindow(postCount: number, postIds: string[], reelsMode: boolean): FeedWindow {
+export function useFeedWindow(
+  postCount: number,
+  postIds: string[],
+  reelsMode: boolean,
+  scrollContainer: HTMLElement | null,
+): FeedWindow {
   const [activeIndex, setActiveIndex] = useState(0);
   const [viewportH, setViewportH] = useState(
     typeof window !== "undefined" ? window.innerHeight : 800,
@@ -26,6 +31,27 @@ export function useFeedWindow(postCount: number, postIds: string[], reelsMode: b
       setActiveIndex(postCount - 1);
     }
   }, [activeIndex, postCount]);
+
+  useEffect(() => {
+    if (!scrollContainer) return;
+    let raf = 0;
+    const readPosition = () => {
+      raf = 0;
+      const idx = Math.floor(scrollContainer.scrollTop / cardHeight);
+      const clamped = Math.max(0, Math.min(postCount - 1, idx));
+      setActiveIndex((prev) => (prev === clamped ? prev : clamped));
+    };
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(readPosition);
+    };
+    scrollContainer.addEventListener("scroll", onScroll, { passive: true });
+    readPosition();
+    return () => {
+      scrollContainer.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [scrollContainer, cardHeight, postCount]);
 
   const windowStart = Math.max(0, activeIndex - WINDOW_RADIUS);
   const windowEnd = Math.min(postCount - 1, activeIndex + WINDOW_RADIUS);

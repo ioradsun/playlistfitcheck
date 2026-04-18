@@ -78,12 +78,11 @@ function FeedList({
   const supportsCV = typeof CSS !== "undefined" && CSS.supports("content-visibility: auto");
 
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
-  const feedWindow = useFeedWindow(posts.length, postIds, reelsMode);
-  const { primaryId, closestIndex } = usePrimaryArbiter(
+  const feedWindow = useFeedWindow(posts.length, postIds, reelsMode, scrollContainer);
+  const { primaryId } = usePrimaryArbiter(
     scrollContainer,
     feedWindow.cardRefs,
     feedWindow.renderedIds,
-    postIds,
     feedWindow.renderedIdsVersion,
   );
 
@@ -110,12 +109,6 @@ function FeedList({
     if (scrollContainer) scrollContainer.scrollBy({ top: offset, behavior: "smooth" });
     else window.scrollBy({ top: offset, behavior: "smooth" });
   }, [feedWindow.cardRefs, scrollContainer]);
-
-  useEffect(() => {
-    if (closestIndex >= 0 && closestIndex !== feedWindow.activeIndex) {
-      feedWindow.setActiveIndex(closestIndex);
-    }
-  }, [closestIndex, feedWindow.activeIndex, feedWindow.setActiveIndex]);
 
   useEffect(() => {
     if (feedView === "billboard" || !hasMore) return;

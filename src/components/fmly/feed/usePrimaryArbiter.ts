@@ -6,21 +6,17 @@ const VELOCITY_THRESHOLD_PX_PER_SEC = 2500;
 
 export interface ArbiterResult {
   primaryId: string | null;
-  closestIndex: number;
 }
 
 export function usePrimaryArbiter(
   scrollContainer: HTMLElement | null,
   cardRefs: React.MutableRefObject<Map<string, HTMLElement>>,
   renderedIds: Set<string>,
-  postIds: string[],
   renderedIdsVersion = 0,
 ): ArbiterResult {
-  const [result, setResult] = useState<ArbiterResult>({ primaryId: null, closestIndex: 0 });
+  const [result, setResult] = useState<ArbiterResult>({ primaryId: null });
   const renderedIdsRef = useRef(renderedIds);
-  const postIdsRef = useRef(postIds);
   renderedIdsRef.current = renderedIds;
-  postIdsRef.current = postIds;
 
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const velocityRef = useRef(0);
@@ -30,7 +26,7 @@ export function usePrimaryArbiter(
   useEffect(() => {
     if (typeof window === "undefined" || !("IntersectionObserver" in window)) {
       liveCard.set(null);
-      setResult({ primaryId: null, closestIndex: 0 });
+      setResult({ primaryId: null });
       return;
     }
 
@@ -41,7 +37,7 @@ export function usePrimaryArbiter(
 
     const observedEntries = new Map<Element, IntersectionObserverEntry>();
 
-    const measure = (): { primaryId: string | null; closestIndex: number } => {
+    const measure = (): { primaryId: string | null } => {
       const visible = Array.from(observedEntries.values())
         .map((entry) => {
           const id = (entry.target as HTMLElement).dataset.fmlyPostId;
@@ -50,29 +46,23 @@ export function usePrimaryArbiter(
         })
         .filter((item): item is { id: string; ratio: number } => !!item);
 
-      if (!visible.length) return { primaryId: null, closestIndex: 0 };
+      if (!visible.length) return { primaryId: null };
 
       visible.sort((a, b) => b.ratio - a.ratio);
       const best = visible[0];
-      const closestIndex = Math.max(0, postIdsRef.current.indexOf(best.id));
       return {
         primaryId: best.ratio > 0 ? best.id : null,
-        closestIndex,
       };
     };
 
-    const commit = (measurement: { primaryId: string | null; closestIndex: number }) => {
+    const commit = (measurement: { primaryId: string | null }) => {
       const fast = velocityRef.current > VELOCITY_THRESHOLD_PX_PER_SEC;
       const primaryId = fast ? null : measurement.primaryId;
-      setResult((prev) => (
-        prev.primaryId === primaryId && prev.closestIndex === measurement.closestIndex
-          ? prev
-          : { primaryId, closestIndex: measurement.closestIndex }
-      ));
+      setResult((prev) => (prev.primaryId === primaryId ? prev : { primaryId }));
       liveCard.set(primaryId);
     };
 
-    const scheduleSettle = (measurement: { primaryId: string | null; closestIndex: number }) => {
+    const scheduleSettle = (measurement: { primaryId: string | null }) => {
       if (settleRef.current) clearTimeout(settleRef.current);
       settleRef.current = setTimeout(() => {
         settleRef.current = null;
@@ -98,11 +88,6 @@ export function usePrimaryArbiter(
         }
 
         const measurement = measure();
-        setResult((prev) => (
-          prev.closestIndex === measurement.closestIndex
-            ? prev
-            : { ...prev, closestIndex: measurement.closestIndex }
-        ));
         scheduleSettle(measurement);
       },
       {
