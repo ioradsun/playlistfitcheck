@@ -272,21 +272,6 @@ export function FitTab({
   const { user, profile } = useAuth();
   const { canCreate, credits, required } = useVoteGate();
 
-  const danceData = useMemo<LyricDanceData | null>(() => {
-    if (!savedId || !cinematicDirection || !beatGrid || !audioUrl) return null;
-    return {
-      id: savedId,
-      audio_url: audioUrl,
-      cinematic_direction: cinematicDirection,
-      beat_grid: beatGrid,
-      words: words ?? null,
-      lines: lyricData?.lines ?? null,
-      section_images: sectionImageUrls.length ? sectionImageUrls : null,
-      palette: null,
-      auto_palettes: null,
-    } as any;
-  }, [savedId, audioUrl, cinematicDirection, beatGrid, words, lyricData, sectionImageUrls]);
-
   const danceId = savedId;
   const danceUrl = useMemo(() => {
     const row = initialLyric as any;
@@ -719,6 +704,35 @@ export function FitTab({
   const [empowermentLoading, setEmpowermentLoading] = useState(false);
   const [empowermentError, setEmpowermentError] = useState(false);
   const [hasHydratedEmpowerment, setHasHydratedEmpowerment] = useState(false);
+  const danceData = useMemo<LyricDanceData | null>(() => {
+    if (!savedId || !cinematicDirection || !beatGrid || !audioUrl) return null;
+
+    const base = (initialLyric ?? {}) as Record<string, any>;
+
+    return {
+      ...base,
+      id: savedId,
+      audio_url: audioUrl,
+      cinematic_direction: cinematicDirection,
+      beat_grid: beatGrid,
+      words: words ?? (base.words ?? null),
+      lines: lyricData?.lines ?? (base.lines ?? null),
+      section_images: sectionImageUrls.length
+        ? sectionImageUrls
+        : (base.section_images ?? null),
+      empowerment_promise: empowermentPromise ?? base.empowerment_promise ?? null,
+    } as any;
+  }, [
+    savedId,
+    audioUrl,
+    cinematicDirection,
+    beatGrid,
+    words,
+    lyricData,
+    sectionImageUrls,
+    empowermentPromise,
+    initialLyric,
+  ]);
 
   // Live vote counts per hook index — fetched after promise is generated
   const [hookVoteCounts, setHookVoteCounts] = useState<number[]>([]);
