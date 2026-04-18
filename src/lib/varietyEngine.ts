@@ -112,7 +112,7 @@ export class VarietyEngine {
       return 'center';
     }
     const recent = this.recent('bias');
-    const picked = pickFromEligible(BIAS_PREF, ['left', 'center', 'right'], recent);
+    const picked = pickFromEligible(BIAS_PREF, ['left', 'center', 'right'] as Bias[], recent);
     this.commit('bias', picked);
     return picked;
   }
@@ -144,7 +144,7 @@ export class VarietyEngine {
       this.states.set(this.currentSection, emptyAxisState());
     }
     const s = this.states.get(this.currentSection)!;
-    (s[axis] as V[]) = [value, ...s[axis]].slice(0, 2) as AxisState[K];
+    (s[axis] as unknown as V[]) = [value, ...(s[axis] as unknown as V[])].slice(0, 2);
   }
 }
 
