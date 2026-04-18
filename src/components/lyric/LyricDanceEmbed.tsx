@@ -13,9 +13,9 @@ import { fireWeight } from "@/lib/fireHold";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import type { CardMode } from "@/components/lyric/PlayerHeader";
-import { MomentPanel } from "@/components/lyric/MomentPanel";
-import { CardResultsPanel } from "@/components/lyric/CardResultsPanel";
-import { EmpowermentModePanel } from "@/components/lyric/EmpowermentModePanel";
+import { MomentsMode } from "@/components/lyric/modes/MomentsMode";
+import { ResultsMode } from "@/components/lyric/modes/ResultsMode";
+import { EmpowermentMode } from "@/components/lyric/modes/EmpowermentMode";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 import { LyricTextLayer } from "@/components/lyric/LyricTextLayer";
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
@@ -898,7 +898,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         )}
 
         {live && cardMode === "empowerment" && (
-          <EmpowermentModePanel
+          <EmpowermentMode
             danceId={danceId ?? null}
             empowermentPromise={
               ((data ?? prefetchedData) as any)?.empowerment_promise ?? null
@@ -908,7 +908,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         )}
 
         {live && cardMode === "moments" && (
-          <MomentPanel
+          <MomentsMode
             danceId={danceId}
             moments={moments}
             fireHeat={fireHeat}
@@ -944,7 +944,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         )}
 
         {live && cardMode === "results" && (
-          <CardResultsPanel
+          <ResultsMode
             moments={moments}
             fireHeat={fireHeat}
             spotifyTrackId={spotifyTrackId ?? null}
