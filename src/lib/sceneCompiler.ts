@@ -22,6 +22,7 @@ import {
   type SectionBehavior,
   type HeroStyle,
 } from "@/lib/fontResolver";
+import { STAGGER_DELAY, type RevealStyle } from "@/lib/revealStyle";
 
 
 export type LineBeatMap = {
@@ -916,21 +917,13 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       groupSecTypo.weight === 'bold' ? 'lift' :
       groupSecTypo.weight === 'regular' ? 'groove' :
       'intimate';
-    // Prefer AI's per-phrase revealStyle when available, fall back to energy-derived
-    const aiReveal = matchPhrase?.revealStyle;
-    const revealStyle: "instant" | "stagger_fast" | "stagger_slow" =
-      (aiReveal === 'instant' || aiReveal === 'stagger_fast' || aiReveal === 'stagger_slow')
-        ? aiReveal
-        : energyTier === 'impact' ? 'instant'
-        : energyTier === 'intimate' ? 'stagger_slow'
-        : 'stagger_fast';
+    // Reveal style is physics-derived upstream in phraseEngine.ts via deriveRevealStyle().
+    const revealStyle: RevealStyle = matchPhrase?.revealStyle ?? 'instant';
     const holdClass = (group as any).holdClass ?? matchPhrase?.holdClass ?? 'medium_groove';
     const heroType: "phrase" | "word" = 'word';
 
     // Reveal → stagger delay
-    const staggerVal = revealStyle === 'instant' ? 0
-      : revealStyle === 'stagger_fast' ? 0.12   // was 0.04 — too fast to see
-      : 0.25; // stagger_slow — was 0.12 — deliberate pacing
+    const staggerVal = STAGGER_DELAY[revealStyle];
 
     // Hold → linger duration
     const lingerVal = holdClass === 'short_hit' ? 0.1
