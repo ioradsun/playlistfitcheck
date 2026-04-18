@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo, useMemo, type ReactNode } from "react";
-import { Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
 import { withPriorityInitLimit } from "@/engine/initQueue";
@@ -8,7 +7,6 @@ import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { enrichSections } from "@/engine/directionResolvers";
-import { isGlobalMuted } from "@/lib/globalMute";
 import { fireWeight } from "@/lib/fireHold";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
@@ -30,19 +28,16 @@ import { useResolvedTypography } from "@/hooks/useResolvedTypography";
  * is invariant.
  *
  * Concerns, top-to-bottom:
- *   1. Props and refs
- *   2. Core state (fetched data, player, playback time, mute)
- *   3. Data fetching (prefetched or Supabase)
- *   4. Engine lifecycle (create/destroy LyricDancePlayer)
- *   5. Playback time tracking (RAF loop gated on visibility + playing)
- *   6. Fire state (heat, user map, anon count) + hydration + realtime
- *   7. Comments state + hydration + realtime
- *   8. Profile avatars (batch fetch)
- *   9. Play tracking (progress, duration, flush interval)
- *  10. Derived memos (durationSec, audioSections, moments, activeLine, posterSrc)
- *  11. Interaction callbacks
- *  12. Mode lifecycle effects (cardMode visibility, end-of-track handoff)
- *  13. Render
+ *   - Props and refs
+ *   - Core state (fetched data, player, playback time, mute, fire, comments)
+ *   - Data fetching (prefetched or Supabase)
+ *   - Engine lifecycle (create/destroy LyricDancePlayer, resize observation)
+ *   - Playback time tracking (RAF loop gated on visibility + playing)
+ *   - Derived data (durationSec, audioSections, moments, posterSrc)
+ *   - Fire + comments + profiles (hydration, realtime, aggregation)
+ *   - Interaction callbacks + play-progress tracking
+ *   - Live/mode lifecycle effects
+ *   - Mode context + render
  *
  * Every engine/FMLY/fire/comments concern is gated on `live`.
  * When live=false, only data fetching and render remain active.
@@ -89,7 +84,7 @@ export interface LyricDanceEmbedHandle {
 }
 
 export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDanceEmbedProps>(function LyricDanceEmbed(props, ref) {
-  // 1. Props and refs
+  // Props and refs
   const {
     lyricDanceId,
     songTitle,
@@ -127,7 +122,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const panelPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFiresRef = useRef<Array<{ line_index: number | null; hold_ms: number | null }>>([]);
 
-  // 2. Core state
+  // Core state
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(() => {
     if (!prefetchedData) return null;
     return {
@@ -137,7 +132,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         : prefetchedData.cinematic_direction,
     };
   });
-  const data = fetchedData;
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
@@ -151,14 +145,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
 
-  const danceId: string | null = ((data ?? prefetchedData) as any)?.id ?? null;
-  const effectiveMuted = muted;
+  const danceId: string | null = (fetchedData ?? prefetchedData)?.id ?? null;
 
-  // 3. Data fetching (prefetched or Supabase)
+  // Data fetching (prefetched or Supabase)
   useEffect(() => {
     if (prefetchedData) {
       setFetchedData((prev) => {
-        if (prev && prev.id === (prefetchedData as any).id && prev.cinematic_direction) return prev;
+        if (prev && prev.id === prefetchedData.id && prev.cinematic_direction) return prev;
         return {
           ...prefetchedData,
           cinematic_direction: prefetchedData.cinematic_direction
@@ -178,12 +171,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       .then(({ data: row }: any) => {
         if (cancelled) return;
         if (row) {
-          const r = row as any;
           setFetchedData({
             ...(row as unknown as LyricDanceData),
-            cinematic_direction: r.cinematic_direction
-              ? normalizeCinematicDirection(r.cinematic_direction)
-              : r.cinematic_direction,
+            cinematic_direction: row.cinematic_direction
+              ? normalizeCinematicDirection(row.cinematic_direction)
+              : row.cinematic_direction,
           });
         }
       })
@@ -199,26 +191,24 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [lyricDanceId, prefetchedData]);
 
-  // 4. Engine lifecycle
+  // Engine lifecycle
   useEffect(() => {
-    if (!live) {
+    const teardown = () => {
       setPlayerReady(false);
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
         setPlayer(null);
       }
+    };
+
+    if (!live) {
+      teardown();
       return;
     }
 
-    const next = fetchedData;
-    if (!next?.id || !next.audio_url || !canvasRef.current || !textCanvasRef.current || !containerRef.current) {
-      setPlayerReady(false);
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
-        setPlayer(null);
-      }
+    if (!fetchedData?.id || !fetchedData.audio_url || !canvasRef.current || !textCanvasRef.current || !containerRef.current) {
+      teardown();
       return;
     }
 
@@ -226,7 +216,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     setPlayerReady(false);
 
     const p = new LyricDancePlayer(
-      next,
+      fetchedData,
       canvasRef.current,
       textCanvasRef.current,
       containerRef.current,
@@ -250,7 +240,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       setPlayer((prev) => (prev === p ? null : prev));
       setPlayerReady(false);
     };
-  }, [live, fetchedData, canvasRef, textCanvasRef, containerRef]);
+  }, [live, fetchedData]);
 
   // 4b. Container resize observation — keeps engine layout in sync with container size
   // Fixes: text off-center or clipped after card transitions (reels mode primary change,
@@ -296,7 +286,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [player]);
 
-  // 5. Playback time tracking (RAF loop gated on visibility + playing)
+  // Playback time tracking (RAF loop gated on visibility + playing)
   useEffect(() => {
     if (!live || !player) return;
 
@@ -351,43 +341,27 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [live, player]);
 
-  // 10. Derived memos
+  // Derived data
   const durationSec = useMemo(() => {
-    const lines = (data as any)?.lines ?? (data as any)?.lyrics ?? [];
+    const lines = fetchedData?.lines ?? fetchedData?.lyrics ?? [];
     if (lines.length) {
-      return (lines[lines.length - 1] as any).end ?? 0;
+      return lines[lines.length - 1]?.end ?? 0;
     }
-    const bg = (data as any)?.beat_grid;
+    const bg = fetchedData?.beat_grid;
     if (bg?._duration && bg._duration > 0) return bg._duration;
     if (Array.isArray(bg?.beats) && bg.beats.length > 0) {
       return bg.beats[bg.beats.length - 1];
     }
     return 0;
-  }, [(data as any)?.lines ?? (data as any)?.lyrics, (data as any)?.beat_grid]);
+  }, [fetchedData?.lines, fetchedData?.lyrics, fetchedData?.beat_grid]);
 
   const lyricSections = useLyricSections(
-    data?.words ?? null,
-    data?.beat_grid ?? null,
-    data?.cinematic_direction ?? null,
+    fetchedData?.words ?? null,
+    fetchedData?.beat_grid ?? null,
+    fetchedData?.cinematic_direction ?? null,
     durationSec,
   );
-  const resolvedTypography = useResolvedTypography(data ?? prefetchedData);
-
-  const activeLine = useMemo(() => {
-    if (!lyricSections.isReady) return null;
-    const line = lyricSections.allLines.find(
-      (l) => currentTimeSec >= l.startSec && currentTimeSec < l.endSec + 0.1,
-    ) ?? null;
-    if (!line) return null;
-    const section = lyricSections.sections.find((s) =>
-      s.lines.some((sl) => sl.lineIndex === line.lineIndex),
-    ) ?? null;
-    return {
-      text: line.text,
-      lineIndex: line.lineIndex,
-      sectionLabel: section?.label ?? null,
-    };
-  }, [lyricSections, currentTimeSec]);
+  const resolvedTypography = useResolvedTypography(fetchedData ?? prefetchedData);
 
   const audioSections = useMemo(() => {
     if (lyricSections.sections.length > 0) {
@@ -398,10 +372,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         role: s.role,
       }));
     }
-    const cd = (data as any)?.cinematic_direction;
+    const cd = fetchedData?.cinematic_direction;
     const cdSections = cd?.sections;
     if (Array.isArray(cdSections) && cdSections.length > 0) {
-      const dur = (data as any)?.beat_grid?._duration || durationSec || undefined;
+      const dur = fetchedData?.beat_grid?._duration || durationSec || undefined;
       const enriched = enrichSections(cdSections, dur);
       return enriched.map((s, i) => ({
         sectionIndex: s.sectionIndex ?? i,
@@ -411,11 +385,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       }));
     }
     return [];
-  }, [lyricSections.sections, data, durationSec]);
+  }, [lyricSections.sections, fetchedData, durationSec]);
 
   const moments = useMemo<Moment[]>(() => {
-    const phrases = (data as any)?.cinematic_direction?.phrases ?? [];
-    const phraseInputs = phrases.map((p: any) => {
+    const phrases = fetchedData?.cinematic_direction?.phrases ?? [];
+    const phraseInputs = phrases.map((p) => {
       const isMs = p.start > 500;
       return {
         start: isMs ? p.start / 1000 : p.start,
@@ -424,25 +398,25 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       };
     });
     return buildMoments(phraseInputs, audioSections, lyricSections.allLines, durationSec);
-  }, [data, audioSections, lyricSections.allLines, durationSec]);
+  }, [fetchedData, audioSections, lyricSections.allLines, durationSec]);
 
   const posterSrc = useMemo(() => {
-    const albumArt = (data as any)?.album_art_url ?? (prefetchedData as any)?.album_art_url ?? null;
+    const albumArt = fetchedData?.album_art_url ?? prefetchedData?.album_art_url ?? null;
     const sectionImg = previewImageUrl ?? null;
     if (sectionImg && getPreloadedImage(sectionImg)) return sectionImg;
     return albumArt || sectionImg || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-  }, [data, prefetchedData, previewImageUrl]);
+  }, [fetchedData, prefetchedData, previewImageUrl]);
 
-  // 6. Fire state (heat, user map, anon count) + hydration + realtime
+  // Fire state (heat, user map, anon count) + hydration + realtime
   useEffect(() => {
-    if (!live || !data?.id) return;
+    if (!live || !fetchedData?.id) return;
 
     let mounted = true;
     const hydrate = async () => {
       const { data: fires } = await supabase
         .from("project_fires" as any)
         .select("line_index, hold_ms, user_id")
-        .eq("project_id", data.id);
+        .eq("project_id", fetchedData.id);
 
       if (!mounted || !fires) return;
 
@@ -450,7 +424,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       const userMap: Record<number, string[]> = {};
       const anonCount: Record<number, number> = {};
 
-      for (const fire of fires as any[]) {
+      for (const fire of fires as Array<{ line_index: number | null; hold_ms: number | null; user_id: string | null }>) {
         const idx = fire.line_index ?? 0;
         const weight = fireWeight(fire.hold_ms ?? 0);
         agg["🔥"].line[idx] = (agg["🔥"].line[idx] ?? 0) + weight;
@@ -488,14 +462,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }, 500);
 
     const fireChannel = supabase
-      .channel(`fires-core-${data.id}`)
+      .channel(`fires-core-${fetchedData.id}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
           table: "project_fires",
-          filter: `project_id=eq.${data.id}`,
+          filter: `project_id=eq.${fetchedData.id}`,
         },
         (payload: any) => {
           const { line_index, hold_ms, user_id } = payload.new;
@@ -524,7 +498,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       pendingFiresRef.current = [];
       supabase.removeChannel(fireChannel);
     };
-  }, [live, data?.id]);
+  }, [live, fetchedData?.id]);
 
   useEffect(() => {
     if (!player) return;
@@ -532,7 +506,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     player.setMoments(moments);
   }, [player, fireHeat, moments]);
 
-  // 7. Comments state + hydration + realtime
+  // Comments state + hydration + realtime
   useEffect(() => {
     if (!live || !danceId) return;
     let mounted = true;
@@ -570,7 +544,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [live, danceId]);
 
-  // 8. Profile avatars (batch fetch)
+  // Profile avatars (batch fetch)
   useEffect(() => {
     if (!live) return;
     const fireIds = Object.values(fireUserMap).flat();
@@ -588,7 +562,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       .then(({ data: profiles }) => {
         if (!profiles) return;
         const map: Record<string, { avatarUrl: string | null; displayName: string | null }> = {};
-        for (const profile of profiles as any[]) {
+        for (const profile of profiles as Array<{ id: string; avatar_url: string | null; display_name: string | null }>) {
           map[profile.id] = {
             avatarUrl: profile.avatar_url ?? null,
             displayName: profile.display_name ?? null,
@@ -598,7 +572,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       });
   }, [live, fireUserMap, comments]);
 
-  // 11. Interaction callbacks
+  // Interaction callbacks
   const handleCanvasTap = useCallback(() => {
     unlockAudio();
 
@@ -618,13 +592,18 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [player]);
 
   const getCurrentFireIndex = useCallback(() => {
-    if (activeLine) return activeLine.lineIndex;
     const t = player?.audio?.currentTime ?? 0;
+    if (lyricSections.isReady) {
+      const line = lyricSections.allLines.find(
+        (l) => t >= l.startSec && t < l.endSec + 0.1,
+      );
+      if (line) return line.lineIndex;
+    }
     for (let i = moments.length - 1; i >= 0; i -= 1) {
       if (t >= moments[i].startSec - 0.1) return moments[i].sectionIndex;
     }
     return 0;
-  }, [activeLine, player, moments]);
+  }, [player, moments, lyricSections.allLines, lyricSections.isReady]);
 
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
@@ -640,9 +619,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     });
   }, [danceId, durationSec, player, userId]);
 
-  const getPlayerStable = useCallback(() => player ?? null, [player]);
+  const getPlayer = useCallback(() => playerRef.current, []);
 
-  // 9. Play tracking (progress, duration, flush interval)
+  // Play tracking (progress, duration, flush interval)
   useEffect(() => {
     if (!live || !danceId) return;
     playCountRef.current += 1;
@@ -678,12 +657,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     return () => { cancelled = true; };
   }, [live, player, danceId]);
 
-  // 12. Mode lifecycle effects (cardMode visibility, end-of-track handoff)
-  // On go-live: reset mute intent to "play audibly".
-  // New primary card always starts unmuted — user must tap to mute it.
-  // Going not-live doesn't touch intent; next primary will reset its own.
+  // Live transition resets.
   useEffect(() => {
-    if (live) setMuted(false);
+    if (live) {
+      setMuted(false);
+    } else {
+      hasPlayedRef.current = false;
+    }
   }, [live]);
 
   useEffect(() => {
@@ -721,18 +701,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
   }, [player, playerReady, live, cardMode, muted, autoPlay]);
 
-  // Canvas visibility based on cardMode. Pure DOM-style concern, not player state.
-  useEffect(() => {
-    if (!live) return;
-    if (!containerRef.current) return;
-    const isListening = cardMode === "listen";
-    const canvases = containerRef.current.querySelectorAll("canvas");
-    canvases.forEach((c) => {
-      c.style.visibility = isListening ? "visible" : "hidden";
-      c.style.pointerEvents = "none";
-    });
-  }, [cardMode, live]);
-
   // Clear any pending panel-play timer when cardMode or live changes.
   // This was bundled into Effect B; now separated for clarity.
   useEffect(() => {
@@ -741,12 +709,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       panelPlayTimerRef.current = null;
     }
   }, [cardMode, live]);
-
-  useEffect(() => {
-    if (!live) {
-      hasPlayedRef.current = false;
-    }
-  }, [live]);
 
   useEffect(() => {
     if (!live) return;
@@ -775,7 +737,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     getMoments: () => moments,
     getFireHeat: () => fireHeat,
     getComments: () => comments,
-    getAudioUrl: () => ((data ?? prefetchedData) as any)?.audio_url ?? "",
+    getAudioUrl: () => (fetchedData ?? prefetchedData)?.audio_url ?? "",
     reloadTranscript: (lines: any[], words?: any[]) => {
       player?.updateTranscript(lines, words ?? null);
     },
@@ -785,7 +747,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     set wickBarEnabled(enabled: boolean) {
       if (player) player.wickBarEnabled = enabled;
     },
-  }), [player, moments, fireHeat, comments, data, prefetchedData]);
+  }), [player, moments, fireHeat, comments, fetchedData, prefetchedData]);
 
   // ── Mode context: bundled shape consumed by ModeDispatcher ──
   // All existing state, derived data, refs, and action callbacks flow through here.
@@ -795,7 +757,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     live,
     playerReady,
     player,
-    data,
+    data: fetchedData,
     danceId,
     postId: postId ?? null,
     lyricDanceUrl,
@@ -810,7 +772,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     profileMap,
     comments,
     currentTimeSec,
-    effectiveMuted,
+    muted,
     showMuteIndicator,
     setCardMode,
     setComments,
@@ -836,14 +798,15 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     },
     onCommentAdded: (comment) => setComments((prev) =>
       (prev.some((c) => c.id === comment.id) ? prev : [...prev, comment])),
+    onShareClip: () => setViralClipOpen(true),
   }), [
-    cardMode, live, playerReady, player, data, danceId, postId, lyricDanceUrl,
+    cardMode, live, playerReady, player, fetchedData, danceId, postId, lyricDanceUrl,
     spotifyTrackId, userId, moments, fireHeat, fireUserMap, fireAnonCount,
-    profileMap, comments, currentTimeSec, effectiveMuted, showMuteIndicator,
+    profileMap, comments, currentTimeSec, muted, showMuteIndicator,
     setCardMode, setComments, handleCanvasTap, seekOnly,
   ]);
 
-  // 13. Render
+  // Render
   return (
     <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
       <PlayerHeader
@@ -902,9 +865,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         )}
 
         <LyricTextLayer
-          lines={((data ?? prefetchedData) as any)?.lines ?? []}
-          words={((data ?? prefetchedData) as any)?.words}
-          phrases={((data ?? prefetchedData) as any)?.cinematic_direction?.phrases}
+          lines={(fetchedData ?? prefetchedData)?.lines ?? []}
+          words={(fetchedData ?? prefetchedData)?.words}
+          phrases={(fetchedData ?? prefetchedData)?.cinematic_direction?.phrases}
           typography={resolvedTypography}
           currentTimeSec={currentTimeSec}
           // DOM text is the stand-in until the canvas engine is live.
@@ -913,33 +876,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         />
 
         <ModeDispatcher ctx={modeCtx} />
-
-        {live && cardMode === "listen" ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setViralClipOpen(true);
-            }}
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              zIndex: 45,
-              width: 34,
-              height: 34,
-              borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "rgba(0,0,0,0.35)",
-              color: "rgba(255,255,255,0.9)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            aria-label="Share clip"
-          >
-            <Share2 size={14} />
-          </button>
-        ) : null}
       </div>
 
       <div
@@ -1006,13 +942,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         <ViralClipModal
           isOpen={viralClipOpen}
           onClose={() => setViralClipOpen(false)}
-          getPlayer={getPlayerStable}
+          getPlayer={getPlayer}
           moments={moments}
           fireHeat={fireHeat}
           comments={comments}
           songTitle={songTitle}
           artistName={artistName ?? "artist"}
-          audioUrl={((data ?? prefetchedData) as any)?.audio_url ?? ""}
+          audioUrl={(fetchedData ?? prefetchedData)?.audio_url ?? ""}
         />
       )}
     </div>

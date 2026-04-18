@@ -116,7 +116,7 @@ const LEGIBILITY = {
 // ──────────────────────────────────────────────────────────────
 
 export interface LyricDanceData {
-  id: string;
+  id?: string;
   user_id: string;
   post_id?: string | null;
   artist_slug: string;
@@ -125,25 +125,41 @@ export interface LyricDanceData {
   artist_name: string;
   song_name?: string;
   title?: string;
-  audio_url: string;
-  lyrics?: LyricLine[];
-  lines?: any;
-  words?: Array<{ word: string; start: number; end: number; speaker_id?: string }>;
+  audio_url?: string;
+  lyrics?: Array<{ text: string; start: number; end: number; [key: string]: unknown }> | null;
+  lines?: Array<{ text: string; start: number; end: number; [key: string]: unknown }> | null;
+  words?: Array<{ word: string; start: number; end: number; speaker_id?: string; [key: string]: unknown }> | null;
   motion_profile_spec?: PhysicsSpec;
   physics_spec?: PhysicsSpec;
-  beat_grid: { bpm: number; beats: number[]; confidence: number; _duration?: number };
-  palette: string[];
+  beat_grid?: {
+    bpm?: number;
+    beats?: number[];
+    confidence?: number;
+    _duration?: number;
+    _analysis?: unknown;
+  } | null;
+  palette?: string[] | null;
   system_type?: string;
   artist_dna?: any;
   seed?: string;
   frame_state?: any;
-  cinematic_direction: CinematicDirection | null;
-  section_images?: string[];
-  auto_palettes?: string[][];
+  cinematic_direction?: (CinematicDirection & {
+    phrases?: Array<{ start: number; end: number; text: string; [key: string]: unknown }>;
+    sections?: unknown[];
+    [key: string]: unknown;
+  }) | null;
+  section_images?: (string | null)[] | null;
+  auto_palettes?: string[][] | null;
   scene_context?: SceneContext | null;
   cover_image_url?: string | null;
   album_art_url?: string | null;
-  empowerment_promise?: any;
+  empowerment_promise?: {
+    emotionalJob?: string;
+    fromState?: string;
+    toState?: string;
+    promise?: string;
+    hooks?: string[];
+  } | null;
   spotify_track_id?: string | null;
   top_reaction?: { emoji: string; count: number; line_text: string } | null;
   preview_ready?: boolean;
