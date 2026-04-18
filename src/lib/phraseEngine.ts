@@ -1,3 +1,5 @@
+import { deriveRevealStyle, type RevealStyle } from "@/lib/revealStyle";
+
 export type RawWord = { word: string; start: number; end: number };
 
 export interface PhraseBlock {
@@ -11,7 +13,7 @@ export interface PhraseBlock {
   exitEffect: string;
   composition: 'stack' | 'line' | 'center_word';
   bias: 'left' | 'center' | 'right';
-  revealStyle: 'instant' | 'stagger_fast' | 'stagger_slow';
+  revealStyle: RevealStyle;
   holdClass: 'short_hit' | 'medium_groove' | 'long_emotional';
 }
 
@@ -452,21 +454,6 @@ function assignBias(
   return 'center';
 }
 
-function assignRevealStyle(block: PhraseDraft): 'instant' | 'stagger_fast' | 'stagger_slow' {
-  // Solo words slam in instantly
-  if (block.wordCount === 1) return 'instant';
-  // Very fast phrases (high words-per-second) → instant
-  const wps = block.wordCount / Math.max(0.1, block.durationMs / 1000);
-  if (wps >= 5) return 'instant';
-  // Short phrases → instant
-  if (block.durationMs < 600) return 'instant';
-  // Long, slow phrases → stagger_slow (deliberate reveal)
-  if (block.durationMs >= 2500 && wps < 2.5) return 'stagger_slow';
-  // Medium phrases with breathing room → stagger_slow
-  if (block.durationMs >= 1500 && block.wordCount <= 4) return 'stagger_slow';
-  // Default: stagger_fast
-  return 'stagger_fast';
-}
 
 function assignHoldClass(block: PhraseDraft): 'short_hit' | 'medium_groove' | 'long_emotional' {
   // Very fast → short_hit (punch and go)
@@ -516,13 +503,28 @@ export function buildPhrases(
 
   const finalBlocks = applySoloSplits(initialBlocks);
   const phrases: PhraseBlock[] = [];
+  const sectionReveals = new Map<number, RevealStyle[]>();
+  const sectionIndexForBlock = (block: PhraseDraft): number => {
+    if (!sectionContext || sectionContext.length === 0) return 0;
+    for (let s = 0; s < sectionContext.length; s++) {
+      const sec = sectionContext[s];
+      if (block.startTime >= sec.startSec && block.startTime < sec.endSec) {
+        return s;
+      }
+    }
+    return Math.max(0, sectionContext.length - 1);
+  };
+
   let prevEffect: string | null = null;
   for (let i = 0; i < finalBlocks.length; i++) {
     const block = finalBlocks[i];
     const next = i < finalBlocks.length - 1 ? finalBlocks[i + 1] : null;
 
+    const secIdx = sectionIndexForBlock(block);
+    const recent = sectionReveals.get(secIdx) ?? [];
+
     // Find which section this phrase belongs to
-    const section = sectionContext?.find(s =>
+    const section = sectionContext?.[secIdx] ?? sectionContext?.find(s =>
       block.startTime >= s.startSec && block.startTime < s.endSec
     );
     const sectionHeroes = section?.heroWords ?? [];
@@ -535,7 +537,8 @@ export function buildPhrases(
     const endIndex = block.words[block.words.length - 1].index;
     const composition = assignComposition(block);
     const bias = assignBias(block, i, composition);
-    const revealStyle = assignRevealStyle(block);
+    const revealStyle = deriveRevealStyle(block.durationMs / 1000, block.wordCount, recent);
+    sectionReveals.set(secIdx, [revealStyle, ...recent].slice(0, 2));
     const holdClass = assignHoldClass(block);
     phrases.push({
       wordRange: [startIndex, endIndex],

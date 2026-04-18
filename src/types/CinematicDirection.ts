@@ -88,7 +88,12 @@ export interface CinematicPhrase {
   composition?: 'stack' | 'line' | 'center_word';
   /** Horizontal bias */
   bias?: 'left' | 'center' | 'right';
-  /** Word reveal timing */
+  /**
+   * @deprecated Reveal style is physics-derived from phrase duration + word count
+   * via `deriveRevealStyle` in src/lib/revealStyle.ts. This field is accepted for
+   * backward-compat with cached AI outputs but is ignored by the compiler.
+   * New AI prompts should not request this field.
+   */
   revealStyle?: 'instant' | 'stagger_fast' | 'stagger_slow';
   /** Hold timing class */
   holdClass?: 'short_hit' | 'medium_groove' | 'long_emotional';
