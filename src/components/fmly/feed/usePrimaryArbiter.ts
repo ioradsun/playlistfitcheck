@@ -17,11 +17,10 @@ export function usePrimaryArbiter(
   cardRefs: React.MutableRefObject<Map<string, HTMLElement>>,
   renderedIds: Set<string>,
   postIds: string[],
+  renderedIdsVersion = 0,
 ): ArbiterResult {
   const [result, setResult] = useState<ArbiterResult>({ primaryId: null, closestIndex: 0 });
-  // Refs that mirror the latest values of renderedIds and postIds without retriggering the effect.
-  // This is critical: these values change on every FmlyFeed render, and if we depended on them
-  // the scroll listener would be torn down and re-added at ~60Hz during fast scroll, dropping events.
+  // Refs that mirror the latest values of renderedIds and postIds without retriggering listeners.
   const renderedIdsRef = useRef(renderedIds);
   const postIdsRef = useRef(postIds);
   renderedIdsRef.current = renderedIds;
@@ -37,7 +36,124 @@ export function usePrimaryArbiter(
   const rafPendingRef = useRef<number | null>(null);
   const velocityRef = useRef(0);
 
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const iosMajor = isIOS
+    ? parseInt((ua.match(/OS (\d+)_/) || [])[1] || "0", 10)
+    : 999;
+  const useIO = typeof window !== "undefined"
+    && "IntersectionObserver" in window
+    && (!isIOS || iosMajor >= 16);
+
   useEffect(() => {
+    if (!useIO) return;
+
+    const getY = () => (scrollContainer ? scrollContainer.scrollTop : window.scrollY);
+    const root = scrollContainer ?? null;
+
+    const measureFromEntries = (
+      entries: IntersectionObserverEntry[],
+    ): { primaryId: string | null; closestIndex: number } => {
+      const visible = entries
+        .map((entry) => {
+          const target = entry.target as HTMLElement;
+          const id = target.dataset.fmlyPostId;
+          if (!id || !renderedIdsRef.current.has(id)) return null;
+          return { id, ratio: entry.intersectionRatio };
+        })
+        .filter((item): item is { id: string; ratio: number } => !!item);
+
+      if (!visible.length) {
+        return { primaryId: null, closestIndex: -1 };
+      }
+
+      visible.sort((a, b) => b.ratio - a.ratio);
+      const best = visible[0];
+      const closestIndex = postIdsRef.current.indexOf(best.id);
+      return {
+        primaryId: best.ratio > 0 ? best.id : null,
+        closestIndex,
+      };
+    };
+
+    const commitPrimary = (measurement: { primaryId: string | null; closestIndex: number }) => {
+      const fast = velocityRef.current > VELOCITY_THRESHOLD_PX_PER_SEC;
+      const primaryId = fast ? null : measurement.primaryId;
+      setResult((prev) =>
+        prev.primaryId === primaryId && prev.closestIndex === measurement.closestIndex
+          ? prev
+          : { primaryId, closestIndex: measurement.closestIndex }
+      );
+      liveCard.set(primaryId);
+    };
+
+    const scheduleSettle = (measurement: { primaryId: string | null; closestIndex: number }) => {
+      if (settleRef.current) clearTimeout(settleRef.current);
+      settleRef.current = setTimeout(() => {
+        settleRef.current = null;
+        commitPrimary(measurement);
+      }, SETTLE_MS);
+    };
+
+    const observedEntries = new Map<Element, IntersectionObserverEntry>();
+    const prevEntryTimeRef = { current: 0 };
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          observedEntries.set(entry.target, entry);
+        }
+
+        const latestEntry = entries.reduce<IntersectionObserverEntry | null>((latest, entry) => {
+          if (!latest || entry.time > latest.time) return entry;
+          return latest;
+        }, null);
+
+        if (latestEntry) {
+          const y = getY();
+          const dt = latestEntry.time - prevEntryTimeRef.current;
+          if (dt > 0) velocityRef.current = Math.abs((y - lastScrollY.current) / dt) * 1000;
+          lastScrollY.current = y;
+          lastScrollT.current = latestEntry.time;
+          prevEntryTimeRef.current = latestEntry.time;
+        }
+
+        const measurement = measureFromEntries(Array.from(observedEntries.values()));
+        setResult((prev) =>
+          prev.closestIndex === measurement.closestIndex
+            ? prev
+            : { ...prev, closestIndex: measurement.closestIndex }
+        );
+        scheduleSettle(measurement);
+      },
+      {
+        root,
+        threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
+        rootMargin: "-40% 0px -40% 0px",
+      },
+    );
+
+    for (const id of renderedIdsRef.current) {
+      const el = cardRefs.current.get(id);
+      if (!el) continue;
+      el.dataset.fmlyPostId = id;
+      io.observe(el);
+    }
+
+    return () => {
+      io.disconnect();
+      if (settleRef.current) clearTimeout(settleRef.current);
+      if (rafPendingRef.current !== null) {
+        cancelAnimationFrame(rafPendingRef.current);
+        rafPendingRef.current = null;
+      }
+      liveCard.set(null);
+    };
+  }, [useIO, scrollContainer, cardRefs, renderedIdsVersion]);
+
+  useEffect(() => {
+    if (useIO) return;
+
     const target = scrollContainer ?? window;
     const getY = () => (scrollContainer ? scrollContainer.scrollTop : window.scrollY);
 
@@ -140,7 +256,7 @@ export function usePrimaryArbiter(
       }
       liveCard.set(null);
     };
-  }, [scrollContainer, cardRefs, renderedIdsKey]);
+  }, [useIO, scrollContainer, cardRefs, renderedIdsKey]);
 
   return result;
 }

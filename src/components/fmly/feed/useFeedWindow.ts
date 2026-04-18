@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const WINDOW_RADIUS = 3;
 
@@ -7,6 +7,7 @@ export interface FeedWindow {
   windowStart: number;
   windowEnd: number;
   renderedIds: Set<string>;
+  renderedIdsVersion: number;
   onCardMeasure: (id: string, height: number) => void;
   estimateHeight: (index: number) => number;
   cardRefs: React.MutableRefObject<Map<string, HTMLElement>>;
@@ -27,10 +28,24 @@ export function useFeedWindow(postCount: number, postIds: string[]): FeedWindow 
   const windowStart = Math.max(0, activeIndex - WINDOW_RADIUS);
   const windowEnd = Math.min(postCount - 1, activeIndex + WINDOW_RADIUS);
 
-  const renderedIds = new Set<string>();
-  for (let i = windowStart; i <= windowEnd; i += 1) {
-    if (postIds[i]) renderedIds.add(postIds[i]);
-  }
+  const renderedIds = useMemo(() => {
+    const s = new Set<string>();
+    for (let i = windowStart; i <= windowEnd; i += 1) {
+      if (postIds[i]) s.add(postIds[i]);
+    }
+    return s;
+  }, [windowStart, windowEnd, postIds]);
+
+  const renderedIdsVersionRef = useRef(0);
+  const lastRenderedIdsKeyRef = useRef<string>("");
+  const renderedIdsVersion = useMemo(() => {
+    const key = Array.from(renderedIds).sort().join(",");
+    if (key !== lastRenderedIdsKeyRef.current) {
+      lastRenderedIdsKeyRef.current = key;
+      renderedIdsVersionRef.current += 1;
+    }
+    return renderedIdsVersionRef.current;
+  }, [renderedIds]);
 
   const onCardMeasure = useCallback((id: string, h: number) => {
     if (h > 0) heights.current.set(id, h);
@@ -47,5 +62,15 @@ export function useFeedWindow(postCount: number, postIds: string[]): FeedWindow 
     return all[Math.floor(all.length / 2)];
   }, [postIds]);
 
-  return { activeIndex, windowStart, windowEnd, renderedIds, onCardMeasure, estimateHeight, cardRefs, setActiveIndex };
+  return {
+    activeIndex,
+    windowStart,
+    windowEnd,
+    renderedIds,
+    renderedIdsVersion,
+    onCardMeasure,
+    estimateHeight,
+    cardRefs,
+    setActiveIndex,
+  };
 }

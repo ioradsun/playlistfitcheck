@@ -22,11 +22,18 @@ import { getPreloadedImage } from "@/lib/imagePreloadCache";
 import { useResolvedTypography } from "@/hooks/useResolvedTypography";
 
 function hydrateRow(raw: LyricDanceData): LyricDanceData {
+  const cinematicDirection = raw.cinematic_direction;
+  const alreadyNormalized = !!cinematicDirection
+    && typeof cinematicDirection === "object"
+    && !Array.isArray(cinematicDirection)
+    && ("sections" in cinematicDirection || "phrases" in cinematicDirection);
   return {
     ...raw,
-    cinematic_direction: raw.cinematic_direction
-      ? normalizeCinematicDirection(raw.cinematic_direction)
-      : raw.cinematic_direction,
+    cinematic_direction: alreadyNormalized
+      ? cinematicDirection
+      : (cinematicDirection
+        ? normalizeCinematicDirection(cinematicDirection)
+        : cinematicDirection),
   };
 }
 
@@ -52,7 +59,7 @@ function hydrateRow(raw: LyricDanceData): LyricDanceData {
  * Every engine/FMLY/fire/comments concern is gated on `live`.
  * When live=false, only data fetching and render remain active.
  */
-interface LyricDanceEmbedProps {
+export interface LyricDanceEmbedProps {
   lyricDanceId: string;
   songTitle: string;
   artistName?: string;
@@ -155,6 +162,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   useEffect(() => {
     if (prefetchedData) {
       setFetchedData((prev) => {
+        if (prev === prefetchedData) return prev;
         if (prev && prev.id === prefetchedData.id && prev.cinematic_direction) return prev;
         return hydrateRow(prefetchedData);
       });
@@ -323,12 +331,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     audio.addEventListener("pause", checkPlaying);
     document.addEventListener("visibilitychange", onVis);
 
-    const interval = setInterval(checkPlaying, 200);
     checkPlaying();
 
     return () => {
       cancelAnimationFrame(rafId);
-      clearInterval(interval);
       audio.removeEventListener("play", checkPlaying);
       audio.removeEventListener("pause", checkPlaying);
       document.removeEventListener("visibilitychange", onVis);
