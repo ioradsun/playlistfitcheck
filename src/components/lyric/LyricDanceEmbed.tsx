@@ -827,7 +827,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           phrases={((data ?? prefetchedData) as any)?.cinematic_direction?.phrases}
           typography={resolvedTypography}
           currentTimeSec={currentTimeSec}
-          ownsText={true}
+          // DOM text is the stand-in until the canvas engine is live.
+          // Once canvas takes over, DOM text steps out for primary cards.
+          ownsText={!live || !playerReady}
         />
 
         {live && cardMode === "listen" && (
