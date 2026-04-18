@@ -204,6 +204,7 @@ function FeedList({
           registerRef={registerRef}
           onMeasure={feedWindow.onCardMeasure}
           onRequestPrimary={handleRequestPrimary}
+          reelsMode={reelsMode}
         />
       ))}
 

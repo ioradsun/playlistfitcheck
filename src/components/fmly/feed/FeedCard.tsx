@@ -3,6 +3,7 @@ import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import type { FmlyPost } from "@/components/fmly/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { cn } from "@/lib/utils";
 
 interface Props {
   post: FmlyPost;
@@ -14,6 +15,9 @@ interface Props {
   onMeasure: (id: string, height: number) => void;
   /** Called when user taps a non-primary card. Parent handles promotion. */
   onRequestPrimary?: (postId: string) => void;
+  /** When true, card renders full viewport height with snap-scroll alignment.
+   *  Set by parent based on device detection (iOS / narrow viewport). */
+  reelsMode?: boolean;
 }
 
 export const FeedCard = memo(function FeedCard({
@@ -23,6 +27,7 @@ export const FeedCard = memo(function FeedCard({
   registerRef,
   onMeasure,
   onRequestPrimary,
+  reelsMode = false,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -50,23 +55,35 @@ export const FeedCard = memo(function FeedCard({
   }, [onRequestPrimary, post.id]);
 
   return (
-    <div ref={rootRef} className="px-2 pb-3">
+    <div
+      ref={rootRef}
+      className={cn(
+        "shrink-0",
+        reelsMode ? "h-[100dvh] snap-start" : "px-2 pb-3",
+      )}
+    >
       <div
-        className="relative overflow-hidden rounded-2xl"
+        className={cn(
+          "relative overflow-hidden",
+          reelsMode ? "h-full w-full" : "rounded-2xl",
+        )}
         style={{
           background: "#0a0a0a",
-          border: "1px solid rgba(255,255,255,0.04)",
-          // GPU layer promotion — scroll becomes a composite-only operation,
-          // no per-pixel paint work as the card moves through the viewport.
-          // Cost: ~4-8MB GPU memory per card × ~7 mounted = 30-50MB.
+          border: reelsMode ? "none" : "1px solid rgba(255,255,255,0.04)",
+          // GPU layer promotion — scroll composites on the GPU instead of
+          // repainting per-pixel. ~4-8MB GPU memory per card × ~7 mounted = 30-50MB.
           willChange: "transform",
           transform: "translateZ(0)",
-          // Contain paint work to this subtree — a repaint inside the card
-          // (e.g., canvas redraw, text update) doesn't invalidate adjacent cards.
           contain: "layout paint",
         }}
       >
-        <div className="relative" style={{ height: 320 }}>
+        <div
+          className="relative"
+          style={{
+            height: reelsMode ? "100%" : 320,
+            width: "100%",
+          }}
+        >
           <LyricDanceEmbed
             lyricDanceId={post.project_id ?? ""}
             postId={post.id}
