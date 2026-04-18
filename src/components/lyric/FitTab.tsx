@@ -685,6 +685,56 @@ export function FitTab({
     initialLyric,
   ]);
 
+  const playerReady = !!(danceData && fontReady);
+
+  useEffect(() => {
+    const audio = dancePlayerRef.current?.getPlayer()?.audio;
+    if (!audio) return;
+
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("ended", onEnded);
+
+    return () => {
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("ended", onEnded);
+    };
+  }, [playerReady]);
+
+  const LyricDanceEmbedModule = useMemo(
+    () =>
+      danceId
+        ? lazy(() =>
+            import("@/components/lyric/LyricDanceEmbed").then((m) => ({
+              default: m.LyricDanceEmbed,
+            })),
+          )
+        : null,
+    [danceId],
+  );
+
+  useEffect(() => {
+    if (playerReady || !danceId) {
+      setImageWaitExpired(false);
+      return;
+    }
+
+    setImageWaitExpired(false);
+    const timer = setTimeout(() => setImageWaitExpired(true), 60_000);
+    return () => clearTimeout(timer);
+  }, [playerReady, danceId]);
+
   // Live vote counts per hook index — fetched after promise is generated
   const [hookVoteCounts, setHookVoteCounts] = useState<number[]>([]);
   const getViralClipPlayer = useCallback(
