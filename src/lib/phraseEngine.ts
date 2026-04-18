@@ -1,4 +1,11 @@
-import { deriveRevealStyle, type RevealStyle } from "@/lib/revealStyle";
+import {
+  VarietyEngine,
+  DRAMATIC_EXITS,
+  type RevealStyle,
+  type Composition,
+  type Bias,
+  type ExitEffect,
+} from "@/lib/varietyEngine";
 
 export type RawWord = { word: string; start: number; end: number };
 
@@ -10,7 +17,7 @@ export interface PhraseBlock {
   end: number;
   durationMs: number;
   heroWord: string;
-  exitEffect: string;
+  exitEffect: ExitEffect;
   composition: 'stack' | 'line' | 'center_word';
   bias: 'left' | 'center' | 'right';
   revealStyle: RevealStyle;
@@ -302,42 +309,26 @@ function energyModifyEffect(effect: string, sectionEnergy: number | undefined): 
   return effect;
 }
 
-export function calcExitEffectV2(
-  block: PhraseDraft,
-  nextBlock: PhraseDraft | null,
-  prevEffect: string | null,
-  sectionEnergy?: number,
-): string {
-  // Layer 1: phrase-text semantic scan
+/**
+ * Returns a dramatic exit suggestion IF the phrase text or hero semantically suggests one.
+ * Returns null for phrases with no dramatic semantic signal.
+ */
+function semanticDramaticExit(block: PhraseDraft, sectionEnergy?: number): ExitEffect | null {
   let effect = phraseSemanticEffect(block.text);
-
-  // Layer 2: heroWord semantic scan (if phrase text didn't match)
   if (!effect) {
-    const heroClean = block.words.reduce((best, w) =>
-      w.d > best.d ? w : best, block.words[0]).clean;
+    const heroClean = block.words.reduce(
+      (best, w) => (w.d > best.d ? w : best),
+      block.words[0],
+    ).clean;
     effect = phraseSemanticEffect(heroClean);
   }
-
-  // Layer 3: energy modifier
-  if (effect) {
+  if (effect && sectionEnergy !== undefined) {
     effect = energyModifyEffect(effect, sectionEnergy);
   }
-
-  // Layer 4: timing fallback
-  if (!effect) {
-    effect = _calcExitEffectTiming(block, nextBlock, prevEffect);
+  if (effect && (DRAMATIC_EXITS as readonly string[]).includes(effect)) {
+    return effect as ExitEffect;
   }
-
-  // Layer 5: anti-repeat
-  if (effect === prevEffect) {
-    const fallback: Record<string, string> = {
-      slam: "burn", burn: "slam", dissolve: "fade", fade: "dissolve",
-      drift_up: "fade", glitch: "scatter", scatter: "glitch",
-    };
-    effect = fallback[effect] ?? "fade";
-  }
-
-  return VALID_EXIT_EFFECTS.has(effect) ? effect : "fade";
+  return null;
 }
 
 export function normalizeHookKey(text: string): string {
@@ -423,37 +414,6 @@ export function inferSignaturePhrase(
   return scored[0]?.text ?? phrases[0]?.text ?? "";
 }
 
-function assignComposition(block: PhraseDraft): 'stack' | 'line' | 'center_word' {
-  // Solo word or 2-word phrase with a long hold → center_word (big, centered, impactful)
-  if (block.wordCount === 1) return 'center_word';
-  if (block.wordCount === 2 && block.durationMs >= 1500) return 'center_word';
-  // Long phrases → stack (vertical, intimate, multi-line)
-  if (block.wordCount >= 7) return 'stack';
-  // Medium-long phrases occasionally stack for variety
-  if (block.wordCount >= 5 && block.durationMs >= 2000) return 'stack';
-  // Default: line (horizontal, clean)
-  return 'line';
-}
-
-function assignBias(
-  block: PhraseDraft,
-  phraseIndex: number,
-  composition: string,
-): 'left' | 'center' | 'right' {
-  // Solo/center_word compositions → always center
-  if (composition === 'center_word') return 'center';
-  // Stacked compositions → alternate left/right for visual movement
-  if (composition === 'stack') {
-    return phraseIndex % 2 === 0 ? 'left' : 'right';
-  }
-  // Line compositions: cycle through center/left/right
-  // with center weighted heavier (appears ~50% of the time)
-  const cycle = phraseIndex % 5;
-  if (cycle === 1) return 'left';
-  if (cycle === 3) return 'right';
-  return 'center';
-}
-
 
 function assignHoldClass(block: PhraseDraft): 'short_hit' | 'medium_groove' | 'long_emotional' {
   // Very fast → short_hit (punch and go)
@@ -503,7 +463,8 @@ export function buildPhrases(
 
   const finalBlocks = applySoloSplits(initialBlocks);
   const phrases: PhraseBlock[] = [];
-  const sectionReveals = new Map<number, RevealStyle[]>();
+  const variety = new VarietyEngine();
+
   const sectionIndexForBlock = (block: PhraseDraft): number => {
     if (!sectionContext || sectionContext.length === 0) return 0;
     for (let s = 0; s < sectionContext.length; s++) {
@@ -515,31 +476,48 @@ export function buildPhrases(
     return Math.max(0, sectionContext.length - 1);
   };
 
-  let prevEffect: string | null = null;
   for (let i = 0; i < finalBlocks.length; i++) {
     const block = finalBlocks[i];
-    const next = i < finalBlocks.length - 1 ? finalBlocks[i + 1] : null;
 
     const secIdx = sectionIndexForBlock(block);
-    const recent = sectionReveals.get(secIdx) ?? [];
-
-    // Find which section this phrase belongs to
-    const section = sectionContext?.[secIdx] ?? sectionContext?.find(s =>
-      block.startTime >= s.startSec && block.startTime < s.endSec
+    variety.setSection(secIdx);
+    const section = sectionContext?.[secIdx] ?? sectionContext?.find(
+      (s) => block.startTime >= s.startSec && block.startTime < s.endSec,
     );
     const sectionHeroes = section?.heroWords ?? [];
     const sectionEnergy = section?.avgEnergy;
 
     const { heroWord } = selectHeroWord(block, sectionHeroes);
-    const exitEffect = calcExitEffectV2(block, next, prevEffect, sectionEnergy);
-    prevEffect = exitEffect;
+
+    const aiWantsCenterWord =
+      (block.wordCount === 2 && block.durationMs >= 1500) ||
+      (block.wordCount <= 3 && !!heroWord && block.durationMs >= 1200);
+
+    const aiDramaticExit = semanticDramaticExit(block, sectionEnergy);
+    const aiClimax = aiDramaticExit !== null ||
+      (sectionEnergy !== undefined && sectionEnergy >= 0.8 && block.wordCount <= 4);
+
+    const durationSec = block.durationMs / 1000;
+
+    const revealStyle: RevealStyle = variety.pickReveal({
+      durationSec,
+      wordCount: block.wordCount,
+    });
+    const composition: Composition = variety.pickComposition({
+      wordCount: block.wordCount,
+      durationSec,
+      aiWantsCenterWord,
+    });
+    const bias: Bias = variety.pickBias({ composition });
+    const exitEffect: ExitEffect = variety.pickExit({
+      aiClimax,
+      aiDramaticExit: aiDramaticExit ?? undefined,
+    });
+
     const startIndex = block.words[0].index;
     const endIndex = block.words[block.words.length - 1].index;
-    const composition = assignComposition(block);
-    const bias = assignBias(block, i, composition);
-    const revealStyle = deriveRevealStyle(block.durationMs / 1000, block.wordCount, recent);
-    sectionReveals.set(secIdx, [revealStyle, ...recent].slice(0, 2));
     const holdClass = assignHoldClass(block);
+
     phrases.push({
       wordRange: [startIndex, endIndex],
       heroWord,
