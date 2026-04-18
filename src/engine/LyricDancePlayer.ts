@@ -4201,37 +4201,6 @@ export class LyricDancePlayer {
         sx * camZoom,
         sy * camZoom,
       );
-      if (
-        typeof window !== "undefined" &&
-        (window as any).__ENGINE_DIAG &&
-        (chunk as any)._groupIndex !== this._diagLastDrawnGroup &&
-        (chunk as any)._wordIndexInGroup === 0
-      ) {
-        this._diagLastDrawnGroup = (chunk as any)._groupIndex;
-        console.log("[DIAG draw]", {
-          text: chunk.text,
-          chunkX: chunk.x,
-          chunkY: chunk.y,
-          rawDrawX,
-          rawDrawY,
-          centerX,
-          centerY,
-          drawX,
-          finalDrawY,
-          alpha: drawAlpha,
-          sx,
-          sy,
-          camZoom,
-          camShakeX,
-          camShakeY,
-          camRotation,
-          camCX,
-          camCY,
-          matrix: { a: ma, b: mb, c: mc, d: md, e: me, f: mf },
-          dpr,
-          textVerticalBias: this._textVerticalBias,
-        });
-      }
       this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
       // Hero glow: subtle white bloom behind hero words (quality tier >= 2 only)
