@@ -260,8 +260,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     if (!container) return;
 
     let rafPending = 0;
-    let lastAppliedW = player.width;
-    let lastAppliedH = player.height;
+    let lastAppliedW = player.currentWidth;
+    let lastAppliedH = player.currentHeight;
 
     const applyResize = () => {
       rafPending = 0;
