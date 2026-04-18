@@ -21,17 +21,6 @@ export async function logEngagementEvent(
 }
 
 /**
- * Increment impression count for a post.
- */
-export async function logImpression(postId: string) {
-  try {
-    await supabase.rpc("increment_impressions" as any, { _post_id: postId });
-  } catch {
-    // Best-effort
-  }
-}
-
-/**
  * Check if a user already has an active or cooldown submission for a given track.
  * Returns the conflicting post if found.
  */

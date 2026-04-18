@@ -513,9 +513,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
     supabase
       .from("project_comments" as any)
-      .select("id, text, line_index, submitted_at, user_id")
+      .select("id, text, line_index, created_at, user_id")
       .eq("project_id", danceId)
-      .order("submitted_at", { ascending: true })
+      .order("created_at", { ascending: true })
       .limit(300)
       .then(({ data: rows }) => { if (mounted && rows) setComments(rows as unknown as Comment[]); });
 

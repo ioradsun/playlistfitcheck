@@ -149,7 +149,7 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
       id: `temp-${Date.now()}`,
       text,
       line_index: lineIndex,
-      submitted_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       user_id: user?.id ?? null,
     };
     onCommentAdded(optimistic);
@@ -163,7 +163,7 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
         session_id: getSessionId(),
         user_id: user?.id ?? null,
       })
-      .select("id, text, line_index, submitted_at, user_id" as any)
+      .select("id, text, line_index, created_at, user_id" as any)
       .single();
   }, [danceId, isInstrumental, moments, onCommentAdded, user?.id]);
 
