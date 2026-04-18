@@ -9,7 +9,7 @@ interface Comment {
   id: string;
   text: string;
   line_index: number | null;
-  submitted_at: string;
+  created_at: string;
   user_id: string | null;
 }
 
@@ -126,7 +126,7 @@ export function OneTruth({
       id: `temp-${Date.now()}`,
       text: trimmed,
       line_index: lineIndex,
-      submitted_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       user_id: user?.id ?? null,
     };
     onCommentSubmitted(optimistic);
