@@ -77,6 +77,7 @@ interface Props {
   onTitleChange?: (newTitle: string) => void;
   subView?: "fit" | "data";
   filmMode?: "song" | "beat";
+  autoPlay?: boolean;
 }
 
 const fmtTime = (sec: number) => {
@@ -266,6 +267,7 @@ export function FitTab({
   onTitleChange,
   subView = "fit",
   filmMode = "song",
+  autoPlay = true,
 }: Props) {
   const { user, profile } = useAuth();
   const { canCreate, credits, required } = useVoteGate();
@@ -1201,6 +1203,7 @@ export function FitTab({
                         ?? (danceData as any)?.album_art_url
                         ?? null
                       }
+                      autoPlay={autoPlay}
                     />
                   ) : null}
                 </Suspense>

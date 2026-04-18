@@ -251,6 +251,7 @@ export function LyricFitTab({
             onTitleChange={p.handleTitleChange}
             subView={activeTab === "data" ? "data" : "fit"}
             filmMode={filmMode}
+            autoPlay={activeTab === "fit" || activeTab === "data"}
           />
         </div>
       )}

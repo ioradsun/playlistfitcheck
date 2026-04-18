@@ -68,6 +68,11 @@ interface LyricDanceEmbedProps {
   previewImageUrl?: string | null;
   /** Enables full player behaviors; false renders static preview shell. */
   live?: boolean;
+  /**
+   * When true (default), playback auto-starts once the live player is ready in listen mode.
+   * Set false when the embed is mounted in a hidden/non-active container that must stay silent.
+   */
+  autoPlay?: boolean;
   /** Optional top-left menu slot (typically a menu trigger for feed contexts). */
   menuSlot?: ReactNode;
   /** Invoked when the user taps a non-live card. Feed wrappers implement this
@@ -105,6 +110,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     previewPaletteColor,
     previewImageUrl,
     live = true,
+    autoPlay = true,
     menuSlot,
     onRequestPrimary,
   } = props;
@@ -707,14 +713,18 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       player.setRegion(undefined, undefined);
       player.audio.loop = true;
       player.setMuted(muted);
-      player.play(true);
+      if (autoPlay) {
+        player.play(true);
+      } else {
+        player.pause();
+      }
     } else {
       player.setMuted(true);
       player.audio.loop = false;
       // Don't pause — engine may need to continue for export/preview contexts.
       // Non-primary cards have live=false which tears down the engine via the hook.
     }
-  }, [player, playerReady, live, cardMode, muted]);
+  }, [player, playerReady, live, cardMode, muted, autoPlay]);
 
   // Canvas visibility based on cardMode. Pure DOM-style concern, not player state.
   useEffect(() => {
