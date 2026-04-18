@@ -25,16 +25,23 @@ export const LyricDanceShell = memo(function LyricDanceShell({
   previewImageUrl,
   onRequestPrimary,
 }: LyricDanceEmbedProps) {
-  const [posterLoaded, setPosterLoaded] = useState<boolean>(false);
-
   const posterAlbumArt = prefetchedData?.album_art_url ?? null;
   const posterSectionImage = previewImageUrl ?? null;
   const posterSrc = posterSectionImage && getPreloadedImage(posterSectionImage)
     ? posterSectionImage
     : (posterAlbumArt || posterSectionImage || TRANSPARENT_PIXEL);
 
+  const [posterLoaded, setPosterLoaded] = useState<boolean>(() => {
+    if (!posterSrc || posterSrc === TRANSPARENT_PIXEL) return false;
+    return !!getPreloadedImage(posterSrc);
+  });
+
   useEffect(() => {
-    setPosterLoaded(false);
+    if (!posterSrc || posterSrc === TRANSPARENT_PIXEL) {
+      setPosterLoaded(false);
+      return;
+    }
+    setPosterLoaded(!!getPreloadedImage(posterSrc));
   }, [posterSrc]);
 
   return (
