@@ -33,6 +33,25 @@ export function useFeedWindow(
   }, [activeIndex, postCount]);
 
   useEffect(() => {
+    if (!reelsMode) return;
+    let raf = 0;
+    const onResize = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setViewportH(window.innerHeight);
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [reelsMode]);
+
+  const cardHeight = reelsMode ? viewportH : CARD_TOTAL_HEIGHT_PX;
+
+  useEffect(() => {
     if (!scrollContainer) return;
     let raf = 0;
     const readPosition = () => {
@@ -65,25 +84,6 @@ export function useFeedWindow(
   }, [windowStart, windowEnd, postIds]);
 
   const renderedIdsVersion = windowStart * 100000 + windowEnd + postIds.length;
-
-  useEffect(() => {
-    if (!reelsMode) return;
-    let raf = 0;
-    const onResize = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        setViewportH(window.innerHeight);
-      });
-    };
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [reelsMode]);
-
-  const cardHeight = reelsMode ? viewportH : CARD_TOTAL_HEIGHT_PX;
 
   return {
     activeIndex,
