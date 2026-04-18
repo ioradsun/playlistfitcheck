@@ -235,7 +235,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     // Remove this block when diagnosis is complete.
     if (typeof window !== "undefined") {
       (window as any).__engine = p;
-      (window as any).__enginePostId = post?.id ?? danceId ?? "unknown";
+      (window as any).__enginePostId = postId ?? danceId ?? "unknown";
       console.log(`[DIAG] Engine exposed as window.__engine for post ${(window as any).__enginePostId}`);
     }
 
