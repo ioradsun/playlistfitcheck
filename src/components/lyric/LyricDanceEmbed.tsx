@@ -680,13 +680,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [live]);
 
   useEffect(() => {
-    if (!live) return;
-    if (!player) return;
-    player.textRenderMode = "dom";
-    return () => { player.textRenderMode = "canvas"; };
-  }, [player, live]);
-
-  useEffect(() => {
     if (muted) {
       setShowMuteIndicator(true);
       const timeout = setTimeout(() => setShowMuteIndicator(false), 2000);
