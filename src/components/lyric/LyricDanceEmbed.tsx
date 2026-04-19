@@ -641,6 +641,27 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     return 0;
   }, [player, moments, lyricSections.allLines, lyricSections.isReady]);
 
+  const getAttributedPhraseIndex = useCallback(() => {
+    const t = player?.audio?.currentTime ?? 0;
+    const phrases = effectiveData?.cinematic_direction?.phrases;
+    if (!phrases?.length) {
+      return getCurrentFireIndex();
+    }
+
+    const MIN_REACTION_MS = 0.3;
+
+    for (let i = phrases.length - 1; i >= 0; i -= 1) {
+      const phrase = phrases[i];
+      const pStart = phrase.start ?? 0;
+      const pEnd = phrase.end ?? 0;
+
+      if (pEnd <= t) return i;
+      if (pStart <= t && (t - pStart) >= MIN_REACTION_MS) return i;
+    }
+
+    return 0;
+  }, [player, effectiveData, getCurrentFireIndex]);
+
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;
     const currentTime = player?.audio?.currentTime ?? 0;
@@ -813,7 +834,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     seekOnly,
     onFireMoment: (lineIndex, timeSec, holdMs) => {
       if (!danceId) return;
-      player?.fireFire(holdMs);
       emitFire(danceId, lineIndex, timeSec, holdMs, "feed", userId ?? null);
     },
     onPlayLine: (startSec, endSec) => {
@@ -904,8 +924,10 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             comments={comments}
             onFire={(lineIndex, holdMs) => {
               modeCtx.onFireMoment(lineIndex, player?.audio.currentTime ?? 0, holdMs);
+              const phrase = effectiveData?.cinematic_direction?.phrases?.[lineIndex];
+              if (phrase?.text) player?.showEcho(phrase.text);
             }}
-            getLineIndex={getCurrentFireIndex}
+            getLineIndex={getAttributedPhraseIndex}
             onSeekTo={seekOnly}
             onToastTap={(momentIdx) => {
               const m = moments[momentIdx];

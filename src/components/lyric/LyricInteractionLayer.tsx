@@ -7,6 +7,23 @@ import { fetchSessionFires } from "@/lib/fire";
 import { createFireHold } from "@/lib/fireHold";
 
 const BAR_HEIGHT = 44;
+const MIN_SEGMENT_HEIGHT = 2;
+
+const getSegmentHeight = (fireWeight: number, maxWeight: number): number => {
+  if (fireWeight <= 0) return MIN_SEGMENT_HEIGHT;
+  const normalized = Math.log1p(fireWeight) / Math.log1p(Math.max(1, maxWeight));
+  return MIN_SEGMENT_HEIGHT + normalized * 18;
+};
+
+const getSegmentColor = (fireWeight: number, maxWeight: number): string => {
+  if (fireWeight <= 0) return "rgba(255,255,255,0.06)";
+  const t = Math.min(1, fireWeight / Math.max(1, maxWeight));
+  const r = Math.round(80 + t * 175);
+  const g = Math.round(80 + t * 120);
+  const b = Math.round(80 - t * 40);
+  const a = 0.15 + t * 0.55;
+  return `rgba(${r},${g},${b},${a})`;
+};
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -52,31 +69,19 @@ export function FmlyBar({
     r: number; g: number; b: number;
     segIdx: number; x0: number; x1: number;
   }>>([]);
-  const pendingFireSpawnsRef = useRef<Array<{ count: number; intensity: number }>>([]);
   const pendingPlayheadSpawnsRef = useRef<Array<{ count: number; intensity: number }>>([]);
   const animRef = useRef<number>(0);
   const scrubbingRef = useRef(false);
   const progressPctRef = useRef(0);
-  const playheadRef = useRef<HTMLDivElement>(null);
   const toastMomentRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
-  const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeHoldMomentRef = useRef<number>(-1);
+  const activeHoldMsRef = useRef(0);
 
   const momentFireCounts = useMemo(
     () => deriveMomentFireCounts(fireHeat, moments),
     [fireHeat, moments],
   );
-  const maxFireCount = useMemo(() => Math.max(1, ...Object.values(momentFireCounts)), [momentFireCounts]);
-
-  const hottestIdx = useMemo(() => {
-    if (!moments.length) return -1;
-    let best = 0;
-    for (let i = 1; i < moments.length; i++) {
-      if ((momentFireCounts[i] ?? 0) > (momentFireCounts[best] ?? 0)) best = i;
-    }
-    return best;
-  }, [moments, momentFireCounts]);
-
   /**
    * Timeline duration — the authoritative length of the scrub bar's span.
    *
@@ -98,17 +103,6 @@ export function FmlyBar({
   const ready = totalDuration > 0;
   const progressPct = Math.max(0, Math.min(100, (currentTimeSec / Math.max(0.0001, totalDuration)) * 100));
   progressPctRef.current = progressPct;
-
-  // Drive playhead position directly on DOM — bypasses React diff/layout entirely
-  // so the line glides at 60fps instead of blinking with each React render.
-  useEffect(() => {
-    const el = playheadRef.current;
-    if (!el) return;
-    el.style.left = `${progressPct}%`;
-    // Hide playhead when not ready OR playhead at position 0
-    // (position 0 is the pre-playback state — don't show a phantom mark).
-    el.style.opacity = (ready && progressPct > 0) ? "1" : "0";
-  });
 
   const currentMomentIdx = useMemo(
     () => moments.findIndex((m) => currentTimeSec >= m.startSec && currentTimeSec < m.endSec),
@@ -136,17 +130,6 @@ export function FmlyBar({
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
   }, []);
 
-  const clearHoldInterval = useCallback(() => {
-    if (holdIntervalRef.current) {
-      clearInterval(holdIntervalRef.current);
-      holdIntervalRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => () => {
-    clearHoldInterval();
-  }, [clearHoldInterval]);
-
   // ── Hydrate user fires from DB on mount ─────────────────────────────────
   useEffect(() => {
     if (!moments.length || hydrated || !danceId) return;
@@ -168,7 +151,10 @@ export function FmlyBar({
 
   useEffect(() => {
     fireHoldControllerRef.current = createFireHold({
-      onCanvasTrigger: (elapsedMs) => player?.fireMoment?.(elapsedMs),
+      onCanvasTrigger: (elapsedMs) => {
+        activeHoldMsRef.current = elapsedMs;
+        player?.fireMoment?.(elapsedMs);
+      },
     });
     return () => {
       fireHoldControllerRef.current?.destroy();
@@ -232,27 +218,6 @@ export function FmlyBar({
       }
     };
 
-    const spawnFireEmbers = (count: number, intensity: number) => {
-      const rect = canvas.parentElement?.getBoundingClientRect();
-      if (!rect) return;
-      const x0 = rect.width / 2 - 24;
-      const x1 = rect.width / 2 + 24;
-      for (let i = 0; i < count; i++) {
-        if (embers.length >= 24) break;
-        embers.push({
-          x: x0 + Math.random() * (x1 - x0),
-          y: rect.height - 2,
-          vy: -(0.4 + Math.random() * 0.5),
-          vx: (Math.random() - 0.5) * 0.1,
-          life: 0.5 + Math.random() * 0.4,
-          size: 1.0 + intensity * 1.5,
-          opacity: 0.5 + intensity * 0.4,
-          r: 255, g: 140, b: 40,
-          segIdx: -1, x0, x1,
-        });
-      }
-    };
-
     const spawnPlayheadEmbers = (count: number, intensity: number) => {
       const rect = canvas.parentElement?.getBoundingClientRect();
       if (!rect) return;
@@ -286,12 +251,51 @@ export function FmlyBar({
 
       ctx.clearRect(0, 0, rect.width, rect.height);
 
+      const getMomentWeight = (idx: number) => {
+        const base = momentFireCounts[idx] ?? 0;
+        const committedUser = (userFiresRef.current[idx] ?? 0) / 150;
+        const liveHold = activeHoldMomentRef.current === idx ? (activeHoldMsRef.current / 150) : 0;
+        return base + committedUser + liveHold;
+      };
+
+      const maxFire = Math.max(1, ...moments.map((_, i) => getMomentWeight(i)));
+
+      for (let i = 0; i < moments.length; i += 1) {
+        const moment = moments[i];
+        const fireWeight = getMomentWeight(i);
+        const segH = getSegmentHeight(fireWeight, maxFire);
+        const segColor = getSegmentColor(fireWeight, maxFire);
+        const leftPct = moment.startSec / Math.max(0.0001, totalDuration);
+        const rightPct = moment.endSec / Math.max(0.0001, totalDuration);
+        const x = leftPct * rect.width;
+        const w = Math.max(1, (rightPct - leftPct) * rect.width);
+        const breathe = fireWeight > 0
+          ? Math.sin(frame * 0.008 * Math.PI)
+          : 0;
+        const y = rect.height - segH - breathe;
+        ctx.fillStyle = segColor;
+        ctx.fillRect(x + 0.5, y, Math.max(0, w - 1), segH + breathe);
+      }
+
+      const currentPct = progressPctRef.current / 100;
+      const playheadX = currentPct * rect.width;
+      const currentSegIdx = moments.findIndex((m) =>
+        currentPct >= m.startSec / Math.max(0.0001, totalDuration) &&
+        currentPct <= m.endSec / Math.max(0.0001, totalDuration),
+      );
+      const currentSegH = currentSegIdx >= 0
+        ? getSegmentHeight(getMomentWeight(currentSegIdx), maxFire)
+        : MIN_SEGMENT_HEIGHT;
+      const playheadY = rect.height - currentSegH - 2;
+      if (ready && progressPctRef.current > 0) {
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(playheadX, playheadY, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       // Spawn new embers every ~60 frames (~1 second at 60fps)
       if (frame % 60 === 0) {
-        if (hottestIdx >= 0 && (momentFireCounts[hottestIdx] ?? 0) > 0) {
-          const intensity = Math.min(1, (momentFireCounts[hottestIdx] ?? 0) / maxFireCount);
-          spawnEmber(hottestIdx, 74, 222, 128, intensity);
-        }
         const userFires = userFiresRef.current;
         const maxUF = Math.max(1, ...Object.values(userFires));
         for (const [idx, ms] of Object.entries(userFires)) {
@@ -299,16 +303,9 @@ export function FmlyBar({
         }
       }
 
-      while (pendingFireSpawnsRef.current.length > 0) {
-        const req = pendingFireSpawnsRef.current.shift()!;
-        spawnFireEmbers(req.count, req.intensity);
-      }
       while (pendingPlayheadSpawnsRef.current.length > 0) {
         const req = pendingPlayheadSpawnsRef.current.shift()!;
         spawnPlayheadEmbers(req.count, req.intensity);
-      }
-      if (frame % 180 === 0) {
-        spawnFireEmbers(1 + Math.floor(Math.random() * 2), 0.25);
       }
 
       // Update and draw particles
@@ -343,7 +340,7 @@ export function FmlyBar({
 
     animRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animRef.current);
-  }, [moments, hottestIdx, momentFireCounts, maxFireCount, renderTick]);
+  }, [moments, momentFireCounts, renderTick, ready, totalDuration]);
 
   // ── Fire handlers ───────────────────────────────────────────────────────
   const addUserFire = (idx: number, holdMs: number) => {
@@ -353,41 +350,36 @@ export function FmlyBar({
   };
 
   const handleFireTap = useCallback(() => {
-    clearHoldInterval();
     addUserFire(currentMomentIdx, 150);
     pendingPlayheadSpawnsRef.current.push({ count: 2, intensity: 0.3 });
+    activeHoldMomentRef.current = -1;
+    activeHoldMsRef.current = 0;
     if (!danceId) return;
-    player?.fireFire(0);
     onFire(getLineIndex(), 0);
-  }, [clearHoldInterval, currentMomentIdx, danceId, getLineIndex, onFire, player]);
-  const handleFireHoldStart = useCallback(() => {
-    if (holdIntervalRef.current) return;
-    holdIntervalRef.current = setInterval(() => { player?.fireFire(0); }, 300);
-  }, [player]);
+  }, [currentMomentIdx, danceId, getLineIndex, onFire]);
   const handleFireHoldEnd = useCallback((holdMs: number) => {
-    clearHoldInterval();
     addUserFire(currentMomentIdx, holdMs);
     const intensity = Math.min(1.0, holdMs / 2000);
-    pendingFireSpawnsRef.current.push({ count: Math.floor(4 + intensity * 8), intensity });
     pendingPlayheadSpawnsRef.current.push({ count: Math.floor(3 + intensity * 5), intensity });
+    activeHoldMomentRef.current = -1;
+    activeHoldMsRef.current = 0;
     if (!danceId) return;
-    player?.fireFire(holdMs);
     onFire(getLineIndex(), holdMs);
-  }, [clearHoldInterval, currentMomentIdx, danceId, getLineIndex, onFire, player]);
+  }, [currentMomentIdx, danceId, getLineIndex, onFire]);
 
   const handleDown = () => {
     setPressing(true);
-    pendingFireSpawnsRef.current.push({ count: 5, intensity: 0.6 });
+    activeHoldMomentRef.current = currentMomentIdx;
+    activeHoldMsRef.current = 0;
     pendingPlayheadSpawnsRef.current.push({ count: 3, intensity: 0.5 });
-    player?.fireMoment?.(0);
-    handleFireHoldStart();
+    player?.fireHoldStart?.();
     fireHoldControllerRef.current?.start();
   };
 
   const handleUp = () => {
     setPressing(false);
     const holdData = fireHoldControllerRef.current?.stop();
-    player?.stopContinuousFire?.();
+    player?.fireHoldEnd?.();
     if (!holdData) return;
     const holdMs = holdData.holdMs;
     if (holdMs < 180) handleFireTap(); else handleFireHoldEnd(holdMs);
@@ -421,56 +413,6 @@ export function FmlyBar({
           <canvas
             ref={emberCanvasRef}
             style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 3 }}
-          />
-
-          {/* Segment heat backgrounds */}
-          {moments.map((moment, idx) => {
-            const count = momentFireCounts[idx] ?? 0;
-            if (count <= 0) return null;
-            const leftPct = (moment.startSec / Math.max(0.0001, totalDuration)) * 100;
-            const widthPct = ((moment.endSec - moment.startSec) / Math.max(0.0001, totalDuration)) * 100;
-            const isConsensus = idx === hottestIdx && count > 0;
-            const background = isConsensus
-              ? (count >= 10 ? "rgba(74, 222, 128, 0.14)" : "rgba(74, 222, 128, 0.07)")
-              : count >= 10
-                ? "rgba(255, 140, 40, 0.12)"
-                : count >= 1
-                  ? "rgba(255, 140, 40, 0.06)"
-                  : "transparent";
-            return (
-              <div
-                key={`${moment.startSec}-${moment.endSec}-heat`}
-                style={{
-                  position: "absolute",
-                  top: "auto",
-                  bottom: 0,
-                  height: 6,
-                  left: `${leftPct}%`,
-                  width: `${widthPct}%`,
-                  background,
-                  pointerEvents: "none",
-                  zIndex: 0,
-                }}
-              />
-            );
-          })}
-
-          {/* Playhead line — position driven by direct DOM mutation (no React diff blink) */}
-          <div
-            ref={playheadRef}
-            style={{
-              position: "absolute", top: 0, bottom: 0,
-              left: "0%",
-              opacity: 0,
-              width: "1.5px",
-              background: "rgba(255,255,255,0.55)",
-              boxShadow: "0 0 6px rgba(255,255,255,0.3), 0 0 2px rgba(255,255,255,0.6)",
-              pointerEvents: "none",
-              zIndex: 2,
-              willChange: "left",
-              transition: "left 80ms linear, opacity 200ms ease",
-              borderRadius: "1px",
-            }}
           />
 
           {/* Moment divider lines — visual only */}
