@@ -1,4 +1,4 @@
-import type { ComponentType, Dispatch, SetStateAction, RefObject, ReactNode } from "react";
+import type { ComponentType, Dispatch, SetStateAction, ReactNode } from "react";
 import type { Moment } from "@/lib/buildMoments";
 import type { LyricDancePlayer, LyricDanceData } from "@/engine/LyricDancePlayer";
 
@@ -49,11 +49,6 @@ export interface ModeContext {
   lyricDanceUrl: string | null;
   spotifyTrackId: string | null;
   userId: string | null;
-
-  // — Canvas refs (owned by LyricDanceEmbed, attached by ListenMode) —
-  canvasRef: RefObject<HTMLCanvasElement | null>;
-  textCanvasRef: RefObject<HTMLCanvasElement | null>;
-
   // — Derived data —
   moments: Moment[];
   fireHeat: Record<string, { line: Record<number, number>; total: number }>;
