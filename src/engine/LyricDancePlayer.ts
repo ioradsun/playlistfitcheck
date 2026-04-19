@@ -2371,7 +2371,9 @@ export class LyricDancePlayer {
   /** Subscribe to the first-frame paint event. Fires immediately if already painted. Returns an unsubscribe fn. */
   onFirstFrame(cb: () => void): () => void {
     if (this._firstFramePainted) {
-      try { cb(); } catch (err) { console.warn('[LyricDancePlayer] onFirstFrame cb threw:', err); }
+      queueMicrotask(() => {
+        try { cb(); } catch (err) { console.warn('[LyricDancePlayer] onFirstFrame cb threw:', err); }
+      });
       return () => {};
     }
     this._firstFrameCallbacks.push(cb);

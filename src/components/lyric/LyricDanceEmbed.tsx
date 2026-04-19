@@ -130,6 +130,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTimeSecRef = useRef(0);
+  const textLayerRef = useRef<HTMLDivElement>(null);
+  const firstPaintAtRef = useRef<number | null>(null);
   const hasPlayedRef = useRef(false);
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const playStartRef = useRef<number | null>(null);
@@ -148,7 +150,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   );
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
-  const [canvasPainting, setCanvasPainting] = useState(false);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [muted, setMuted] = useState(false);
   const [fireHeat, setFireHeat] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
@@ -221,7 +222,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
     let cancelled = false;
     setPlayerReady(false);
-    setCanvasPainting(false);
 
     const p = new LyricDancePlayer(
       fetchedData,
@@ -265,7 +265,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       if (playerRef.current === p) playerRef.current = null;
       setPlayer((prev) => (prev === p ? null : prev));
       setPlayerReady(false);
-      setCanvasPainting(false);
     };
   }, [live, fetchedData, danceId]);
 
@@ -368,9 +367,28 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   // First-frame paint event — engine-driven, no polling.
   useEffect(() => {
-    if (!live || !player) return;
+    if (!live || !player) {
+      if (textLayerRef.current) {
+        textLayerRef.current.style.transition = "";
+        textLayerRef.current.style.opacity = "1";
+      }
+      firstPaintAtRef.current = null;
+      return;
+    }
+
     return player.onFirstFrame(() => {
-      setCanvasPainting(true);
+      firstPaintAtRef.current = performance.now();
+      const el = textLayerRef.current;
+      if (!el) return;
+      el.style.opacity = "1";
+      el.style.transition = "opacity 80ms linear";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!textLayerRef.current) return;
+          textLayerRef.current.style.opacity = "0";
+        });
+      });
+
       const metrics = player.getBootMetrics();
       const isColdFeedBoot = !hasRecordedColdFeedBoot;
       if (!hasRecordedColdFeedBoot) hasRecordedColdFeedBoot = true;
@@ -918,16 +936,24 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           />
         )}
 
-        <LyricTextLayer
-          lines={effectiveData?.lines ?? []}
-          words={effectiveData?.words}
-          phrases={effectiveData?.cinematic_direction?.phrases}
-          typography={resolvedTypography}
-          currentTimeSec={currentTimeSec}
-          // DOM text is the stand-in until the canvas engine is live.
-          // Once canvas takes over, DOM text steps out for primary cards.
-          ownsText={!live || !canvasPainting}
-        />
+        <div
+          ref={textLayerRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 3,
+            pointerEvents: "none",
+            opacity: 1,
+          }}
+        >
+          <LyricTextLayer
+            lines={effectiveData?.lines ?? []}
+            words={effectiveData?.words}
+            phrases={effectiveData?.cinematic_direction?.phrases}
+            typography={resolvedTypography}
+            currentTimeSec={currentTimeSec}
+          />
+        </div>
 
         <ModeDispatcher ctx={modeCtx} />
       </div>

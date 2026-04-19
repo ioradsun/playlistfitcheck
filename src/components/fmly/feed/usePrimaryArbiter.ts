@@ -28,6 +28,7 @@ export function usePrimaryArbiter(
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncRafRef = useRef<number | null>(null);
+  const resyncRef = useRef<(() => void) | null>(null);
   const velocityRef = useRef(0);
   const lastScrollYRef = useRef(0);
   const lastScrollTRef = useRef(performance.now());
@@ -203,6 +204,11 @@ export function usePrimaryArbiter(
       });
     };
 
+    resyncRef.current = () => {
+      syncObserved();
+      commit(measure(), true);
+    };
+
     const onScroll = () => {
       scheduleSync();
       const now = performance.now();
@@ -234,9 +240,14 @@ export function usePrimaryArbiter(
       if (syncRafRef.current != null) cancelAnimationFrame(syncRafRef.current);
       if (restTimerRef.current) clearTimeout(restTimerRef.current);
       if (settleRef.current) clearTimeout(settleRef.current);
+      resyncRef.current = null;
       liveCard.set(null);
     };
   }, [scrollContainer, cardRefs, opts?.cardHeight, opts?.reelsMode]);
+
+  useEffect(() => {
+    resyncRef.current?.();
+  }, [renderedIds]);
 
   return result;
 }
