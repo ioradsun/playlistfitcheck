@@ -1877,12 +1877,14 @@ export class LyricDancePlayer {
     startTime: number;
     duration: number;
   } | null = null;
-  private _fireVisual: {
-    active: boolean;
-    intensity: number;
-    startTime: number;
-    releaseTime: number | null;
-  } = { active: false, intensity: 0, startTime: 0, releaseTime: null };
+  private _fireRisers: Array<{
+    x: number;
+    y: number;
+    spawnTime: number;
+    lifetime: number;
+    size: number;
+    opacity: number;
+  }> = [];
   private emojiReactionData: Record<string, { line: Record<number, number>; total: number }> = {};
   private emojiStreamEnabled = false;
   private _lastEmojiLineIndex = -1;
@@ -4147,7 +4149,7 @@ export class LyricDancePlayer {
       this.ambientParticleEngine?.draw(this.ctx, "far");
     }
 
-    this.drawFireBloom();
+    this.drawFireRisers();
 
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
 
@@ -4522,75 +4524,30 @@ export class LyricDancePlayer {
   }
 
 
-  private drawFireBloom(): void {
-    const fv = this._fireVisual;
-    const now = performance.now();
-
-    let visualIntensity = 0;
-
-    if (fv.active) {
-      const holdDuration = (now - fv.startTime) / 1000;
-      visualIntensity = Math.min(1, holdDuration / 2);
-      fv.intensity = visualIntensity;
-    } else if (fv.releaseTime) {
-      const releaseDuration = (now - fv.releaseTime) / 1000;
-      if (releaseDuration >= 0.5) {
-        fv.releaseTime = null;
-        fv.intensity = 0;
-        return;
-      }
-      visualIntensity = fv.intensity * (1 - releaseDuration / 0.5);
-    }
-
-    if (visualIntensity < 0.01) return;
-
-    const w = this.width;
-    const h = this.height;
-    const palette = this.data.palette ?? [];
-    const accentColor = palette[2] ?? palette[1] ?? '#ffcc66';
-
-    const hexToRgb = (hex: string) => {
-      const clean = hex.replace('#', '');
-      const normalized = clean.length === 3
-        ? `${clean[0]}${clean[0]}${clean[1]}${clean[1]}${clean[2]}${clean[2]}`
-        : clean;
-      return {
-        r: parseInt(normalized.slice(0, 2), 16) || 255,
-        g: parseInt(normalized.slice(2, 4), 16) || 200,
-        b: parseInt(normalized.slice(4, 6), 16) || 100,
-      };
-    };
-    const { r, g, b } = hexToRgb(accentColor);
-
-    const bloomRadius = h * 0.6 * visualIntensity;
-    const bloomAlpha = 0.25 * visualIntensity;
+  private drawFireRisers(): void {
+    if (this._fireRisers.length === 0) return;
+    const now = performance.now() / 1000;
 
     this.ctx.save();
+    this.ctx.textAlign = 'center';
+    this.setCanvasBaseline('middle');
 
-    const grad = this.ctx.createRadialGradient(
-      w / 2, h,
-      0,
-      w / 2, h,
-      bloomRadius,
-    );
-    grad.addColorStop(0, `rgba(${r},${g},${b},${bloomAlpha})`);
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    this.ctx.fillStyle = grad;
-    this.ctx.fillRect(0, 0, w, h);
+    this._fireRisers = this._fireRisers.filter((riser) => {
+      const elapsed = now - riser.spawnTime;
+      if (elapsed >= riser.lifetime) return false;
+      const t = elapsed / riser.lifetime;
 
-    const coreSize = 8 + 8 * visualIntensity;
-    const beatPulse = (this._lastBeatState?.pulse ?? 0) * visualIntensity;
-    const coreRadius = coreSize + beatPulse * 3;
+      const y = riser.y - (riser.y * 0.7) * t;
+      const x = riser.x + Math.sin(elapsed * 2) * 6;
+      const alpha = t < 0.6
+        ? riser.opacity
+        : riser.opacity * (1 - (t - 0.6) / 0.4);
 
-    const coreGrad = this.ctx.createRadialGradient(
-      w / 2, h - 4, 0,
-      w / 2, h - 4, coreRadius,
-    );
-    coreGrad.addColorStop(0, `rgba(255,248,230,${0.6 * visualIntensity})`);
-    coreGrad.addColorStop(0.5, `rgba(${r},${g},${b},${0.3 * visualIntensity})`);
-    coreGrad.addColorStop(1, 'rgba(0,0,0,0)');
-    this.ctx.fillStyle = coreGrad;
-    this.ctx.fillRect(w / 2 - coreRadius, h - coreRadius * 2, coreRadius * 2, coreRadius * 2);
+      this.ctx.globalAlpha = alpha;
+      this.ctx.font = `${Math.round(riser.size)}px serif`;
+      this.ctx.fillText('🔥', x, y);
+      return true;
+    });
 
     this.ctx.restore();
   }
@@ -4720,31 +4677,22 @@ export class LyricDancePlayer {
   }
 
   public fireComment(text: string): void {
-    if (text === '🔥') {
-      this.fireHoldStart();
-      this.fireHoldEnd();
-      return;
-    }
     this._legacyFireComment(text);
   }
 
-  public fireHoldStart(): void {
-    this._fireVisual = {
-      active: true,
-      intensity: 0,
-      startTime: performance.now(),
-      releaseTime: null,
-    };
-  }
-
-  public fireHoldEnd(): void {
-    this._fireVisual.active = false;
-    this._fireVisual.releaseTime = performance.now();
-  }
-
-  public fireMoment(elapsedMs: number = 0): void {
-    if (!this._globalWickBar) return;
-    this._globalWickBar.receiveFire(Math.min(60, 15 + elapsedMs / 50));
+  public spawnFireRiser(): void {
+    const now = performance.now() / 1000;
+    this._fireRisers.push({
+      x: this.width / 2 + (Math.random() - 0.5) * 20,
+      y: this.height - 10,
+      spawnTime: now,
+      lifetime: 1.2 + Math.random() * 0.4,
+      size: 14 + Math.random() * 4,
+      opacity: 0.5 + Math.random() * 0.2,
+    });
+    if (this._fireRisers.length > 8) {
+      this._fireRisers = this._fireRisers.slice(-8);
+    }
   }
 
   public setFireBaseline(
