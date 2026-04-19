@@ -37,7 +37,6 @@ export function FmlyBar({
   comments = [],
   onToastTap,
 }: FmlyBarProps) {
-  const [pressing, setPressing] = useState(false);
   const [renderTick, setRenderTick] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState<{ text: string; momentIndex: number } | null>(null);
@@ -52,7 +51,7 @@ export function FmlyBar({
     r: number; g: number; b: number;
     segIdx: number; x0: number; x1: number;
   }>>([]);
-  const pendingPlayheadSpawnsRef = useRef<Array<{ count: number; intensity: number }>>([]);
+  const pendingPlayheadBurstRef = useRef<{ count: number; intensity: number } | null>(null);
   const animRef = useRef<number>(0);
   const scrubbingRef = useRef(false);
   const progressPctRef = useRef(0);
@@ -167,14 +166,11 @@ export function FmlyBar({
     resize();
 
     const getSegmentRanges = (w: number) => {
-      const totalFlex = moments.reduce((s, m) => s + Math.max(1, m.endSec - m.startSec), 0);
       const ranges: Array<{ x0: number; x1: number }> = [];
-      let x = 0;
       for (const m of moments) {
-        const flex = Math.max(1, m.endSec - m.startSec);
-        const segW = (flex / totalFlex) * w;
-        ranges.push({ x0: x, x1: x + segW });
-        x += segW;
+        const x0 = (m.startSec / Math.max(0.0001, totalDuration)) * w;
+        const x1 = (m.endSec / Math.max(0.0001, totalDuration)) * w;
+        ranges.push({ x0, x1 });
       }
       return ranges;
     };
@@ -187,7 +183,7 @@ export function FmlyBar({
       if (!seg) return;
       const count = Math.floor(2 + intensity * 3);
       for (let i = 0; i < count; i++) {
-        if (embers.length >= 20) break;
+        if (embers.length >= 60) break;
         embers.push({
           x: seg.x0 + Math.random() * (seg.x1 - seg.x0),
           y: rect.height - 2 + Math.random() * 4,
@@ -208,7 +204,7 @@ export function FmlyBar({
       const x0 = playheadX - 12;
       const x1 = playheadX + 12;
       for (let i = 0; i < count; i++) {
-        if (embers.length >= 30) break;
+        if (embers.length >= 80) break;
         embers.push({
           x: x0 + Math.random() * (x1 - x0),
           y: rect.height - 2,
@@ -312,18 +308,38 @@ export function FmlyBar({
         ctx.fill();
       }
 
-      // Spawn new embers every ~60 frames (~1 second at 60fps)
-      if (frame % 60 === 0) {
-        const userFires = userFiresRef.current;
-        const maxUF = Math.max(1, ...Object.values(userFires));
-        for (const [idx, ms] of Object.entries(userFires)) {
-          if (ms > 0) spawnEmber(Number(idx), 255, 150, 40, ms / maxUF);
+      // Spawn embers — collective fires (everyone) + hottest moment (green)
+      // Runs every ~20 frames (~3× per second at 60fps) for denser coverage
+      if (frame % 20 === 0) {
+        const maxFC = Math.max(1, ...moments.map((_, i) => momentFireCounts[i] ?? 0));
+
+        let hottestIdx = -1;
+        let hottestCount = 0;
+        for (let i = 0; i < moments.length; i += 1) {
+          const c = momentFireCounts[i] ?? 0;
+          if (c > hottestCount) {
+            hottestCount = c;
+            hottestIdx = i;
+          }
+        }
+
+        for (let i = 0; i < moments.length; i += 1) {
+          const count = momentFireCounts[i] ?? 0;
+          if (count <= 0) continue;
+          const intensity = Math.min(1, count / maxFC);
+          spawnEmber(i, 255, 140, 40, intensity);
+        }
+
+        if (hottestIdx >= 0 && hottestCount > 0) {
+          const intensity = Math.min(1, hottestCount / maxFC);
+          spawnEmber(hottestIdx, 74, 222, 128, intensity);
         }
       }
 
-      while (pendingPlayheadSpawnsRef.current.length > 0) {
-        const req = pendingPlayheadSpawnsRef.current.shift()!;
-        spawnPlayheadEmbers(req.count, req.intensity);
+      const burst = pendingPlayheadBurstRef.current;
+      if (burst) {
+        pendingPlayheadBurstRef.current = null;
+        spawnPlayheadEmbers(burst.count, burst.intensity);
       }
 
       // Update and draw particles
@@ -369,7 +385,7 @@ export function FmlyBar({
 
   const handleFireTap = useCallback(() => {
     addUserFire(currentMomentIdx, 150);
-    pendingPlayheadSpawnsRef.current.push({ count: 2, intensity: 0.3 });
+    pendingPlayheadBurstRef.current = { count: 2, intensity: 0.3 };
     activeHoldMomentRef.current = -1;
     activeHoldMsRef.current = 0;
     if (!danceId) return;
@@ -378,7 +394,7 @@ export function FmlyBar({
   const handleFireHoldEnd = useCallback((holdMs: number) => {
     addUserFire(currentMomentIdx, holdMs);
     const intensity = Math.min(1.0, holdMs / 2000);
-    pendingPlayheadSpawnsRef.current.push({ count: Math.floor(3 + intensity * 5), intensity });
+    pendingPlayheadBurstRef.current = { count: Math.floor(3 + intensity * 5), intensity };
     activeHoldMomentRef.current = -1;
     activeHoldMsRef.current = 0;
     if (!danceId) return;
@@ -386,16 +402,14 @@ export function FmlyBar({
   }, [currentMomentIdx, danceId, getLineIndex, onFire]);
 
   const handleDown = () => {
-    setPressing(true);
     activeHoldMomentRef.current = currentMomentIdx;
     activeHoldMsRef.current = 0;
-    pendingPlayheadSpawnsRef.current.push({ count: 3, intensity: 0.5 });
+    pendingPlayheadBurstRef.current = { count: 3, intensity: 0.5 };
     player?.fireHoldStart?.();
     fireHoldControllerRef.current?.start();
   };
 
   const handleUp = () => {
-    setPressing(false);
     const holdData = fireHoldControllerRef.current?.stop();
     player?.fireHoldEnd?.();
     if (!holdData) return;
