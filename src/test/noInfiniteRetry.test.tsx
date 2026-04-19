@@ -29,12 +29,7 @@ vi.mock("@/hooks/useLyricSections", () => ({ useLyricSections: () => ({ sections
 vi.mock("@/components/lyric/LyricInteractionLayer", () => ({ LyricInteractionLayer: () => null }));
 vi.mock("@/components/lyric/PlayerHeader", () => ({ PlayerHeader: () => null }));
 vi.mock("@/components/lyric/modes/ModeDispatcher", () => ({
-  ModeDispatcher: ({ ctx }: any) => (
-    <>
-      <canvas ref={ctx.canvasRef} />
-      <canvas ref={ctx.textCanvasRef} />
-    </>
-  ),
+  ModeDispatcher: () => null,
 }));
 vi.mock("@/components/lyric/modes/registry", () => ({ CARD_MODES: [] }));
 vi.mock("@/components/lyric/ViralClipModal", () => ({ ViralClipModal: () => null }));

@@ -121,15 +121,15 @@ function preloadFirstVisible(posts: FmlyPost[], count = 3): void {
   posts.slice(0, count).forEach((post) => {
     const lp = (post as any).lyric_projects;
     const rawPoster = lp?.section_images?.[0] || lp?.album_art_url;
-    const poster = rawPoster ? cdnImage(rawPoster, "shell") : null;
+    const poster = rawPoster ? cdnImage(rawPoster, "live") : null;
     if (poster) injectImagePreloadLink(poster);
-    if (lp?.album_art_url) void preloadImage(cdnImage(lp.album_art_url, "shell"), { priority: "high" });
-    if (lp?.section_images?.[0]) void preloadImage(cdnImage(lp.section_images[0], "shell"), { priority: "high" });
+    if (lp?.album_art_url) void preloadImage(cdnImage(lp.album_art_url, "live"), { priority: "high" });
+    if (lp?.section_images?.[0]) void preloadImage(cdnImage(lp.section_images[0], "live"), { priority: "high" });
   });
   posts.slice(count).forEach((post) => {
     const lp = (post as any).lyric_projects;
-    if (lp?.album_art_url) void preloadImage(cdnImage(lp.album_art_url, "shell"));
-    if (lp?.section_images?.[0]) void preloadImage(cdnImage(lp.section_images[0], "shell"));
+    if (lp?.album_art_url) void preloadImage(cdnImage(lp.album_art_url, "live"));
+    if (lp?.section_images?.[0]) void preloadImage(cdnImage(lp.section_images[0], "live"));
   });
 }
 

@@ -32,7 +32,7 @@
 const SUPABASE_OBJECT_PATH = "/storage/v1/object/public/";
 const SUPABASE_RENDER_PATH = "/storage/v1/render/image/public/";
 
-export type CdnPreset = "shell" | "engine" | "thumb";
+export type CdnPreset = "shell" | "engine" | "live" | "thumb";
 
 const PRESETS: Record<CdnPreset, { width: number; quality: number }> = {
   // Small preview behind cover overlay. 600 px @ 75 ≈ 25–35 KB per image.
@@ -40,6 +40,9 @@ const PRESETS: Record<CdnPreset, { width: number; quality: number }> = {
   // Player canvas chapter image. 960 px @ 80 ≈ 80–120 KB; still 15–20× smaller
   // than the raw PNG, with no visible quality loss at typical card sizes.
   engine: { width: 960, quality: 80 },
+  // Live card visual source for both feed preloads + engine chapter images.
+  // Kept aligned to avoid first-frame content mismatches.
+  live: { width: 960, quality: 80 },
   // Avatars and small thumbs.
   thumb: { width: 240, quality: 75 },
 };

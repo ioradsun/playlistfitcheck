@@ -17,7 +17,6 @@ import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { getSharedAudio } from "@/lib/sharedAudio";
-import { getPreloadedImage } from "@/lib/imagePreloadCache";
 
 // Session-scoped marker: record only one cold feed boot metric per page lifetime.
 let hasRecordedColdFeedBoot = false;
@@ -51,7 +50,7 @@ function hydrateRow(raw: LyricDanceData): LyricDanceData {
  *   - Data fetching (prefetched or Supabase)
  *   - Engine lifecycle (create/destroy LyricDancePlayer, resize observation)
  *   - Playback time tracking (RAF loop gated on visibility + playing)
- *   - Derived data (durationSec, audioSections, moments, posterSrc)
+ *   - Derived data (durationSec, audioSections, moments)
  *   - Fire + comments + profiles (hydration, realtime, aggregation)
  *   - Interaction callbacks + play-progress tracking
  *   - Live/mode lifecycle effects
@@ -73,9 +72,9 @@ export interface LyricDanceEmbedProps {
   isVerified?: boolean;
   userId?: string | null;
   onProfileClick?: () => void;
-  /** Hex color from palette — renders instantly as background, zero network */
+  /** Kept for call-site compatibility; used by LyricDanceShell path, not live embed rendering. */
   previewPaletteColor?: string | null;
-  /** Section image URL — used by preload cache, NOT CSS background */
+  /** Kept for call-site compatibility; used by LyricDanceShell path, not live embed rendering. */
   previewImageUrl?: string | null;
   /** Enables full player behaviors; false renders static preview shell. */
   live?: boolean;
@@ -116,8 +115,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     isVerified,
     userId,
     onProfileClick,
-    previewPaletteColor,
-    previewImageUrl,
     live = true,
     autoPlay = true,
     menuSlot,
@@ -128,7 +125,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTimeSecRef = useRef(0);
-  const canvasLayerRef = useRef<HTMLDivElement>(null);
   const hasPlayedRef = useRef(false);
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const playStartRef = useRef<number | null>(null);
@@ -362,31 +358,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [live, player]);
 
-  // Canvas fade-in on first frame paint — engine-driven, no polling.
-  // Canvas is opaque black until first draw (alpha: false context). Keeping
-  // it at opacity 0 until then lets the poster show through. On first paint,
-  // an 80ms linear crossfade brings canvas to full opacity.
+  // Boot metrics emission (no visual side-effects).
   useEffect(() => {
-    if (!live || !player) {
-      if (canvasLayerRef.current) {
-        canvasLayerRef.current.style.transition = "";
-        canvasLayerRef.current.style.opacity = "0";
-      }
-      return;
-    }
+    if (!live || !player) return;
 
     return player.onFirstFrame(() => {
-      const el = canvasLayerRef.current;
-      if (!el) return;
-      el.style.opacity = "0";
-      el.style.transition = "opacity 80ms linear";
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!canvasLayerRef.current) return;
-          canvasLayerRef.current.style.opacity = "1";
-        });
-      });
-
       const metrics = player.getBootMetrics();
       const isColdFeedBoot = !hasRecordedColdFeedBoot;
       if (!hasRecordedColdFeedBoot) hasRecordedColdFeedBoot = true;
@@ -457,13 +433,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     });
     return buildMoments(phraseInputs, audioSections, lyricSections.allLines, durationSec);
   }, [fetchedData, audioSections, lyricSections.allLines, durationSec]);
-
-  const posterSrc = useMemo(() => {
-    const albumArt = fetchedData?.album_art_url ?? prefetchedData?.album_art_url ?? null;
-    const sectionImg = previewImageUrl ?? null;
-    if (sectionImg && getPreloadedImage(sectionImg)) return sectionImg;
-    return albumArt || sectionImg || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-  }, [fetchedData, prefetchedData, previewImageUrl]);
 
   // Fire state (heat, user map, anon count) + hydration + realtime
   useEffect(() => {
@@ -829,8 +798,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     lyricDanceUrl,
     spotifyTrackId: spotifyTrackId ?? null,
     userId: userId ?? null,
-    canvasRef,
-    textCanvasRef,
     moments,
     fireHeat,
     fireUserMap,
@@ -898,52 +865,20 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
-        style={{
-          background: previewPaletteColor
-            ? `radial-gradient(ellipse at 50% 40%, ${previewPaletteColor}33 0%, #0a0a0a 70%)`
-            : "#0a0a0a",
-        }}
         onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
-        {/* Poster layer — mounted for card lifetime; canvas crossfades on top. */}
-        <img
-          src={posterSrc}
-          alt=""
-          aria-hidden
-          decoding="async"
-          fetchPriority="high"
-          className="absolute inset-0 w-full h-full pointer-events-none select-none"
-          style={{ objectFit: "cover", zIndex: 1, opacity: 1 }}
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full"
+          style={{ zIndex: 1, pointerEvents: "none" }}
         />
-        {/* Static vignette — applied only when live=false. Approximates the engine's
-         *  own vignette so non-primary cards feel like stilled versions of the live card
-         *  rather than a separate visual language. When live, the canvas draws its own
-         *  dynamic vignette on top, so this overlay must not render. */}
-        {!live && (
-          <div
-            aria-hidden
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              zIndex: 2,
-              background: `
-                radial-gradient(ellipse at 50% 45%, transparent 20%, rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.35) 100%),
-                linear-gradient(to bottom, transparent 70%, rgba(0,0,0,0.25) 100%)
-              `,
-            }}
-          />
-        )}
+        <canvas
+          ref={textCanvasRef}
+          className="absolute inset-0 w-full h-full"
+          style={{ zIndex: 2, pointerEvents: "none" }}
+        />
 
-        <div
-          ref={canvasLayerRef}
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 1,
-            opacity: 0,
-          }}
-        >
-          <ModeDispatcher ctx={modeCtx} />
-        </div>
+        <ModeDispatcher ctx={modeCtx} />
       </div>
 
       <div

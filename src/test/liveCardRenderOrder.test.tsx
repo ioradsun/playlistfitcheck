@@ -1,10 +1,5 @@
-import { render, act } from "@testing-library/react";
+import { render, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-
-const h = vi.hoisted(() => ({
-  firstFrameListeners: [] as Array<() => void>,
-  initCalls: 0,
-}));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -28,23 +23,24 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-vi.mock("@/hooks/useLyricSections", () => ({ useLyricSections: () => ({ sections: [], allLines: [] }) }));
+vi.mock("@/hooks/useLyricSections", () => ({ useLyricSections: () => ({ sections: [], allLines: [], isReady: true }) }));
 vi.mock("@/components/lyric/LyricInteractionLayer", () => ({ LyricInteractionLayer: () => null }));
-vi.mock("@/components/lyric/PlayerHeader", () => ({ PlayerHeader: () => null }));
-vi.mock("@/components/lyric/modes/ModeDispatcher", () => ({
-  ModeDispatcher: ({ ctx }: any) => (
-    <>
-      <canvas ref={ctx.canvasRef} />
-      <canvas ref={ctx.textCanvasRef} />
-    </>
+vi.mock("@/components/lyric/PlayerHeader", () => ({
+  PlayerHeader: ({ onModeChange }: any) => (
+    <div>
+      <button onClick={() => onModeChange?.("moments")}>moments</button>
+      <button onClick={() => onModeChange?.("listen")}>listen</button>
+    </div>
   ),
+}));
+vi.mock("@/components/lyric/modes/ModeDispatcher", () => ({
+  ModeDispatcher: () => <div data-testid="mode-dispatcher" />,
 }));
 vi.mock("@/components/lyric/modes/registry", () => ({ CARD_MODES: [] }));
 vi.mock("@/components/lyric/ViralClipModal", () => ({ ViralClipModal: () => null }));
 vi.mock("@/lib/fire", () => ({ emitFire: vi.fn(), fetchFireData: vi.fn(async () => ({})), upsertPlay: vi.fn() }));
 vi.mock("@/lib/reelsAudioUnlock", () => ({ unlockAudio: vi.fn() }));
 vi.mock("@/lib/sharedAudio", () => ({ getSharedAudio: () => document.createElement("audio") }));
-vi.mock("@/lib/imagePreloadCache", () => ({ getPreloadedImage: () => null }));
 
 vi.mock("@/engine/LyricDancePlayer", () => ({
   LyricDancePlayer: class MockPlayer {
@@ -58,16 +54,11 @@ vi.mock("@/engine/LyricDancePlayer", () => ({
         },
       });
     }
-    async init() { h.initCalls += 1; }
+    async init() {}
     destroy() {}
-    onFirstFrame(cb: () => void) {
-      h.firstFrameListeners.push(cb);
-      return () => {
-        h.firstFrameListeners = h.firstFrameListeners.filter((fn) => fn !== cb);
-      };
-    }
-    getBootMetrics() { return { ttffMs: 10, startLatencyMs: 10, fullModeMs: 10 }; }
+    onFirstFrame() { return () => {}; }
     getCurrentTime() { return 0; }
+    getBootMetrics() { return { ttffMs: 10, startLatencyMs: 10, fullModeMs: 10 }; }
   },
 }));
 
@@ -81,37 +72,31 @@ const prefetchedData: any = {
   cinematic_direction: { phrases: [{ start: 0, end: 10, text: "hello world" }] },
 };
 
-describe("canvas fade in", () => {
+describe("live card render order", () => {
   beforeEach(() => {
     (globalThis as any).ResizeObserver = class { observe() {} disconnect() {} };
-    h.firstFrameListeners = [];
-    h.initCalls = 0;
-    vi.useFakeTimers();
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
-      return window.setTimeout(() => cb(performance.now()), 0);
-    });
   });
 
-  it("keeps canvas hidden until first frame then fades to opacity 1", async () => {
+  it("keeps canvases mounted and contains no img layer in live mode", () => {
     const { container, rerender } = render(
       <LyricDanceEmbed lyricDanceId="dance-1" songTitle="Song" prefetchedData={prefetchedData} live />,
     );
 
-    const canvasLayer = container.querySelector('div[style*="z-index: 1"][style*="opacity: 0"]') as HTMLDivElement;
-    expect(canvasLayer).toBeTruthy();
-    expect(canvasLayer.style.opacity).toBe("0");
+    const firstCanvas = container.querySelector("canvas");
+    expect(firstCanvas).toBeTruthy();
+    expect(container.querySelectorAll("canvas")).toHaveLength(2);
+    expect(container.querySelectorAll("img")).toHaveLength(0);
 
-    expect(h.firstFrameListeners).toHaveLength(1);
-    act(() => {
-      h.firstFrameListeners[0]();
-    });
+    const containerEl = container.querySelector(".relative.flex-1.min-h-0.overflow-hidden") as HTMLElement;
+    expect(containerEl?.firstElementChild?.tagName.toLowerCase()).toBe("canvas");
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(50);
-    });
-    expect(canvasLayer.style.opacity).toBe("1");
+    fireEvent.click(container.querySelector("button") as HTMLButtonElement);
+    fireEvent.click(container.querySelectorAll("button")[1] as HTMLButtonElement);
 
-    rerender(<LyricDanceEmbed lyricDanceId="dance-1" songTitle="Song" prefetchedData={prefetchedData} live={false} />);
-    expect(canvasLayer.style.opacity).toBe("0");
+    rerender(<LyricDanceEmbed lyricDanceId="dance-1" songTitle="Song" prefetchedData={prefetchedData} live />);
+
+    const canvasAfter = container.querySelector("canvas");
+    expect(canvasAfter).toBe(firstCanvas);
+    expect(firstCanvas?.isConnected).toBe(true);
   });
 });

@@ -45,7 +45,7 @@ import { FinaleEffect } from "@/engine/FinaleEffect";
 import { ExitEffect } from '@/engine/ExitEffect';
 import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
-import { preloadImageForCanvas } from "@/lib/imagePreloadCache";
+import { getPreloadedImage, preloadImageForCanvas } from "@/lib/imagePreloadCache";
 import { cdnImage } from "@/lib/cdnImage";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
@@ -1992,6 +1992,9 @@ export class LyricDancePlayer {
     const tctx = textCanvas.getContext("2d", { alpha: true });
     if (tctx) tctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
+    // Paint a synchronous still frame so the live surface is never visually empty.
+    this.paintIdentityFrame();
+
     this._audioListenerAbort = new AbortController();
     const audioSignal = this._audioListenerAbort.signal;
 
@@ -2262,6 +2265,7 @@ export class LyricDancePlayer {
             const cw = this.container.offsetWidth || this.canvas.offsetWidth || 960;
             const ch = this.container.offsetHeight || this.canvas.offsetHeight || 540;
             if (cw > 0 && ch > 0) this.resize(cw, ch);
+    this.paintIdentityFrame();
           }
 
           const payload = this.buildScenePayload();
@@ -2853,6 +2857,57 @@ export class LyricDancePlayer {
   }
 
   /**
+   * Paint a synchronous, still identity frame onto the live surface.
+   *
+   * This represents T=0 before motion/text begin. It avoids any visual handoff
+   * layer by ensuring the engine has already painted something meaningful.
+   */
+  paintIdentityFrame(): void {
+    if (this.destroyed || !this.ctx || !this.canvas) return;
+
+    const cw = this.container?.offsetWidth || this.canvas.offsetWidth || this.width || 960;
+    const ch = this.container?.offsetHeight || this.canvas.offsetHeight || this.height || 540;
+    if (cw > 0 && ch > 0 && (this.width !== cw || this.height !== ch)) {
+      this.width = cw;
+      this.height = ch;
+      this._applyDprToCanvas();
+    } else if (this.width <= 0 || this.height <= 0) {
+      this.width = Math.max(1, cw);
+      this.height = Math.max(1, ch);
+      this._applyDprToCanvas();
+    }
+
+    const w = Math.max(1, this.width || this.canvas.width || 960);
+    const h = Math.max(1, this.height || this.canvas.height || 540);
+    const paletteA = this.data.palette?.[0] ?? "#0a0a0a";
+    const paletteB = this.data.palette?.[1] ?? paletteA;
+
+    this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
+    const grad = this.ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, paletteA);
+    grad.addColorStop(1, paletteB);
+    this.ctx.fillStyle = grad;
+    this.ctx.fillRect(0, 0, w, h);
+
+    const urls = this.data.section_images ?? [];
+    const firstUrl = urls[0] ? cdnImage(urls[0], "live") : null;
+    const sectionImage = this.chapterImages[0];
+    const cachedImage = firstUrl ? getPreloadedImage(firstUrl) : null;
+    const image = (sectionImage && sectionImage.complete && sectionImage.naturalWidth > 0)
+      ? sectionImage
+      : ((cachedImage && cachedImage.complete && cachedImage.naturalWidth > 0) ? cachedImage : null);
+
+    if (image) {
+      this._drawImageCoverCropped(this.ctx, image, 0, 0, w, h);
+    }
+
+    const scrimOpacity = this._sectionScrimOpacity[0] ?? 0.25;
+    if (scrimOpacity > 0.01) {
+      this._drawContrastScrim(this.ctx, Math.max(0.08, Math.min(0.45, scrimOpacity)));
+    }
+  }
+
+  /**
    * Swap the render target to a different canvas pair.
    * Render one engine to two canvases alternately when needed.
    * Preserves all compiled state — only the output surface changes.
@@ -2870,6 +2925,7 @@ export class LyricDancePlayer {
     const cw = container?.offsetWidth || bgCanvas.offsetWidth || this.width || 960;
     const ch = container?.offsetHeight || bgCanvas.offsetHeight || this.height || 540;
     if (cw > 0 && ch > 0) this.resize(cw, ch);
+    this.paintIdentityFrame();
   }
 
   /**
@@ -5010,7 +5066,7 @@ export class LyricDancePlayer {
         // Fetch the WebP-encoded, width-resized variant via Supabase's image
         // transform endpoint. ~10–20× smaller than the raw PNG with no visible
         // quality loss at the canvas's actual rendered size.
-        const img = await preloadImageForCanvas(cdnImage(url, "engine"));
+        const img = await preloadImageForCanvas(cdnImage(url, "live"));
         this.chapterImages[i] = img;
         this._sectionScrimOpacity[i] = this._requiredScrimOpacity(
           this._sampleRegionLuminance(img, 90)
@@ -5023,10 +5079,12 @@ export class LyricDancePlayer {
     const firstLoads = loadPromises.filter((_, i) => !!urls[i]);
     if (firstLoads.length > 0) {
       await Promise.race(firstLoads);
+      this.paintIdentityFrame();
     }
 
     void Promise.all(loadPromises).then(() => {
       this._rebuildKenBurnsParams();
+      this.paintIdentityFrame();
     }).catch(() => {});
   }
 
