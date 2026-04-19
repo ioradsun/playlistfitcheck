@@ -14,12 +14,10 @@ import { ModeDispatcher } from "@/components/lyric/modes/ModeDispatcher";
 import { CARD_MODES } from "@/components/lyric/modes/registry";
 import type { CardMode, Comment, ModeContext } from "@/components/lyric/modes/types";
 import { ViralClipModal } from "@/components/lyric/ViralClipModal";
-import { LyricTextLayer } from "@/components/lyric/LyricTextLayer";
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { getSharedAudio } from "@/lib/sharedAudio";
 import { getPreloadedImage } from "@/lib/imagePreloadCache";
-import { useResolvedTypography } from "@/hooks/useResolvedTypography";
 
 // Session-scoped marker: record only one cold feed boot metric per page lifetime.
 let hasRecordedColdFeedBoot = false;
@@ -130,8 +128,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTimeSecRef = useRef(0);
-  const textLayerRef = useRef<HTMLDivElement>(null);
-  const firstPaintAtRef = useRef<number | null>(null);
+  const canvasLayerRef = useRef<HTMLDivElement>(null);
   const hasPlayedRef = useRef(false);
   const playerRef = useRef<LyricDancePlayer | null>(null);
   const playStartRef = useRef<number | null>(null);
@@ -365,27 +362,28 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [live, player]);
 
-  // First-frame paint event — engine-driven, no polling.
+  // Canvas fade-in on first frame paint — engine-driven, no polling.
+  // Canvas is opaque black until first draw (alpha: false context). Keeping
+  // it at opacity 0 until then lets the poster show through. On first paint,
+  // an 80ms linear crossfade brings canvas to full opacity.
   useEffect(() => {
     if (!live || !player) {
-      if (textLayerRef.current) {
-        textLayerRef.current.style.transition = "";
-        textLayerRef.current.style.opacity = "1";
+      if (canvasLayerRef.current) {
+        canvasLayerRef.current.style.transition = "";
+        canvasLayerRef.current.style.opacity = "0";
       }
-      firstPaintAtRef.current = null;
       return;
     }
 
     return player.onFirstFrame(() => {
-      firstPaintAtRef.current = performance.now();
-      const el = textLayerRef.current;
+      const el = canvasLayerRef.current;
       if (!el) return;
-      el.style.opacity = "1";
+      el.style.opacity = "0";
       el.style.transition = "opacity 80ms linear";
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          if (!textLayerRef.current) return;
-          textLayerRef.current.style.opacity = "0";
+          if (!canvasLayerRef.current) return;
+          canvasLayerRef.current.style.opacity = "1";
         });
       });
 
@@ -422,7 +420,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     fetchedData?.cinematic_direction ?? null,
     durationSec,
   );
-  const resolvedTypography = useResolvedTypography(effectiveData);
 
   const audioSections = useMemo(() => {
     if (lyricSections.sections.length > 0) {
@@ -937,25 +934,16 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         )}
 
         <div
-          ref={textLayerRef}
+          ref={canvasLayerRef}
           style={{
             position: "absolute",
             inset: 0,
-            zIndex: 3,
-            pointerEvents: "none",
-            opacity: 1,
+            zIndex: 1,
+            opacity: 0,
           }}
         >
-          <LyricTextLayer
-            lines={effectiveData?.lines ?? []}
-            words={effectiveData?.words}
-            phrases={effectiveData?.cinematic_direction?.phrases}
-            typography={resolvedTypography}
-            currentTimeSec={currentTimeSec}
-          />
+          <ModeDispatcher ctx={modeCtx} />
         </div>
-
-        <ModeDispatcher ctx={modeCtx} />
       </div>
 
       <div
