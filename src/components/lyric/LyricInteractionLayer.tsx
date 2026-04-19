@@ -135,7 +135,7 @@ export function FmlyBar({
     fireHoldControllerRef.current = createFireHold({
       onCanvasTrigger: (elapsedMs) => {
         activeHoldMsRef.current = elapsedMs;
-        player?.fireMoment?.(elapsedMs);
+        player?.spawnFireRiser?.();
       },
     });
     return () => {
@@ -175,23 +175,30 @@ export function FmlyBar({
       return ranges;
     };
 
-    const spawnEmber = (segIdx: number, r: number, g: number, b: number, intensity: number) => {
+    const spawnEmber = (
+      segIdx: number,
+      r: number,
+      g: number,
+      b: number,
+      intensity: number,
+      fast = false,
+    ) => {
       const rect = canvas.parentElement?.getBoundingClientRect();
       if (!rect) return;
       const ranges = getSegmentRanges(rect.width);
       const seg = ranges[segIdx];
       if (!seg) return;
-      const count = Math.floor(2 + intensity * 3);
+      const count = fast ? 1 : Math.floor(2 + intensity * 3);
       for (let i = 0; i < count; i++) {
-        if (embers.length >= 60) break;
+        if (embers.length >= 80) break;
         embers.push({
           x: seg.x0 + Math.random() * (seg.x1 - seg.x0),
           y: rect.height - 2 + Math.random() * 4,
-          vy: -(0.15 + Math.random() * 0.25),
-          vx: (Math.random() - 0.5) * 0.15,
-          life: 0.6 + Math.random() * 0.4,
-          size: 1.2 + Math.random() * 1.8,
-          opacity: 0.4 + intensity * 0.4,
+          vy: fast ? -(0.4 + Math.random() * 0.6) : -(0.15 + Math.random() * 0.25),
+          vx: (Math.random() - 0.5) * (fast ? 0.3 : 0.15),
+          life: fast ? (0.4 + Math.random() * 0.3) : (0.6 + Math.random() * 0.4),
+          size: fast ? (1.8 + Math.random() * 2.0) : (1.2 + Math.random() * 1.8),
+          opacity: fast ? (0.7 + intensity * 0.3) : (0.4 + intensity * 0.4),
           r, g, b, segIdx, x0: seg.x0, x1: seg.x1,
         });
       }
@@ -220,6 +227,7 @@ export function FmlyBar({
     };
 
     let frame = 0;
+    let prevMaxFire = 1;
     const loop = () => {
       animRef.current = requestAnimationFrame(loop);
       frame += 1;
@@ -233,12 +241,16 @@ export function FmlyBar({
       const getMomentWeight = (idx: number) => {
         const base = momentFireCounts[idx] ?? 0;
         const committedUser = (userFiresRef.current[idx] ?? 0) / 150;
-        const liveHold = activeHoldMomentRef.current === idx ? (activeHoldMsRef.current / 150) : 0;
-        return base + committedUser + liveHold;
+        if (activeHoldMomentRef.current === idx && activeHoldMsRef.current > 0) {
+          const holdBoost = (activeHoldMsRef.current / 2000) * Math.max(prevMaxFire, 5);
+          return base + committedUser + holdBoost;
+        }
+        return base + committedUser;
       };
 
       const points: Array<{ x: number; y: number }> = [];
       const maxFire = Math.max(1, ...moments.map((_, i) => getMomentWeight(i)));
+      prevMaxFire = maxFire;
       const maxLineHeight = rect.height * 0.7;
       for (let i = 0; i < moments.length; i += 1) {
         const moment = moments[i];
@@ -308,9 +320,21 @@ export function FmlyBar({
         ctx.fill();
       }
 
-      // Spawn embers — collective fires (everyone) + hottest moment (green)
-      // Runs every ~20 frames (~3× per second at 60fps) for denser coverage
-      if (frame % 20 === 0) {
+      // ── Ember spawning ──────────────────────────────────────────────
+      // During fire hold: continuous dense embers from the spike
+      const isHolding = activeHoldMomentRef.current >= 0 && activeHoldMsRef.current > 0;
+      if (isHolding) {
+        const holdIdx = activeHoldMomentRef.current;
+        const holdIntensity = Math.min(1, activeHoldMsRef.current / 2000);
+        const streamCount = 1 + Math.floor(holdIntensity * 2);
+        for (let s = 0; s < streamCount; s += 1) {
+          spawnEmber(holdIdx, 255, 140, 40, 0.6 + holdIntensity * 0.4, true);
+        }
+      }
+
+      // Ambient embers: collective fires (everyone) + hottest (green)
+      // Runs every ~30 frames (~2× per second) — background warmth
+      if (frame % 30 === 0) {
         const maxFC = Math.max(1, ...moments.map((_, i) => momentFireCounts[i] ?? 0));
 
         let hottestIdx = -1;
@@ -405,13 +429,11 @@ export function FmlyBar({
     activeHoldMomentRef.current = currentMomentIdx;
     activeHoldMsRef.current = 0;
     pendingPlayheadBurstRef.current = { count: 3, intensity: 0.5 };
-    player?.fireHoldStart?.();
     fireHoldControllerRef.current?.start();
   };
 
   const handleUp = () => {
     const holdData = fireHoldControllerRef.current?.stop();
-    player?.fireHoldEnd?.();
     if (!holdData) return;
     const holdMs = holdData.holdMs;
     if (holdMs < 180) handleFireTap(); else handleFireHoldEnd(holdMs);
