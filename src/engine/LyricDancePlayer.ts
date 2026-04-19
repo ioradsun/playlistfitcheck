@@ -1630,20 +1630,6 @@ interface CommentChunk {
   _cachedTrailGrad?: { grad: CanvasGradient; x1: number; x2: number; alphaHex: string };
 }
 
-interface EmojiRiser {
-  emoji: string;
-  spawnTime: number;
-  lifetime: number;
-  spawnX: number;
-  spawnY: number;
-  size: number;
-  driftAmplitude: number;
-  driftPhase: number;
-  opacity: number;
-  tier?: 0 | 1 | 2 | 3;
-}
-
-
 
 // ──────────────────────────────────────────────────────────────
 // Player
@@ -1886,7 +1872,17 @@ export class LyricDancePlayer {
   }> = [];
   private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
   private commentColorIdx = 0;
-  private emojiRisers: EmojiRiser[] = [];
+  private _echoState: {
+    text: string;
+    startTime: number;
+    duration: number;
+  } | null = null;
+  private _fireVisual: {
+    active: boolean;
+    intensity: number;
+    startTime: number;
+    releaseTime: number | null;
+  } = { active: false, intensity: 0, startTime: 0, releaseTime: null };
   private emojiReactionData: Record<string, { line: Record<number, number>; total: number }> = {};
   private emojiStreamEnabled = false;
   private _lastEmojiLineIndex = -1;
@@ -3266,7 +3262,6 @@ export class LyricDancePlayer {
     this._globalBeatVis = null;
     this._unmountWickSeekOverlay();
     this._globalWickBar = null;
-    this.emojiRisers = [];
     this._emojiSpawnQueue = [];
     this._textMetricsCache.clear();
     this._watermarkCache = null;
@@ -4149,6 +4144,8 @@ export class LyricDancePlayer {
       this.ambientParticleEngine?.draw(this.ctx, "far");
     }
 
+    this.drawFireBloom();
+
     // ═══ V2: Text is screen-space (no parallax — readability constraint) ═══
 
     // ═══ Sample center brightness for text contrast — ZERO GPU STALL ═══
@@ -4398,8 +4395,7 @@ export class LyricDancePlayer {
 
     // Comment comets — after text, before watermark
     this.drawComments(frameNowSec);
-    // Emoji stream — community reactions rising from bottom-right
-    this.drawEmojiRisers();
+    this.drawEcho();
 
     // ═══ Near-plane particles — Lubezki's envelope ═══
     // Foreground particles (depth >= 0.5) drawn AFTER text.
@@ -4477,30 +4473,8 @@ export class LyricDancePlayer {
   }
 
   private processEmojiSpawnQueue(): void {
-    const nowSec = performance.now() / 1000;
-    while (this._emojiSpawnQueue.length > 0) {
-      if (this._emojiSpawnQueue[0].spawnAtSec > this.audio.currentTime) break;
-      const item = this._emojiSpawnQueue.shift()!;
-      this.emojiRisers.push({
-        emoji: item.emoji,
-        spawnTime: nowSec,
-        lifetime: 3,
-        spawnX: this.width - 48,
-        spawnY: this.height - 70,
-        size: 16 + Math.random() * 12,
-        driftAmplitude: 8 + Math.random() * 12,
-        driftPhase: Math.random() * Math.PI * 2,
-        opacity: 0.7,
-      });
-    }
-
-    this.emojiRisers = this.emojiRisers.filter((r) => {
-      const elapsed = nowSec - r.spawnTime;
-      return elapsed < r.lifetime;
-    });
-
-    if (this.emojiRisers.length > 40) {
-      this.emojiRisers = this.emojiRisers.slice(-40);
+    while (this._emojiSpawnQueue.length > 0 && this._emojiSpawnQueue[0].spawnAtSec <= this.audio.currentTime) {
+      this._emojiSpawnQueue.shift();
     }
   }
 
@@ -4510,45 +4484,111 @@ export class LyricDancePlayer {
       if (fire.spawned) continue;
       if (fire.time_sec > nowSec) break;
       fire.spawned = true;
-      this.fireFire(0);
     }
     // Reset spawned flags on seek backward
     // (handled by setHistoricalFires reset on seek)
   }
 
-  private drawEmojiRisers(): void {
-    if (this.emojiRisers.length === 0) return;
-    const nowSec = performance.now() / 1000;
-
-    this.ctx.save();
-    this.ctx.textAlign = 'center';
-    this.setCanvasBaseline('middle');
-
-    for (const riser of this.emojiRisers) {
-      const elapsed = nowSec - riser.spawnTime;
-      const t = elapsed / riser.lifetime;
-      if (t >= 1) continue;
-
-      const y = riser.spawnY - (riser.spawnY + 40) * t;
-      const x = riser.spawnX + riser.driftAmplitude * Math.sin(elapsed * 1.5 + riser.driftPhase);
-      const alpha = riser.opacity * (1 - t);
-
-      this.ctx.globalAlpha = alpha;
-      this.ctx.font = `${Math.round(riser.size)}px serif`;
-
-      if ((riser.tier ?? 0) >= 2) {
-        this.ctx.shadowColor = (riser.tier ?? 0) >= 3
-          ? 'rgba(255, 32, 96, 0.6)'
-          : 'rgba(255, 94, 32, 0.5)';
-        this.ctx.shadowBlur = (riser.tier ?? 0) >= 3 ? 16 : 8;
-      } else {
-        this.ctx.shadowBlur = 0;
-      }
-
-      this.ctx.fillText(riser.emoji, x, y);
+  private drawEcho(): void {
+    if (!this._echoState) return;
+    const elapsed = performance.now() / 1000 - this._echoState.startTime;
+    if (elapsed >= this._echoState.duration) {
+      this._echoState = null;
+      return;
     }
 
-    this.ctx.shadowBlur = 0;
+    const alpha = 0.5 * (1 - elapsed / this._echoState.duration);
+    const palette = this.data.palette ?? [];
+    const warmColor = palette[2] ?? palette[1] ?? '#ffcc66';
+
+    this.ctx.save();
+    this.ctx.globalAlpha = alpha;
+    this.ctx.font = `600 ${Math.round(this.width * 0.05)}px "Montserrat", sans-serif`;
+    this.ctx.textAlign = 'center';
+    this.setCanvasBaseline('middle');
+    this.ctx.fillStyle = warmColor;
+    this.ctx.shadowColor = warmColor;
+    this.ctx.shadowBlur = 12;
+    this.ctx.fillText(
+      this._echoState.text,
+      this.width / 2,
+      this.height * 0.38,
+      this.width * 0.85,
+    );
+    this.ctx.restore();
+  }
+
+
+  private drawFireBloom(): void {
+    const fv = this._fireVisual;
+    const now = performance.now();
+
+    let visualIntensity = 0;
+
+    if (fv.active) {
+      const holdDuration = (now - fv.startTime) / 1000;
+      visualIntensity = Math.min(1, holdDuration / 2);
+      fv.intensity = visualIntensity;
+    } else if (fv.releaseTime) {
+      const releaseDuration = (now - fv.releaseTime) / 1000;
+      if (releaseDuration >= 0.5) {
+        fv.releaseTime = null;
+        fv.intensity = 0;
+        return;
+      }
+      visualIntensity = fv.intensity * (1 - releaseDuration / 0.5);
+    }
+
+    if (visualIntensity < 0.01) return;
+
+    const w = this.width;
+    const h = this.height;
+    const palette = this.data.palette ?? [];
+    const accentColor = palette[2] ?? palette[1] ?? '#ffcc66';
+
+    const hexToRgb = (hex: string) => {
+      const clean = hex.replace('#', '');
+      const normalized = clean.length === 3
+        ? `${clean[0]}${clean[0]}${clean[1]}${clean[1]}${clean[2]}${clean[2]}`
+        : clean;
+      return {
+        r: parseInt(normalized.slice(0, 2), 16) || 255,
+        g: parseInt(normalized.slice(2, 4), 16) || 200,
+        b: parseInt(normalized.slice(4, 6), 16) || 100,
+      };
+    };
+    const { r, g, b } = hexToRgb(accentColor);
+
+    const bloomRadius = h * 0.6 * visualIntensity;
+    const bloomAlpha = 0.25 * visualIntensity;
+
+    this.ctx.save();
+
+    const grad = this.ctx.createRadialGradient(
+      w / 2, h,
+      0,
+      w / 2, h,
+      bloomRadius,
+    );
+    grad.addColorStop(0, `rgba(${r},${g},${b},${bloomAlpha})`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    this.ctx.fillStyle = grad;
+    this.ctx.fillRect(0, 0, w, h);
+
+    const coreSize = 8 + 8 * visualIntensity;
+    const beatPulse = (this._lastBeatState?.pulse ?? 0) * visualIntensity;
+    const coreRadius = coreSize + beatPulse * 3;
+
+    const coreGrad = this.ctx.createRadialGradient(
+      w / 2, h - 4, 0,
+      w / 2, h - 4, coreRadius,
+    );
+    coreGrad.addColorStop(0, `rgba(255,248,230,${0.6 * visualIntensity})`);
+    coreGrad.addColorStop(0.5, `rgba(${r},${g},${b},${0.3 * visualIntensity})`);
+    coreGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    this.ctx.fillStyle = coreGrad;
+    this.ctx.fillRect(w / 2 - coreRadius, h - coreRadius * 2, coreRadius * 2, coreRadius * 2);
+
     this.ctx.restore();
   }
 
@@ -4668,52 +4708,35 @@ export class LyricDancePlayer {
     );
   }
 
+  public showEcho(text: string): void {
+    this._echoState = {
+      text,
+      startTime: performance.now() / 1000,
+      duration: 0.8,
+    };
+  }
+
   public fireComment(text: string): void {
     if (text === '🔥') {
-      this.fireFire(0);
+      this.fireHoldStart();
+      this.fireHoldEnd();
       return;
     }
     this._legacyFireComment(text);
   }
 
-  public fireFire(holdMs: number = 0): void {
-    const tier: 0 | 1 | 2 | 3 =
-      holdMs < 300  ? 0 :
-      holdMs < 1000 ? 1 :
-      holdMs < 3000 ? 2 : 3;
+  public fireHoldStart(): void {
+    this._fireVisual = {
+      active: true,
+      intensity: 0,
+      startTime: performance.now(),
+      releaseTime: null,
+    };
+  }
 
-    // Size, lifetime, opacity, drift all scale with tier
-    const sizeMap = [18, 26, 36, 48];
-    const lifetimeMap = [2.5, 3.5, 5.0, 7.0];
-    const opacityMap = [0.65, 0.75, 0.85, 0.95];
-    const driftMap = [8, 12, 18, 24];
-
-    // Spawn 1 riser for tap, 2 for tier1, 3 for tier2, 5 for tier3
-    const countMap = [1, 2, 3, 5];
-    const count = countMap[tier];
-
-    const nowSec = performance.now() / 1000;
-
-    for (let i = 0; i < count; i++) {
-      // Spread spawn x slightly for multiple risers
-      const xSpread = count > 1 ? (i - (count - 1) / 2) * 14 : 0;
-      this.emojiRisers.push({
-        emoji: '🔥',
-        spawnTime: nowSec + i * 0.08,
-        lifetime: lifetimeMap[tier] + Math.random() * 0.5,
-        spawnX: this.width / 2 + xSpread,
-        spawnY: this.height - 70,
-        size: sizeMap[tier] + Math.random() * 4,
-        driftAmplitude: driftMap[tier] + Math.random() * 8,
-        driftPhase: Math.random() * Math.PI * 2,
-        opacity: opacityMap[tier],
-        tier,
-      });
-    }
-
-    if (this.emojiRisers.length > 60) {
-      this.emojiRisers = this.emojiRisers.slice(-60);
-    }
+  public fireHoldEnd(): void {
+    this._fireVisual.active = false;
+    this._fireVisual.releaseTime = performance.now();
   }
 
   public fireMoment(elapsedMs: number = 0): void {
