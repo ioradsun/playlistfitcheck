@@ -21,6 +21,7 @@ import { getSharedAudio } from "@/lib/sharedAudio";
 import { getPreloadedImage } from "@/lib/imagePreloadCache";
 import { useResolvedTypography } from "@/hooks/useResolvedTypography";
 
+// Session-scoped marker: record only one cold feed boot metric per page lifetime.
 let hasRecordedColdFeedBoot = false;
 
 function hydrateRow(raw: LyricDanceData): LyricDanceData {
@@ -259,7 +260,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
     return () => {
       cancelled = true;
-      retriedRef.current = false;
       window.clearTimeout(bootDeadline);
       p.destroy();
       if (playerRef.current === p) playerRef.current = null;
