@@ -49,11 +49,6 @@ export function usePrimaryArbiter(
 
     const getCardHeight = () => opts?.cardHeight ?? scrollContainer.clientHeight;
 
-    const BOUNDARY_PX = 8;
-
-    const atTopBoundary = () => scrollContainer.scrollTop <= BOUNDARY_PX;
-    const atBottomBoundary = () => scrollContainer.scrollTop >= getMaxScroll() - BOUNDARY_PX;
-
     const isExtremeScroll = () => {
       const maxScroll = getMaxScroll();
       const halfCard = getCardHeight() * 0.5;
@@ -74,6 +69,30 @@ export function usePrimaryArbiter(
         }
       }
       return chosenId;
+    };
+
+    const atTopBoundary = () => {
+      const first = pickByPosition("first");
+      if (!first) return false;
+      const el = cardRefs.current.get(first);
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      const rootRect = scrollContainer.getBoundingClientRect();
+      const rootCenter = rootRect.top + rootRect.height / 2;
+      const firstCenter = rect.top + rect.height / 2;
+      return firstCenter >= rootCenter;
+    };
+
+    const atBottomBoundary = () => {
+      const last = pickByPosition("last");
+      if (!last) return false;
+      const el = cardRefs.current.get(last);
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      const rootRect = scrollContainer.getBoundingClientRect();
+      const rootCenter = rootRect.top + rootRect.height / 2;
+      const lastCenter = rect.top + rect.height / 2;
+      return lastCenter <= rootCenter;
     };
 
     const hitTestCenter = (): string | null => {
