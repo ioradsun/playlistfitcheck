@@ -50,7 +50,7 @@ function FeedList({
     scrollContainer,
     feedWindow.cardRefs,
     feedWindow.renderedIds,
-    feedWindow.renderedIdsVersion,
+    { cardHeight: feedWindow.cardHeight, reelsMode },
   );
 
   const primaryIndex = useMemo(

@@ -8,7 +8,6 @@ export interface FeedWindow {
   windowStart: number;
   windowEnd: number;
   renderedIds: Set<string>;
-  renderedIdsVersion: number;
   cardHeight: number;
   cardRefs: React.MutableRefObject<Map<string, HTMLElement>>;
   setActiveIndex: (index: number) => void;
@@ -83,14 +82,12 @@ export function useFeedWindow(
     return s;
   }, [windowStart, windowEnd, postIds]);
 
-  const renderedIdsVersion = windowStart * 100000 + windowEnd + postIds.length;
 
   return {
     activeIndex,
     windowStart,
     windowEnd,
     renderedIds,
-    renderedIdsVersion,
     cardHeight,
     cardRefs,
     setActiveIndex,

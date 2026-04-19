@@ -33,3 +33,7 @@ export async function withPriorityInitLimit<T>(fn: () => Promise<T>): Promise<T>
     next?.();
   }
 }
+
+export async function withoutInitLimit<T>(fn: () => Promise<T>): Promise<T> {
+  return fn();
+}
