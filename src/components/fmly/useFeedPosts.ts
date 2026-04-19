@@ -102,7 +102,10 @@ function injectImagePreloadLink(url: string): void {
   link.rel = "preload";
   link.as = "image";
   link.href = url;
-  link.crossOrigin = "anonymous";
+  // No crossOrigin: matches the plain <img> consumer in LyricDanceShell.
+  // Setting crossOrigin="anonymous" here would create a CORS-mode preload
+  // that the no-CORS <img> tag can't reuse, triggering the
+  // "credentials mode does not match" warning and a duplicate fetch.
   (link as any).fetchPriority = "high";
   document.head.appendChild(link);
 }
