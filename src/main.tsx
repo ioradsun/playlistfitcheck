@@ -13,7 +13,7 @@ import App from "./App.tsx";
 import "./index.css";
 
 // --- Cache invalidation (bump CACHE_VERSION to force-clear all caches) ---
-const CACHE_VERSION = 10;
+const CACHE_VERSION = 11;
 const CACHE_VERSION_KEY = "tfm:cache_version";
 (() => {
   try {
