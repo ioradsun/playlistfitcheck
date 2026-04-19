@@ -115,7 +115,10 @@ export function usePrimaryArbiter(
       {
         root,
         threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
-        rootMargin: "-40% 0px -40% 0px",
+        // Widened from -40% to -25%: 50% center band instead of 20%.
+        // Matches natural attention zone; boundary fallback in measure()
+        // covers top/bottom edges where geometry alone misses.
+        rootMargin: "-25% 0px -25% 0px",
       },
     );
 
