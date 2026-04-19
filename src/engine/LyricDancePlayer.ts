@@ -1738,6 +1738,7 @@ export class LyricDancePlayer {
   private _bakedHasCinematicDirection = false;
   /** Incremented by updateTranscript() to cancel any in-flight bake closure */
   private _bakeGeneration = 0;
+  private _firstFramePainted = false;
 
   // Runtime evaluator state
   private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
@@ -1997,7 +1998,10 @@ export class LyricDancePlayer {
       this.audio = options.externalAudio;
       this._ownsAudio = false;
       // Apply engine audio config to the shared element.
-      this.audio.src = data.audio_url;
+      const desiredSrc = data.audio_url;
+      if (this.audio.src !== desiredSrc && this.audio.currentSrc !== desiredSrc) {
+        this.audio.src = desiredSrc;
+      }
       // Disable native loop for region-based players — tick() handles region looping manually
       this.audio.loop = !(data.region_start != null && data.region_end != null);
       this.audio.preload = "auto";
@@ -2124,6 +2128,8 @@ export class LyricDancePlayer {
     performance.clearMarks("engine:start");
     performance.mark("engine:start");
     this.perfMarks.tInitStart = performance.now();
+    this.perfMarks.tFirstFrameDrawn = null;
+    this._firstFramePainted = false;
 
     this.kickFontStabilizationLoad();
 
@@ -2249,76 +2255,86 @@ export class LyricDancePlayer {
       this._bakeLock = true;
       const bakeGen = this._bakeGeneration; // snapshot — if updateTranscript() fires mid-bake it increments this
       this._bakePromise = (async () => {
-        // Ensure real viewport dimensions before compiling
-        if (this.width === 0 && this.container) {
-          const cw = this.container.offsetWidth || this.canvas.offsetWidth || 960;
-          const ch = this.container.offsetHeight || this.canvas.offsetHeight || 540;
-          if (cw > 0 && ch > 0) this.resize(cw, ch);
-        }
+        try {
+          // Ensure real viewport dimensions before compiling
+          if (this.width === 0 && this.container) {
+            const cw = this.container.offsetWidth || this.canvas.offsetWidth || 960;
+            const ch = this.container.offsetHeight || this.canvas.offsetHeight || 540;
+            if (cw > 0 && ch > 0) this.resize(cw, ch);
+          }
 
-        const payload = this.buildScenePayload();
-        this.payload = payload;
-        this.resolvePlayerState(payload);
-        void this.preloadFonts();
-        this.songStartSec = payload.songStart;
-        this.songEndSec = payload.songEnd;
+          const payload = this.buildScenePayload();
+          this.payload = payload;
+          this.resolvePlayerState(payload);
+          void this.preloadFonts();
+          this.songStartSec = payload.songStart;
+          this.songEndSec = payload.songEnd;
 
-        // Compile the scene
-        const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
-        this.compiledScene = compiled;
-        this._markCompiledViewport(this.width || 960, this.height || 540);
+          // Compile the scene
+          const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
+          this.compiledScene = compiled;
+          this._markCompiledViewport(this.width || 960, this.height || 540);
 
-        // ═══ V2: Create BeatConductor with full audio analysis ═══
-        const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
-        const beatGridData = this.data.beat_grid ?? { bpm: 120, beats: [], confidence: 0 };
-        this.conductor = new BeatConductor(beatGridData, songDuration);
-        // Attach runtime analysis if available (has energy/brightness curves not stored in DB)
-        if ((beatGridData as any)._analysis) {
-          this.conductor.setAnalysis((beatGridData as any)._analysis);
-        }
-        
-        if (compiled.songMotion) {
-          this.conductor.setSongIdentity(compiled.songMotion);
-        }
-        if (compiled.sectionMods) {
-          this.conductor.setSectionMods(compiled.sectionMods);
-        }
+          // ═══ V2: Create BeatConductor with full audio analysis ═══
+          const songDuration = Math.max(0.1, this.songEndSec - this.songStartSec);
+          const beatGridData = this.data.beat_grid ?? { bpm: 120, beats: [], confidence: 0 };
+          this.conductor = new BeatConductor(beatGridData, songDuration);
+          // Attach runtime analysis if available (has energy/brightness curves not stored in DB)
+          if ((beatGridData as any)._analysis) {
+            this.conductor.setAnalysis((beatGridData as any)._analysis);
+          }
 
-        // Camera reads Phase 6 motion identity + section mods (not AI labels)
-        if (compiled.songMotion) {
-          this.cameraRig.setSongIdentity(compiled.songMotion);
-        }
-        if (compiled.sectionMods) {
-          this.cameraRig.setSectionMods(compiled.sectionMods);
-        }
+          if (compiled.songMotion) {
+            this.conductor.setSongIdentity(compiled.songMotion);
+          }
+          if (compiled.sectionMods) {
+            this.conductor.setSectionMods(compiled.sectionMods);
+          }
 
-        // Build chunk cache from compiled scene
-        this._buildChunkCacheFromScene(compiled);
+          // Camera reads Phase 6 motion identity + section mods (not AI labels)
+          if (compiled.songMotion) {
+            this.cameraRig.setSongIdentity(compiled.songMotion);
+          }
+          if (compiled.sectionMods) {
+            this.cameraRig.setSectionMods(compiled.sectionMods);
+          }
 
-        // Compute viewport scale
-        this._updateViewportScale();
-        this._textMetricsCache.clear();
+          // Build chunk cache from compiled scene
+          this._buildChunkCacheFromScene(compiled);
 
-        // Only commit to cache if updateTranscript() hasn't fired since we started
-        if (this._bakeGeneration !== bakeGen) {
+          // Compute viewport scale
+          this._updateViewportScale();
+          this._textMetricsCache.clear();
+
+          // Only commit to cache if updateTranscript() hasn't fired since we started
+          if (this._bakeGeneration !== bakeGen) {
+            this._bakeLock = false;
+            return; // stale bake — discard, updateTranscript already set compiledScene fresh
+          }
+          this._bakedScene = compiled;
+          this._bakedChunkCache = new Map(this.chunks);
+          this._bakedHasCinematicDirection = !!this.data.cinematic_direction;
+          this._bakedVersion = BAKER_VERSION;
           this._bakeLock = false;
-          return; // stale bake — discard, updateTranscript already set compiledScene fresh
-        }
-        this._bakedScene = compiled;
-        this._bakedChunkCache = new Map(this.chunks);
-        this._bakedHasCinematicDirection = !!this.data.cinematic_direction;
-        this._bakedVersion = BAKER_VERSION;
-        this._bakeLock = false;
 
-        // Write to module-level cache — survives player.destroy()
-        const danceId = this.data.id ?? this.data.song_slug ?? "";
-        if (danceId) {
-          const cacheKey = sceneCacheKey(danceId, this.width || 960, this.height || 540);
-          sceneCacheSet(cacheKey, {
-            scene: compiled,
-            chunks: new Map(this.chunks),
-            hasCinematicDirection: !!this.data.cinematic_direction,
+          // Write to module-level cache — survives player.destroy()
+          const danceId = this.data.id ?? this.data.song_slug ?? "";
+          if (danceId) {
+            const cacheKey = sceneCacheKey(danceId, this.width || 960, this.height || 540);
+            sceneCacheSet(cacheKey, {
+              scene: compiled,
+              chunks: new Map(this.chunks),
+              hasCinematicDirection: !!this.data.cinematic_direction,
+            });
+          }
+        } catch (err) {
+          console.error("[LyricDancePlayer.bake] compile failed", {
+            danceId: this.data.id,
+            err,
           });
+          this._bakePromise = null;
+          this._bakeLock = false;
+          throw err;
         }
       })();
     }
@@ -2345,6 +2361,10 @@ export class LyricDancePlayer {
     if (this.audio.currentTime <= 0 || this.data.region_start != null) {
       this.audio.currentTime = playStart;
     }
+  }
+
+  get firstFramePainted(): boolean {
+    return this._firstFramePainted;
   }
 
   getBootMetrics(): {
@@ -3467,6 +3487,10 @@ export class LyricDancePlayer {
 
       this.update(deltaMs, smoothedTime, frame, beatState);
       this.draw(smoothedTime, frame);
+      if (!this._firstFramePainted) {
+        this._firstFramePainted = true;
+        this.perfMarks.tFirstFrameDrawn = performance.now();
+      }
 
     } catch (err) {
       console.error('[LyricEngine] tick crash:', err);

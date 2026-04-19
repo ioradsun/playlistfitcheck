@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle, memo, useMemo, type MouseEvent, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { LyricDancePlayer, type LyricDanceData } from "@/engine/LyricDancePlayer";
-import { withPriorityInitLimit } from "@/engine/initQueue";
+import { withoutInitLimit } from "@/engine/initQueue";
 import { useLyricSections } from "@/hooks/useLyricSections";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { buildMoments, type Moment } from "@/lib/buildMoments";
@@ -20,6 +20,8 @@ import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { getSharedAudio } from "@/lib/sharedAudio";
 import { getPreloadedImage } from "@/lib/imagePreloadCache";
 import { useResolvedTypography } from "@/hooks/useResolvedTypography";
+
+let hasRecordedColdFeedBoot = false;
 
 function hydrateRow(raw: LyricDanceData): LyricDanceData {
   const cinematicDirection = raw.cinematic_direction;
@@ -137,6 +139,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const panelPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFiresRef = useRef<Array<{ line_index: number | null; hold_ms: number | null }>>([]);
+  const retriedRef = useRef(false);
 
   // Core state
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(
@@ -144,6 +147,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   );
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
+  const [canvasPainting, setCanvasPainting] = useState(false);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [muted, setMuted] = useState(false);
   const [fireHeat, setFireHeat] = useState<Record<string, { line: Record<number, number>; total: number }>>({});
@@ -216,6 +220,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
     let cancelled = false;
     setPlayerReady(false);
+    setCanvasPainting(false);
 
     const p = new LyricDancePlayer(
       fetchedData,
@@ -227,20 +232,40 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     playerRef.current = p;
     setPlayer(p);
 
-    withPriorityInitLimit(() => p.init()).then(() => {
-      if (cancelled) return;
-      setPlayerReady(true);
-    }).catch(() => {
-      if (cancelled) return;
-      setPlayerReady(false);
-    });
+    const bootDeadline = window.setTimeout(() => {
+      if (!cancelled && playerRef.current === p) {
+        console.warn("[LyricDanceEmbed] init exceeded 4s", { danceId });
+        setPlayerReady(true);
+      }
+    }, 4000);
+
+    withoutInitLimit(() => p.init())
+      .then(() => {
+        if (cancelled) return;
+        window.clearTimeout(bootDeadline);
+        setPlayerReady(true);
+      })
+      .catch((err) => {
+        window.clearTimeout(bootDeadline);
+        if (cancelled) return;
+        console.error("[LyricDanceEmbed] init failed", { danceId, err });
+        if (!retriedRef.current) {
+          retriedRef.current = true;
+          setFetchedData((d) => (d ? { ...d } : d));
+          return;
+        }
+        setPlayerReady(true);
+      });
 
     return () => {
       cancelled = true;
+      retriedRef.current = false;
+      window.clearTimeout(bootDeadline);
       p.destroy();
       if (playerRef.current === p) playerRef.current = null;
       setPlayer((prev) => (prev === p ? null : prev));
       setPlayerReady(false);
+      setCanvasPainting(false);
     };
   }, [live, fetchedData, danceId]);
 
@@ -299,11 +324,27 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     const audio = player.audio;
     let rafId = 0;
 
+    let firstPaintRecorded = false;
+
     const tick = () => {
       const t = player.getCurrentTime?.() ?? audio.currentTime;
       if (Math.abs(t - currentTimeSecRef.current) > 0.1) {
         currentTimeSecRef.current = t;
         setCurrentTimeSec(t);
+      }
+      if (!firstPaintRecorded && player.firstFramePainted) {
+        firstPaintRecorded = true;
+        setCanvasPainting(true);
+        const metrics = player.getBootMetrics();
+        const isColdFeedBoot = !hasRecordedColdFeedBoot;
+        if (!hasRecordedColdFeedBoot) hasRecordedColdFeedBoot = true;
+        console.info("[LyricDanceEmbed] bootMetrics", {
+          danceId,
+          postId,
+          isPrimary: live,
+          isColdFeedBoot,
+          ...metrics,
+        });
       }
       if (player.playing && !document.hidden) {
         rafId = requestAnimationFrame(tick);
@@ -883,7 +924,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           currentTimeSec={currentTimeSec}
           // DOM text is the stand-in until the canvas engine is live.
           // Once canvas takes over, DOM text steps out for primary cards.
-          ownsText={!live || !playerReady}
+          ownsText={!live || !canvasPainting}
         />
 
         <ModeDispatcher ctx={modeCtx} />

@@ -2,93 +2,114 @@ import { useEffect, useRef, useState } from "react";
 import { liveCard } from "@/lib/liveCard";
 
 const SETTLE_MS = 80;
+const SCROLL_REST_MS = 150;
 const VELOCITY_THRESHOLD_PX_PER_SEC = 2500;
 
 export interface ArbiterResult {
   primaryId: string | null;
 }
 
+interface ArbiterOptions {
+  cardHeight?: number;
+  reelsMode?: boolean;
+}
+
 export function usePrimaryArbiter(
   scrollContainer: HTMLElement | null,
   cardRefs: React.MutableRefObject<Map<string, HTMLElement>>,
   renderedIds: Set<string>,
-  renderedIdsVersion = 0,
+  opts?: ArbiterOptions,
 ): ArbiterResult {
   const [result, setResult] = useState<ArbiterResult>({ primaryId: null });
+
   const renderedIdsRef = useRef(renderedIds);
   renderedIdsRef.current = renderedIds;
 
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncRafRef = useRef<number | null>(null);
   const velocityRef = useRef(0);
   const lastScrollYRef = useRef(0);
   const lastScrollTRef = useRef(performance.now());
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("IntersectionObserver" in window)) {
+    if (typeof window === "undefined" || !scrollContainer || !("IntersectionObserver" in window)) {
       liveCard.set(null);
       setResult({ primaryId: null });
       return;
     }
 
-    const root = scrollContainer ?? null;
-    const getY = () => (scrollContainer ? scrollContainer.scrollTop : window.scrollY);
-    lastScrollYRef.current = getY();
-    lastScrollTRef.current = performance.now();
-
     const observedEntries = new Map<Element, IntersectionObserverEntry>();
+    const observedElements = new Set<Element>();
 
-    const BOUNDARY_PX = 50;
+    const getY = () => scrollContainer.scrollTop;
 
-    const measure = (): { primaryId: string | null } => {
-      const visible = Array.from(observedEntries.values())
-        .map((entry) => {
-          const id = (entry.target as HTMLElement).dataset.fmlyPostId;
-          if (!id || !renderedIdsRef.current.has(id)) return null;
-          return { id, ratio: entry.intersectionRatio, target: entry.target as HTMLElement };
-        })
-        .filter((item): item is { id: string; ratio: number; target: HTMLElement } => !!item);
+    const getMaxScroll = () => Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
 
-      // ── Boundary fallback ─────────────────────────────────────────────
-      // First-principles: a user at the top of the feed IS attending to the
-      // first card, regardless of where its geometric center falls. Same at
-      // the bottom. Geometry-only IO misses these edges on tall viewports.
-      const scrollTop = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
-      const scrollHeight = scrollContainer ? scrollContainer.scrollHeight : document.documentElement.scrollHeight;
-      const clientHeight = scrollContainer ? scrollContainer.clientHeight : window.innerHeight;
-      const atTop = scrollTop <= BOUNDARY_PX;
-      const atBottom = scrollTop + clientHeight >= scrollHeight - BOUNDARY_PX;
+    const getCardHeight = () => opts?.cardHeight ?? scrollContainer.clientHeight;
 
-      if (atTop || atBottom) {
-        // Pick the rendered card with the smallest/largest offsetTop accordingly.
-        const cardsByPos = visible
-          .filter((v) => v.ratio > 0)
-          .sort((a, b) => a.target.offsetTop - b.target.offsetTop);
-        if (cardsByPos.length) {
-          return { primaryId: atTop ? cardsByPos[0].id : cardsByPos[cardsByPos.length - 1].id };
+    const isExtremeScroll = () => {
+      const maxScroll = getMaxScroll();
+      const halfCard = getCardHeight() * 0.5;
+      return scrollContainer.scrollTop <= halfCard || scrollContainer.scrollTop >= maxScroll - halfCard;
+    };
+
+    const hitTestCenter = (): string | null => {
+      const rootRect = scrollContainer.getBoundingClientRect();
+      const midpoint = rootRect.top + rootRect.height / 2;
+      let nearestId: string | null = null;
+      let nearestDist = Number.POSITIVE_INFINITY;
+
+      for (const id of renderedIdsRef.current) {
+        const el = cardRefs.current.get(id);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= midpoint && rect.bottom >= midpoint) return id;
+        const dist = Math.min(Math.abs(rect.top - midpoint), Math.abs(rect.bottom - midpoint));
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestId = id;
         }
       }
 
-      if (!visible.length) return { primaryId: null };
-
-      visible.sort((a, b) => b.ratio - a.ratio);
-      const best = visible[0];
-      return {
-        primaryId: best.ratio > 0 ? best.id : null,
-      };
+      return nearestId;
     };
 
-    const commit = (measurement: { primaryId: string | null }) => {
-      const fast = velocityRef.current > VELOCITY_THRESHOLD_PX_PER_SEC;
-      const primaryId = fast ? null : measurement.primaryId;
-      setResult((prev) => (prev.primaryId === primaryId ? prev : { primaryId }));
-      liveCard.set(primaryId);
+    const measure = (): { primaryId: string | null } => {
+      let best: { id: string; ratio: number } | null = null;
+      for (const entry of observedEntries.values()) {
+        const id = (entry.target as HTMLElement).dataset.fmlyPostId;
+        if (!id || !renderedIdsRef.current.has(id)) continue;
+        if (!best || entry.intersectionRatio > best.ratio) {
+          best = { id, ratio: entry.intersectionRatio };
+        }
+      }
+
+      if (best) return { primaryId: best.id };
+      return { primaryId: hitTestCenter() };
     };
 
-    const scheduleSettle = (measurement: { primaryId: string | null }) => {
-      if (settleRef.current) clearTimeout(settleRef.current);
+    const applyMeasurement = (measurement: { primaryId: string | null }) => {
+      const fastMidScroll = velocityRef.current > VELOCITY_THRESHOLD_PX_PER_SEC && !isExtremeScroll();
+      const resolvedPrimary = fastMidScroll ? null : measurement.primaryId ?? hitTestCenter();
+      setResult((prev) => (prev.primaryId === resolvedPrimary ? prev : { primaryId: resolvedPrimary }));
+      liveCard.set(resolvedPrimary);
+    };
+
+    const commit = (measurement: { primaryId: string | null }, immediate = false) => {
+      if (settleRef.current) {
+        clearTimeout(settleRef.current);
+        settleRef.current = null;
+      }
+
+      if (immediate || isExtremeScroll()) {
+        applyMeasurement(measurement);
+        return;
+      }
+
       settleRef.current = setTimeout(() => {
         settleRef.current = null;
-        commit(measurement);
+        applyMeasurement(measurement);
       }, SETTLE_MS);
     };
 
@@ -109,32 +130,111 @@ export function usePrimaryArbiter(
           lastScrollTRef.current = latest.time;
         }
 
-        const measurement = measure();
-        scheduleSettle(measurement);
+        commit(measure(), isExtremeScroll());
       },
       {
-        root,
+        root: scrollContainer,
         threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
-        // Widened from -40% to -25%: 50% center band instead of 20%.
-        // Matches natural attention zone; boundary fallback in measure()
-        // covers top/bottom edges where geometry alone misses.
-        rootMargin: "-25% 0px -25% 0px",
+        rootMargin: "-40% 0px -40% 0px",
       },
     );
 
-    for (const id of renderedIdsRef.current) {
-      const el = cardRefs.current.get(id);
-      if (!el) continue;
-      el.dataset.fmlyPostId = id;
-      io.observe(el);
-    }
+    const syncObserved = () => {
+      const next = new Set<Element>();
+      for (const id of renderedIdsRef.current) {
+        const el = cardRefs.current.get(id);
+        if (!el) continue;
+        el.dataset.fmlyPostId = id;
+        next.add(el);
+      }
+
+      for (const observed of observedElements) {
+        if (next.has(observed)) continue;
+        io.unobserve(observed);
+        observedEntries.delete(observed);
+        observedElements.delete(observed);
+      }
+
+      for (const target of next) {
+        if (observedElements.has(target)) continue;
+        observedElements.add(target);
+        io.observe(target);
+      }
+    };
+
+    const scheduleSync = () => {
+      if (syncRafRef.current != null) return;
+      syncRafRef.current = requestAnimationFrame(() => {
+        syncRafRef.current = null;
+        syncObserved();
+      });
+    };
+
+    const onScroll = () => {
+      scheduleSync();
+      const now = performance.now();
+      const y = getY();
+      const dt = now - lastScrollTRef.current;
+      if (dt > 0) velocityRef.current = Math.abs((y - lastScrollYRef.current) / dt) * 1000;
+      lastScrollYRef.current = y;
+      lastScrollTRef.current = now;
+
+      if (restTimerRef.current) clearTimeout(restTimerRef.current);
+      restTimerRef.current = setTimeout(() => {
+        restTimerRef.current = null;
+        syncObserved();
+        commit(measure(), true);
+      }, SCROLL_REST_MS);
+    };
+
+    scrollContainer.addEventListener("scroll", onScroll, { passive: true });
+
+    lastScrollYRef.current = getY();
+    lastScrollTRef.current = performance.now();
+
+    syncObserved();
+    commit(measure(), true);
 
     return () => {
       io.disconnect();
+      scrollContainer.removeEventListener("scroll", onScroll);
+      if (syncRafRef.current != null) cancelAnimationFrame(syncRafRef.current);
+      if (restTimerRef.current) clearTimeout(restTimerRef.current);
       if (settleRef.current) clearTimeout(settleRef.current);
       liveCard.set(null);
     };
-  }, [scrollContainer, cardRefs, renderedIdsVersion]);
+  }, [scrollContainer, cardRefs, opts?.cardHeight, opts?.reelsMode]);
+
+  useEffect(() => {
+    if (!scrollContainer) return;
+    if (syncRafRef.current != null) return;
+    syncRafRef.current = requestAnimationFrame(() => {
+      syncRafRef.current = null;
+      const primaryId = (() => {
+        const rootRect = scrollContainer.getBoundingClientRect();
+        const midpoint = rootRect.top + rootRect.height / 2;
+        let bestId: string | null = null;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (const id of renderedIdsRef.current) {
+          const el = cardRefs.current.get(id);
+          if (!el) continue;
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= midpoint && rect.bottom >= midpoint) {
+            bestId = id;
+            break;
+          }
+          const dist = Math.min(Math.abs(rect.top - midpoint), Math.abs(rect.bottom - midpoint));
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestId = id;
+          }
+        }
+        return bestId;
+      })();
+      setResult((prev) => (prev.primaryId === primaryId ? prev : { primaryId }));
+      liveCard.set(primaryId);
+    });
+  }, [renderedIds, scrollContainer, cardRefs]);
 
   return result;
 }
