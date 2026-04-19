@@ -26,7 +26,6 @@ interface LyricTextLayerProps {
   phrases?: Phrase[];
   typography?: ResolvedTypography | null;
   currentTimeSec: number;
-  ownsText: boolean;
 }
 
 export const LyricTextLayer = memo(function LyricTextLayer({
@@ -35,7 +34,6 @@ export const LyricTextLayer = memo(function LyricTextLayer({
   phrases,
   typography,
   currentTimeSec,
-  ownsText,
 }: LyricTextLayerProps) {
   const outerRef = useRef<HTMLDivElement>(null);
 
@@ -100,7 +98,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
 
   const fit = useLyricTextFit({
     containerRef: outerRef,
-    text: ownsText ? phraseText || "—" : "—",
+    text: phraseText || "—",
     fontFamily: primaryFontFamily,
     fontWeight: primaryFontWeight,
     maxFontPx: 72,
@@ -141,7 +139,6 @@ export const LyricTextLayer = memo(function LyricTextLayer({
   return (
     <div
       ref={outerRef}
-      data-text-owner={ownsText ? "dom" : "canvas"}
       style={{
         position: "absolute",
         inset: 0,
@@ -154,7 +151,7 @@ export const LyricTextLayer = memo(function LyricTextLayer({
       }}
     >
       <AnimatePresence mode="wait" initial={false}>
-        {ownsText && phraseText && (
+        {phraseText && (
           <motion.div
             key={phraseKey}
             initial={{ opacity: 1 }}
