@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from "react";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { CARD_MODES } from "@/components/lyric/modes/registry";
 import { getPreloadedImage } from "@/lib/imagePreloadCache";
+import { cdnImage } from "@/lib/cdnImage";
 import { cn } from "@/lib/utils";
 import type { LyricDanceEmbedProps } from "@/components/lyric/LyricDanceEmbed";
 import type { CardMode } from "@/components/lyric/modes/types";
