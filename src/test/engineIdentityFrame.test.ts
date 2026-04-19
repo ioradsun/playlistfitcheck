@@ -32,6 +32,8 @@ describe("LyricDancePlayer.paintIdentityFrame", () => {
       drawImage,
       clearRect: vi.fn(),
       save: vi.fn(),
+      translate: vi.fn(),
+      scale: vi.fn(),
       restore: vi.fn(),
     } as any;
 
@@ -68,6 +70,7 @@ describe("LyricDancePlayer.paintIdentityFrame", () => {
     expect(paintSpy).toHaveBeenCalledTimes(1);
     expect(createLinearGradient).toHaveBeenCalled();
     expect(fillRect).toHaveBeenCalled();
+    expect(ctx.scale).toHaveBeenCalledWith(1.08, 1.08);
     expect(drawImage).toHaveBeenCalled();
 
     player.destroy();

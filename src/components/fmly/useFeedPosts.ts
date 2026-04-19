@@ -86,8 +86,8 @@ function hydrateLyricRows(
 
     // Preload the CDN-resized (WebP) variants — that's what the shell + engine
     // will actually consume. Raw PNGs are 1.5 MB; transformed are ~30–100 KB.
-    (lp.section_images ?? []).filter(Boolean).forEach((url: string) => preloadImage(cdnImage(url, "shell")));
-    if (lp.album_art_url) preloadImage(cdnImage(lp.album_art_url, "shell"));
+    (lp.section_images ?? []).filter(Boolean).forEach((url: string) => preloadImage(cdnImage(url, "live")));
+    if (lp.album_art_url) preloadImage(cdnImage(lp.album_art_url, "live"));
   }
 
   return { nextMap, cachePatch, grew: nextMap.size > currentMap.size };
