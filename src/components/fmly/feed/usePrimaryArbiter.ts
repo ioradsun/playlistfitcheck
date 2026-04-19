@@ -48,10 +48,31 @@ export function usePrimaryArbiter(
 
     const getCardHeight = () => opts?.cardHeight ?? scrollContainer.clientHeight;
 
+    const BOUNDARY_PX = 8;
+
+    const atTopBoundary = () => scrollContainer.scrollTop <= BOUNDARY_PX;
+    const atBottomBoundary = () => scrollContainer.scrollTop >= getMaxScroll() - BOUNDARY_PX;
+
     const isExtremeScroll = () => {
       const maxScroll = getMaxScroll();
       const halfCard = getCardHeight() * 0.5;
       return scrollContainer.scrollTop <= halfCard || scrollContainer.scrollTop >= maxScroll - halfCard;
+    };
+
+    /** Pick by document position among rendered cards. dir='first' = topmost, 'last' = bottommost. */
+    const pickByPosition = (dir: "first" | "last"): string | null => {
+      let chosenId: string | null = null;
+      let chosenTop = dir === "first" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+      for (const id of renderedIdsRef.current) {
+        const el = cardRefs.current.get(id);
+        if (!el) continue;
+        const top = el.offsetTop;
+        if (dir === "first" ? top < chosenTop : top > chosenTop) {
+          chosenTop = top;
+          chosenId = id;
+        }
+      }
+      return chosenId;
     };
 
     const hitTestCenter = (): string | null => {
@@ -76,6 +97,18 @@ export function usePrimaryArbiter(
     };
 
     const measure = (): { primaryId: string | null } => {
+      // Boundary override: at the very top, always pick the first card; at the very
+      // bottom, always pick the last. This prevents the "card #2 wins by intersection
+      // ratio" bug when the user lands at the top of the feed.
+      if (atTopBoundary()) {
+        const first = pickByPosition("first");
+        if (first) return { primaryId: first };
+      }
+      if (atBottomBoundary()) {
+        const last = pickByPosition("last");
+        if (last) return { primaryId: last };
+      }
+
       let best: { id: string; ratio: number } | null = null;
       for (const entry of observedEntries.values()) {
         const id = (entry.target as HTMLElement).dataset.fmlyPostId;
