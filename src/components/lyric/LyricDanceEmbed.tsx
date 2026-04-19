@@ -324,27 +324,11 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     const audio = player.audio;
     let rafId = 0;
 
-    let firstPaintRecorded = false;
-
     const tick = () => {
       const t = player.getCurrentTime?.() ?? audio.currentTime;
       if (Math.abs(t - currentTimeSecRef.current) > 0.1) {
         currentTimeSecRef.current = t;
         setCurrentTimeSec(t);
-      }
-      if (!firstPaintRecorded && player.firstFramePainted) {
-        firstPaintRecorded = true;
-        setCanvasPainting(true);
-        const metrics = player.getBootMetrics();
-        const isColdFeedBoot = !hasRecordedColdFeedBoot;
-        if (!hasRecordedColdFeedBoot) hasRecordedColdFeedBoot = true;
-        console.info("[LyricDanceEmbed] bootMetrics", {
-          danceId,
-          postId,
-          isPrimary: live,
-          isColdFeedBoot,
-          ...metrics,
-        });
       }
       if (player.playing && !document.hidden) {
         rafId = requestAnimationFrame(tick);
@@ -381,6 +365,24 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [live, player]);
+
+  // First-frame paint event — engine-driven, no polling.
+  useEffect(() => {
+    if (!live || !player) return;
+    return player.onFirstFrame(() => {
+      setCanvasPainting(true);
+      const metrics = player.getBootMetrics();
+      const isColdFeedBoot = !hasRecordedColdFeedBoot;
+      if (!hasRecordedColdFeedBoot) hasRecordedColdFeedBoot = true;
+      console.info("[LyricDanceEmbed] bootMetrics", {
+        danceId,
+        postId,
+        isPrimary: live,
+        isColdFeedBoot,
+        ...metrics,
+      });
+    });
+  }, [live, player, danceId, postId]);
 
   // Derived data
   const durationSec = useMemo(() => {

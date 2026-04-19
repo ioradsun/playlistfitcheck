@@ -1739,6 +1739,7 @@ export class LyricDancePlayer {
   /** Incremented by updateTranscript() to cancel any in-flight bake closure */
   private _bakeGeneration = 0;
   private _firstFramePainted = false;
+  private _firstFrameCallbacks: Array<() => void> = [];
 
   // Runtime evaluator state
   private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
@@ -2365,6 +2366,19 @@ export class LyricDancePlayer {
 
   get firstFramePainted(): boolean {
     return this._firstFramePainted;
+  }
+
+  /** Subscribe to the first-frame paint event. Fires immediately if already painted. Returns an unsubscribe fn. */
+  onFirstFrame(cb: () => void): () => void {
+    if (this._firstFramePainted) {
+      try { cb(); } catch (err) { console.warn('[LyricDancePlayer] onFirstFrame cb threw:', err); }
+      return () => {};
+    }
+    this._firstFrameCallbacks.push(cb);
+    return () => {
+      const i = this._firstFrameCallbacks.indexOf(cb);
+      if (i >= 0) this._firstFrameCallbacks.splice(i, 1);
+    };
   }
 
   getBootMetrics(): {
@@ -3120,6 +3134,7 @@ export class LyricDancePlayer {
     if (this.destroyed) return;
     this.destroyed = true;
     this.playing = false;
+    this._firstFrameCallbacks = [];
     this.stopHealthMonitor();
     if (this.rafHandle) {
       cancelAnimationFrame(this.rafHandle);
@@ -3490,6 +3505,11 @@ export class LyricDancePlayer {
       if (!this._firstFramePainted) {
         this._firstFramePainted = true;
         this.perfMarks.tFirstFrameDrawn = performance.now();
+        const cbs = this._firstFrameCallbacks;
+        this._firstFrameCallbacks = [];
+        for (const cb of cbs) {
+          try { cb(); } catch (err) { console.warn('[LyricDancePlayer] firstFrame cb threw:', err); }
+        }
       }
 
     } catch (err) {
