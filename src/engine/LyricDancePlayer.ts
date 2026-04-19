@@ -2905,7 +2905,10 @@ export class LyricDancePlayer {
       this.ctx.translate(w / 2, h / 2);
       this.ctx.scale(zoomStart, zoomStart);
       this.ctx.translate(-w / 2, -h / 2);
+      const neutralGrade = getMoodGrade(undefined);
+      this.ctx.filter = buildGradeFilter(neutralGrade, 0.5, 0);
       this._drawImageCoverCropped(this.ctx, image, ox, oy, ow, oh);
+      this.ctx.filter = 'none';
       this.ctx.restore();
     }
 
@@ -4512,7 +4515,7 @@ export class LyricDancePlayer {
     this.ctx.fillText(
       this._echoState.text,
       this.width / 2,
-      this.height * 0.38,
+      this.height * 0.22,
       this.width * 0.85,
     );
     this.ctx.restore();

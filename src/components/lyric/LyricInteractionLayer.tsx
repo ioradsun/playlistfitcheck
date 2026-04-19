@@ -7,23 +7,6 @@ import { fetchSessionFires } from "@/lib/fire";
 import { createFireHold } from "@/lib/fireHold";
 
 const BAR_HEIGHT = 44;
-const MIN_SEGMENT_HEIGHT = 2;
-
-const getSegmentHeight = (fireWeight: number, maxWeight: number): number => {
-  if (fireWeight <= 0) return MIN_SEGMENT_HEIGHT;
-  const normalized = Math.log1p(fireWeight) / Math.log1p(Math.max(1, maxWeight));
-  return MIN_SEGMENT_HEIGHT + normalized * 18;
-};
-
-const getSegmentColor = (fireWeight: number, maxWeight: number): string => {
-  if (fireWeight <= 0) return "rgba(255,255,255,0.06)";
-  const t = Math.min(1, fireWeight / Math.max(1, maxWeight));
-  const r = Math.round(80 + t * 175);
-  const g = Math.round(80 + t * 120);
-  const b = Math.round(80 - t * 40);
-  const a = 0.15 + t * 0.55;
-  return `rgba(${r},${g},${b},${a})`;
-};
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -243,7 +226,7 @@ export function FmlyBar({
     let frame = 0;
     const loop = () => {
       animRef.current = requestAnimationFrame(loop);
-      frame++;
+      frame += 1;
 
       const rect = canvas.parentElement?.getBoundingClientRect();
       if (!rect || rect.width === 0) return;
@@ -258,36 +241,71 @@ export function FmlyBar({
         return base + committedUser + liveHold;
       };
 
+      const points: Array<{ x: number; y: number }> = [];
       const maxFire = Math.max(1, ...moments.map((_, i) => getMomentWeight(i)));
-
+      const maxLineHeight = rect.height * 0.7;
       for (let i = 0; i < moments.length; i += 1) {
         const moment = moments[i];
         const fireWeight = getMomentWeight(i);
-        const segH = getSegmentHeight(fireWeight, maxFire);
-        const segColor = getSegmentColor(fireWeight, maxFire);
-        const leftPct = moment.startSec / Math.max(0.0001, totalDuration);
-        const rightPct = moment.endSec / Math.max(0.0001, totalDuration);
-        const x = leftPct * rect.width;
-        const w = Math.max(1, (rightPct - leftPct) * rect.width);
-        const breathe = fireWeight > 0
-          ? Math.sin(frame * 0.008 * Math.PI)
+        const midPct = ((moment.startSec + moment.endSec) / 2) / Math.max(0.0001, totalDuration);
+        const x = midPct * rect.width;
+        const normalized = fireWeight > 0
+          ? Math.log1p(fireWeight) / Math.log1p(maxFire)
           : 0;
-        const y = rect.height - segH - breathe;
-        ctx.fillStyle = segColor;
-        ctx.fillRect(x + 0.5, y, Math.max(0, w - 1), segH + breathe);
+        const y = rect.height - 2 - normalized * maxLineHeight;
+        points.push({ x, y });
       }
 
-      const currentPct = progressPctRef.current / 100;
-      const playheadX = currentPct * rect.width;
-      const currentSegIdx = moments.findIndex((m) =>
-        currentPct >= m.startSec / Math.max(0.0001, totalDuration) &&
-        currentPct <= m.endSec / Math.max(0.0001, totalDuration),
-      );
-      const currentSegH = currentSegIdx >= 0
-        ? getSegmentHeight(getMomentWeight(currentSegIdx), maxFire)
-        : MIN_SEGMENT_HEIGHT;
-      const playheadY = rect.height - currentSegH - 2;
+      if (points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(0, rect.height - 2);
+        ctx.lineTo(points[0].x, points[0].y);
+        for (let i = 0; i < points.length - 1; i += 1) {
+          const curr = points[i];
+          const next = points[i + 1];
+          const cpx = (curr.x + next.x) / 2;
+          const cpy = (curr.y + next.y) / 2;
+          ctx.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
+        }
+        if (points.length > 1) {
+          const last = points[points.length - 1];
+          ctx.lineTo(last.x, last.y);
+        }
+        ctx.lineTo(rect.width, rect.height - 2);
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+
       if (ready && progressPctRef.current > 0) {
+        const currentPct = progressPctRef.current / 100;
+        const playheadX = currentPct * rect.width;
+        let playheadY = rect.height - 2;
+        if (points.length >= 2) {
+          let left = points[0];
+          let right = points[points.length - 1];
+          if (playheadX <= points[0].x) {
+            left = { x: 0, y: rect.height - 2 };
+            right = points[0];
+          } else if (playheadX >= points[points.length - 1].x) {
+            left = points[points.length - 1];
+            right = { x: rect.width, y: rect.height - 2 };
+          } else {
+            for (let i = 0; i < points.length - 1; i += 1) {
+              if (points[i].x <= playheadX && points[i + 1].x >= playheadX) {
+                left = points[i];
+                right = points[i + 1];
+                break;
+              }
+            }
+          }
+          const t = right.x === left.x ? 0 : (playheadX - left.x) / (right.x - left.x);
+          playheadY = left.y + (right.y - left.y) * t;
+        } else if (points.length === 1) {
+          playheadY = points[0].y;
+        }
         ctx.fillStyle = "rgba(255,255,255,0.9)";
         ctx.beginPath();
         ctx.arc(playheadX, playheadY, 3, 0, Math.PI * 2);
@@ -316,7 +334,7 @@ export function FmlyBar({
         e.life -= 0.008;
         if (e.life <= 0 || e.y < -4) { embers.splice(i, 1); continue; }
 
-        const flicker = 0.7 + Math.sin(frame * 0.08 + i * 2.3) * 0.3;
+        const flicker = 0.7 + Math.sin(performance.now() * 0.004 + i * 2.3) * 0.3;
         const alpha = e.opacity * e.life * flicker;
         const rad = e.size * (0.8 + flicker * 0.4);
 
@@ -414,27 +432,6 @@ export function FmlyBar({
             ref={emberCanvasRef}
             style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 3 }}
           />
-
-          {/* Moment divider lines — visual only */}
-          {moments.slice(0, -1).map((moment) => {
-            const xPct = (moment.endSec / Math.max(0.0001, totalDuration)) * 100;
-            return (
-              <div
-                key={`${moment.startSec}-${moment.endSec}-divider`}
-                style={{
-                  position: "absolute",
-                  top: "auto",
-                  bottom: 0,
-                  height: 6,
-                  left: `${xPct}%`,
-                  width: "1px",
-                  background: "rgba(255,255,255,0.06)",
-                  pointerEvents: "none",
-                  zIndex: 1,
-                }}
-              />
-            );
-          })}
 
           {/* Full-bar scrub overlay */}
           <div
