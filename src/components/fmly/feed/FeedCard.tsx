@@ -1,15 +1,11 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { LyricDanceShell } from "@/components/lyric/LyricDanceShell";
+import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import type { FmlyPost } from "@/components/fmly/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { CARD_CONTENT_HEIGHT_PX } from "@/components/fmly/feed/constants";
 import { cn } from "@/lib/utils";
-
-const LazyLyricDanceEmbed = lazy(async () => {
-  const mod = await import("@/components/lyric/LyricDanceEmbed");
-  return { default: mod.LyricDanceEmbed };
-});
 
 interface Props {
   post: FmlyPost;
@@ -110,9 +106,7 @@ export const FeedCard = memo(function FeedCard({
           }}
         >
           {live ? (
-            <Suspense fallback={<LyricDanceShell {...embedProps} live={false} menuSlot={undefined} />}>
-              <LazyLyricDanceEmbed {...embedProps} />
-            </Suspense>
+            <LyricDanceEmbed {...embedProps} />
           ) : (
             <LyricDanceShell {...embedProps} live={false} menuSlot={undefined} />
           )}
