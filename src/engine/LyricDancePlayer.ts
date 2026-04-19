@@ -2890,7 +2890,8 @@ export class LyricDancePlayer {
     this.ctx.fillRect(0, 0, w, h);
 
     const urls = this.data.section_images ?? [];
-    const firstUrl = urls[0] ? cdnImage(urls[0], "live") : null;
+    const firstRawUrl = urls[0] ?? this.data.album_art_url ?? null;
+    const firstUrl = firstRawUrl ? cdnImage(firstRawUrl, "live") : null;
     const sectionImage = this.chapterImages[0];
     const cachedImage = firstUrl ? getPreloadedImage(firstUrl) : null;
     const image = (sectionImage && sectionImage.complete && sectionImage.naturalWidth > 0)
@@ -2898,7 +2899,18 @@ export class LyricDancePlayer {
       : ((cachedImage && cachedImage.complete && cachedImage.naturalWidth > 0) ? cachedImage : null);
 
     if (image) {
-      this._drawImageCoverCropped(this.ctx, image, 0, 0, w, h);
+      const OVERSCAN = 1.20;
+      const zoomStart = 1.08;
+      const ow = w * OVERSCAN;
+      const oh = h * OVERSCAN;
+      const ox = (w - ow) / 2;
+      const oy = (h - oh) / 2;
+      this.ctx.save();
+      this.ctx.translate(w / 2, h / 2);
+      this.ctx.scale(zoomStart, zoomStart);
+      this.ctx.translate(-w / 2, -h / 2);
+      this._drawImageCoverCropped(this.ctx, image, ox, oy, ow, oh);
+      this.ctx.restore();
     }
 
     const scrimOpacity = this._sectionScrimOpacity[0] ?? 0.25;

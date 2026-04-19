@@ -26,15 +26,11 @@ export const LyricDanceShell = memo(function LyricDanceShell({
   previewImageUrl,
   onRequestPrimary,
 }: LyricDanceEmbedProps) {
-  // Always serve the small CDN-resized variant for the shell. Even when the
-  // raw URL was preloaded by an older code path, the resized URL is what we
-  // render — getPreloadedImage will return null for it and the cache check
-  // simply falls through. The transformed image is ~30 KB vs ~1.5 MB raw.
-  const posterAlbumArt = cdnImage(prefetchedData?.album_art_url ?? null, "shell");
-  const posterSectionImage = cdnImage(previewImageUrl ?? null, "shell");
-  const posterSrc = posterSectionImage && getPreloadedImage(posterSectionImage)
-    ? posterSectionImage
-    : (posterAlbumArt || posterSectionImage || TRANSPARENT_PIXEL);
+  const posterUrl = previewImageUrl
+    ?? prefetchedData?.section_images?.[0]
+    ?? prefetchedData?.album_art_url
+    ?? null;
+  const posterSrc = posterUrl ? cdnImage(posterUrl, "live") : TRANSPARENT_PIXEL;
 
   const [posterLoaded, setPosterLoaded] = useState<boolean>(() => {
     if (!posterSrc || posterSrc === TRANSPARENT_PIXEL) return false;
@@ -105,13 +101,36 @@ export const LyricDanceShell = memo(function LyricDanceShell({
           className="absolute inset-0 w-full h-full pointer-events-none select-none transition-opacity duration-200"
           style={{
             objectFit: "cover",
+            transform: "scale(1.296)",
+            transformOrigin: "center center",
+            filter: "brightness(0.58) saturate(0.75) contrast(1.05)",
             opacity: posterLoaded ? 1 : 0,
+          }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            zIndex: 1,
+            background: `linear-gradient(to bottom,
+              rgba(0,0,0,0.075) 0%,
+              rgba(0,0,0,0.175) 25%,
+              rgba(0,0,0,0.25) 50%,
+              rgba(0,0,0,0.175) 75%,
+              rgba(0,0,0,0.075) 100%)`,
           }}
         />
         <ShellLyricPreview firstLine={prefetchedData?.lines?.[0]?.text} />
       </div>
 
-      <div className="w-full flex-shrink-0" style={{ height: 44, background: "#0a0a0a" }} />
+      <div
+        className="w-full flex-shrink-0"
+        style={{
+          height: 44,
+          background: "#0a0a0a",
+          borderTop: "1px solid rgba(255,255,255,0.04)",
+        }}
+      />
     </div>
   );
 });

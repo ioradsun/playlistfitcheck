@@ -210,15 +210,15 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
 
             const sectionImages = lp.section_images ?? [];
             sectionImages.filter(Boolean).forEach((url: string, imgIdx: number) => {
-              // Preload the small WebP variant — that's what the shell renders.
-              preloadImage(cdnImage(url, "shell"), pi === 0 && imgIdx === 0 ? { priority: "high" } : undefined);
+              // Preload the same variant consumed by shell + identity frame.
+              preloadImage(cdnImage(url, "live"), pi === 0 && imgIdx === 0 ? { priority: "high" } : undefined);
             });
             // Parallel font preload — font ready before engine init()
             _preloadFontsFromDirection(lp.cinematic_direction);
 
             if (lp.album_art_url) {
               const img = new Image();
-              img.src = cdnImage(lp.album_art_url, "shell");
+              img.src = cdnImage(lp.album_art_url, "live");
             }
           }
 

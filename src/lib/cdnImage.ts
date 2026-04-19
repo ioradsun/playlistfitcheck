@@ -16,12 +16,13 @@
  * IMPORTANT: A request without `width` returns the original PNG bytes. To get
  * WebP, both `width` AND a quality must be set. We always pass both.
  *
- * Two presets:
- *   • shellWidth   → small poster behind the cover overlay; ~600 px is plenty
- *                    even at 2× DPR for a feed card.
+ * Presets:
  *   • engineWidth  → chapter image drawn into the player canvas. Canvas
  *                    rarely exceeds ~720 CSS px wide; 960 covers all DPR cases
  *                    while still being a 10× win over the raw PNG.
+ *   • liveWidth    → live-card/source-of-truth poster path; aligned with engine
+ *                    to avoid shell↔canvas first-frame mismatches.
+ *   • thumbWidth   → avatars and small thumbnails.
  *
  * Idempotency
  * ───────────
@@ -32,11 +33,9 @@
 const SUPABASE_OBJECT_PATH = "/storage/v1/object/public/";
 const SUPABASE_RENDER_PATH = "/storage/v1/render/image/public/";
 
-export type CdnPreset = "shell" | "engine" | "live" | "thumb";
+export type CdnPreset = "engine" | "live" | "thumb";
 
 const PRESETS: Record<CdnPreset, { width: number; quality: number }> = {
-  // Small preview behind cover overlay. 600 px @ 75 ≈ 25–35 KB per image.
-  shell: { width: 600, quality: 75 },
   // Player canvas chapter image. 960 px @ 80 ≈ 80–120 KB; still 15–20× smaller
   // than the raw PNG, with no visible quality loss at typical card sizes.
   engine: { width: 960, quality: 80 },
@@ -52,7 +51,7 @@ const PRESETS: Record<CdnPreset, { width: number; quality: number }> = {
  * a WebP-encoded variant. Returns the original URL unchanged for any non-
  * Supabase or already-transformed URL.
  */
-export function cdnImage(url: string | null | undefined, preset: CdnPreset = "shell"): string {
+export function cdnImage(url: string | null | undefined, preset: CdnPreset = "live"): string {
   if (!url) return url ?? "";
   // Don't touch render URLs (already transformed) or non-supabase URLs.
   if (url.includes(SUPABASE_RENDER_PATH)) return url;

@@ -56,7 +56,7 @@ export const FeedCard = memo(function FeedCard({
     lyricDanceUrl,
     prefetchedData: lyricData,
     previewPaletteColor: (lp as any)?.auto_palettes?.[0]?.[0] ?? lp?.palette?.[0] ?? null,
-    previewImageUrl: lp?.album_art_url ?? lp?.section_images?.[0] ?? null,
+    previewImageUrl: lp?.section_images?.[0] ?? lp?.album_art_url ?? null,
     live,
     menuSlot: (
       <SidebarTrigger
