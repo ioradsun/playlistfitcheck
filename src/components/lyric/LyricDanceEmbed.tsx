@@ -366,6 +366,24 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [live, player]);
 
+  // First-frame paint event — engine-driven, no polling.
+  useEffect(() => {
+    if (!live || !player) return;
+    return player.onFirstFrame(() => {
+      setCanvasPainting(true);
+      const metrics = player.getBootMetrics();
+      const isColdFeedBoot = !hasRecordedColdFeedBoot;
+      if (!hasRecordedColdFeedBoot) hasRecordedColdFeedBoot = true;
+      console.info("[LyricDanceEmbed] bootMetrics", {
+        danceId,
+        postId,
+        isPrimary: live,
+        isColdFeedBoot,
+        ...metrics,
+      });
+    });
+  }, [live, player, danceId, postId]);
+
   // Derived data
   const durationSec = useMemo(() => {
     const lines = fetchedData?.lines ?? fetchedData?.lyrics ?? [];
