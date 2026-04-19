@@ -46,12 +46,27 @@ function FeedList({
 
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const feedWindow = useFeedWindow(posts.length, postIds, reelsMode, scrollContainer);
-  const { primaryId } = usePrimaryArbiter(
+  const { primaryId: arbiterPrimaryId } = usePrimaryArbiter(
     scrollContainer,
     feedWindow.cardRefs,
     feedWindow.renderedIds,
     { cardHeight: feedWindow.cardHeight, reelsMode },
   );
+
+  // Manual override: when the user taps a non-primary card, we promote it
+  // immediately. This wins over the arbiter until the next scroll event,
+  // ensuring tap-to-activate works even when the card cannot reach center
+  // (e.g. last card in feed).
+  const [manualPrimaryId, setManualPrimaryId] = useState<string | null>(null);
+  const primaryId = manualPrimaryId ?? arbiterPrimaryId;
+
+  // Clear manual override on scroll so the arbiter can resume.
+  useEffect(() => {
+    if (!scrollContainer || !manualPrimaryId) return;
+    const onScroll = () => setManualPrimaryId(null);
+    scrollContainer.addEventListener("scroll", onScroll, { passive: true });
+    return () => scrollContainer.removeEventListener("scroll", onScroll);
+  }, [scrollContainer, manualPrimaryId]);
 
   const primaryIndex = useMemo(
     () => (primaryId ? postIds.indexOf(primaryId) : null),
@@ -66,6 +81,9 @@ function FeedList({
   }, [feedWindow.cardRefs]);
 
   const handleRequestPrimary = useCallback((postId: string) => {
+    // Promote immediately — don't wait for scroll/arbiter.
+    setManualPrimaryId(postId);
+
     const el = feedWindow.cardRefs.current.get(postId);
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -73,8 +91,13 @@ function FeedList({
     const cardCenter = rect.top + rect.height / 2;
     const offset = cardCenter - vpCenter;
 
-    if (scrollContainer) scrollContainer.scrollBy({ top: offset, behavior: "smooth" });
-    else window.scrollBy({ top: offset, behavior: "smooth" });
+    // Only scroll if there's meaningful offset (>50px). For the last card
+    // when already at the bottom, scrolling is a no-op — promotion alone
+    // is enough.
+    if (Math.abs(offset) > 50) {
+      if (scrollContainer) scrollContainer.scrollBy({ top: offset, behavior: "smooth" });
+      else window.scrollBy({ top: offset, behavior: "smooth" });
+    }
   }, [feedWindow.cardRefs, scrollContainer]);
 
   useEffect(() => {
