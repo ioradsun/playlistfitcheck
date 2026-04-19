@@ -936,7 +936,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             }}
           />
         ) : (
-          <div style={{ height: 44 }} />
+          <div
+            style={{
+              height: 44,
+              borderTop: "1px solid rgba(255,255,255,0.04)",
+            }}
+          />
         )}
       </div>
 
