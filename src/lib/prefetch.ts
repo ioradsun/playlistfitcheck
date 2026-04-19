@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import { preloadImage } from "@/lib/imagePreloadCache";
+import { cdnImage } from "@/lib/cdnImage";
 
 /**
  * Prefetch cache — fires immediately at module evaluation time.
@@ -203,14 +204,15 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
 
             const sectionImages = lp.section_images ?? [];
             sectionImages.filter(Boolean).forEach((url: string, imgIdx: number) => {
-              preloadImage(url, pi === 0 && imgIdx === 0 ? { priority: "high" } : undefined);
+              // Preload the small WebP variant — that's what the shell renders.
+              preloadImage(cdnImage(url, "shell"), pi === 0 && imgIdx === 0 ? { priority: "high" } : undefined);
             });
             // Parallel font preload — font ready before engine init()
             _preloadFontsFromDirection(lp.cinematic_direction);
 
             if (lp.album_art_url) {
               const img = new Image();
-              img.src = lp.album_art_url;
+              img.src = cdnImage(lp.album_art_url, "shell");
             }
           }
 
@@ -283,7 +285,9 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
         preloadAudio(result.data.audio_url);
       }
       const sectionImages = result.data.section_images ?? [];
-      sectionImages.filter(Boolean).forEach((url: string) => preloadImage(url));
+      // Embed pages use a larger canvas — preload the engine variant so the
+      // browser cache hit lines up with what loadSectionImages requests.
+      sectionImages.filter(Boolean).forEach((url: string) => preloadImage(cdnImage(url, "engine")));
       // Parallel font preload — font ready before engine init()
       _preloadFontsFromDirection(result.data.cinematic_direction);
     }

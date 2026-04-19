@@ -46,6 +46,7 @@ import { ExitEffect } from '@/engine/ExitEffect';
 import { HeroSmokeEffect } from '@/engine/HeroSmokeEffect';
 import { revokeAnalyzerWorker } from "@/engine/audioAnalyzerWorker";
 import { preloadImageForCanvas } from "@/lib/imagePreloadCache";
+import { cdnImage } from "@/lib/cdnImage";
 import { ensureFontReady, isFontReady } from "@/lib/fontReadinessCache";
 import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
 import { deserializeSectionPalette, type SectionPalette } from "@/lib/autoPalette";
@@ -4960,7 +4961,10 @@ export class LyricDancePlayer {
     const loadPromises = urls.map(async (url: string, i: number) => {
       if (!url) return;
       try {
-        const img = await preloadImageForCanvas(url);
+        // Fetch the WebP-encoded, width-resized variant via Supabase's image
+        // transform endpoint. ~10–20× smaller than the raw PNG with no visible
+        // quality loss at the canvas's actual rendered size.
+        const img = await preloadImageForCanvas(cdnImage(url, "engine"));
         this.chapterImages[i] = img;
         this._sectionScrimOpacity[i] = this._requiredScrimOpacity(
           this._sampleRegionLuminance(img, 90)

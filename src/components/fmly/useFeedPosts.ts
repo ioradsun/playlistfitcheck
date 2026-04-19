@@ -25,6 +25,7 @@ import {
   cacheWrite,
 } from "@/lib/prefetch";
 import { preloadImage } from "@/lib/imagePreloadCache";
+import { cdnImage } from "@/lib/cdnImage";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 
 const PAGE_SIZE = 20;
@@ -83,8 +84,10 @@ function hydrateLyricRows(
     nextMap.set(lp.id, merged);
     cachePatch[lp.id] = merged;
 
-    (lp.section_images ?? []).filter(Boolean).forEach((url: string) => preloadImage(url));
-    if (lp.album_art_url) preloadImage(lp.album_art_url);
+    // Preload the CDN-resized (WebP) variants — that's what the shell + engine
+    // will actually consume. Raw PNGs are 1.5 MB; transformed are ~30–100 KB.
+    (lp.section_images ?? []).filter(Boolean).forEach((url: string) => preloadImage(cdnImage(url, "shell")));
+    if (lp.album_art_url) preloadImage(cdnImage(lp.album_art_url, "shell"));
   }
 
   return { nextMap, cachePatch, grew: nextMap.size > currentMap.size };
@@ -117,15 +120,16 @@ function injectImagePreloadLink(url: string): void {
 function preloadFirstVisible(posts: FmlyPost[], count = 3): void {
   posts.slice(0, count).forEach((post) => {
     const lp = (post as any).lyric_projects;
-    const poster = lp?.section_images?.[0] || lp?.album_art_url;
+    const rawPoster = lp?.section_images?.[0] || lp?.album_art_url;
+    const poster = rawPoster ? cdnImage(rawPoster, "shell") : null;
     if (poster) injectImagePreloadLink(poster);
-    if (lp?.album_art_url) void preloadImage(lp.album_art_url, { priority: "high" });
-    if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0], { priority: "high" });
+    if (lp?.album_art_url) void preloadImage(cdnImage(lp.album_art_url, "shell"), { priority: "high" });
+    if (lp?.section_images?.[0]) void preloadImage(cdnImage(lp.section_images[0], "shell"), { priority: "high" });
   });
   posts.slice(count).forEach((post) => {
     const lp = (post as any).lyric_projects;
-    if (lp?.album_art_url) void preloadImage(lp.album_art_url);
-    if (lp?.section_images?.[0]) void preloadImage(lp.section_images[0]);
+    if (lp?.album_art_url) void preloadImage(cdnImage(lp.album_art_url, "shell"));
+    if (lp?.section_images?.[0]) void preloadImage(cdnImage(lp.section_images[0], "shell"));
   });
 }
 
