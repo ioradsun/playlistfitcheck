@@ -37,14 +37,36 @@ export function usePrimaryArbiter(
 
     const observedEntries = new Map<Element, IntersectionObserverEntry>();
 
+    const BOUNDARY_PX = 50;
+
     const measure = (): { primaryId: string | null } => {
       const visible = Array.from(observedEntries.values())
         .map((entry) => {
           const id = (entry.target as HTMLElement).dataset.fmlyPostId;
           if (!id || !renderedIdsRef.current.has(id)) return null;
-          return { id, ratio: entry.intersectionRatio };
+          return { id, ratio: entry.intersectionRatio, target: entry.target as HTMLElement };
         })
-        .filter((item): item is { id: string; ratio: number } => !!item);
+        .filter((item): item is { id: string; ratio: number; target: HTMLElement } => !!item);
+
+      // ── Boundary fallback ─────────────────────────────────────────────
+      // First-principles: a user at the top of the feed IS attending to the
+      // first card, regardless of where its geometric center falls. Same at
+      // the bottom. Geometry-only IO misses these edges on tall viewports.
+      const scrollTop = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
+      const scrollHeight = scrollContainer ? scrollContainer.scrollHeight : document.documentElement.scrollHeight;
+      const clientHeight = scrollContainer ? scrollContainer.clientHeight : window.innerHeight;
+      const atTop = scrollTop <= BOUNDARY_PX;
+      const atBottom = scrollTop + clientHeight >= scrollHeight - BOUNDARY_PX;
+
+      if (atTop || atBottom) {
+        // Pick the rendered card with the smallest/largest offsetTop accordingly.
+        const cardsByPos = visible
+          .filter((v) => v.ratio > 0)
+          .sort((a, b) => a.target.offsetTop - b.target.offsetTop);
+        if (cardsByPos.length) {
+          return { primaryId: atTop ? cardsByPos[0].id : cardsByPos[cardsByPos.length - 1].id };
+        }
+      }
 
       if (!visible.length) return { primaryId: null };
 
@@ -93,7 +115,10 @@ export function usePrimaryArbiter(
       {
         root,
         threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
-        rootMargin: "-40% 0px -40% 0px",
+        // Widened from -40% to -25%: 50% center band instead of 20%.
+        // Matches natural attention zone; boundary fallback in measure()
+        // covers top/bottom edges where geometry alone misses.
+        rootMargin: "-25% 0px -25% 0px",
       },
     );
 
