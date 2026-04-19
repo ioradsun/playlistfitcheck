@@ -47,15 +47,22 @@ export function usePrefetchNearbyScenes({
     const h = viewportHeight || DEFAULT_VIEWPORT.height;
 
     const nextQueue: PrefetchItem[] = [];
+    // Include primary (offset 0) FIRST so its scene compiles before neighbors.
+    // Critical for time-to-first-play: the primary's compileScene() can take
+    // 50-200ms on the main thread during engine boot.
+    const seen = new Set<number>();
+    const pushIdx = (idx: number) => {
+      if (idx < 0 || idx >= posts.length || seen.has(idx)) return;
+      seen.add(idx);
+      const post = posts[idx];
+      const data = post.project_id ? lyricDataMap.get(post.project_id) ?? null : null;
+      if (!data?.id) return;
+      nextQueue.push({ data, width: w, height: h });
+    };
+    pushIdx(primaryIndex);
     for (let offset = 1; offset <= PREFETCH_RADIUS; offset += 1) {
-      for (const delta of [offset, -offset]) {
-        const idx = primaryIndex + delta;
-        if (idx < 0 || idx >= posts.length) continue;
-        const post = posts[idx];
-        const data = post.project_id ? lyricDataMap.get(post.project_id) ?? null : null;
-        if (!data?.id) continue;
-        nextQueue.push({ data, width: w, height: h });
-      }
+      pushIdx(primaryIndex + offset);
+      pushIdx(primaryIndex - offset);
     }
 
     queueRef.current = nextQueue;

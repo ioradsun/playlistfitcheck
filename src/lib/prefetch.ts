@@ -171,6 +171,12 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
         if (result.data && result.data.length > 0) {
           cacheWrite("feed_posts", result.data);
 
+          // Warm primary post's audio HTTP cache immediately — saves 100-400ms
+          // off time-to-first-play. The engine's <audio> element will hit the
+          // browser cache instead of issuing a fresh request.
+          const primaryAudio = (result.data as any[])[0]?.lyric_projects?.audio_url;
+          if (primaryAudio) preloadAudio(primaryAudio);
+
           const lyricTextCache: Record<string, any> = getCachedLyricText() ?? {};
           const lyricSceneCache: Record<string, any> = getCachedLyricScene() ?? {};
           for (let pi = 0; pi < (result.data as any[]).length; pi++) {
