@@ -26,8 +26,12 @@ export const LyricDanceShell = memo(function LyricDanceShell({
   previewImageUrl,
   onRequestPrimary,
 }: LyricDanceEmbedProps) {
-  const posterAlbumArt = prefetchedData?.album_art_url ?? null;
-  const posterSectionImage = previewImageUrl ?? null;
+  // Always serve the small CDN-resized variant for the shell. Even when the
+  // raw URL was preloaded by an older code path, the resized URL is what we
+  // render — getPreloadedImage will return null for it and the cache check
+  // simply falls through. The transformed image is ~30 KB vs ~1.5 MB raw.
+  const posterAlbumArt = cdnImage(prefetchedData?.album_art_url ?? null, "shell");
+  const posterSectionImage = cdnImage(previewImageUrl ?? null, "shell");
   const posterSrc = posterSectionImage && getPreloadedImage(posterSectionImage)
     ? posterSectionImage
     : (posterAlbumArt || posterSectionImage || TRANSPARENT_PIXEL);
