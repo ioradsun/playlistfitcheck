@@ -135,7 +135,7 @@ export function usePrimaryArbiter(
       {
         root: scrollContainer,
         threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
-        rootMargin: "-40% 0px -40% 0px",
+        rootMargin: "-25% 0px -25% 0px",
       },
     );
 
@@ -204,37 +204,6 @@ export function usePrimaryArbiter(
       liveCard.set(null);
     };
   }, [scrollContainer, cardRefs, opts?.cardHeight, opts?.reelsMode]);
-
-  useEffect(() => {
-    if (!scrollContainer) return;
-    if (syncRafRef.current != null) return;
-    syncRafRef.current = requestAnimationFrame(() => {
-      syncRafRef.current = null;
-      const primaryId = (() => {
-        const rootRect = scrollContainer.getBoundingClientRect();
-        const midpoint = rootRect.top + rootRect.height / 2;
-        let bestId: string | null = null;
-        let bestDist = Number.POSITIVE_INFINITY;
-        for (const id of renderedIdsRef.current) {
-          const el = cardRefs.current.get(id);
-          if (!el) continue;
-          const rect = el.getBoundingClientRect();
-          if (rect.top <= midpoint && rect.bottom >= midpoint) {
-            bestId = id;
-            break;
-          }
-          const dist = Math.min(Math.abs(rect.top - midpoint), Math.abs(rect.bottom - midpoint));
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestId = id;
-          }
-        }
-        return bestId;
-      })();
-      setResult((prev) => (prev.primaryId === primaryId ? prev : { primaryId }));
-      liveCard.set(primaryId);
-    });
-  }, [renderedIds, scrollContainer, cardRefs]);
 
   return result;
 }
