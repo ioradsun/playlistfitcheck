@@ -29,7 +29,6 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 vi.mock("@/hooks/useLyricSections", () => ({ useLyricSections: () => ({ sections: [], allLines: [] }) }));
-vi.mock("@/hooks/useResolvedTypography", () => ({ useResolvedTypography: () => null }));
 vi.mock("@/components/lyric/LyricInteractionLayer", () => ({ LyricInteractionLayer: () => null }));
 vi.mock("@/components/lyric/PlayerHeader", () => ({ PlayerHeader: () => null }));
 vi.mock("@/components/lyric/modes/ModeDispatcher", () => ({
@@ -42,7 +41,6 @@ vi.mock("@/components/lyric/modes/ModeDispatcher", () => ({
 }));
 vi.mock("@/components/lyric/modes/registry", () => ({ CARD_MODES: [] }));
 vi.mock("@/components/lyric/ViralClipModal", () => ({ ViralClipModal: () => null }));
-vi.mock("@/components/lyric/LyricTextLayer", () => ({ LyricTextLayer: () => <div>text</div> }));
 vi.mock("@/lib/fire", () => ({ emitFire: vi.fn(), fetchFireData: vi.fn(async () => ({})), upsertPlay: vi.fn() }));
 vi.mock("@/lib/reelsAudioUnlock", () => ({ unlockAudio: vi.fn() }));
 vi.mock("@/lib/sharedAudio", () => ({ getSharedAudio: () => document.createElement("audio") }));
@@ -83,7 +81,7 @@ const prefetchedData: any = {
   cinematic_direction: { phrases: [{ start: 0, end: 10, text: "hello world" }] },
 };
 
-describe("first frame handoff", () => {
+describe("canvas fade in", () => {
   beforeEach(() => {
     (globalThis as any).ResizeObserver = class { observe() {} disconnect() {} };
     h.firstFrameListeners = [];
@@ -94,24 +92,26 @@ describe("first frame handoff", () => {
     });
   });
 
-  it("fades DOM text layer to opacity 0 when first frame arrives", async () => {
-    const { container } = render(
+  it("keeps canvas hidden until first frame then fades to opacity 1", async () => {
+    const { container, rerender } = render(
       <LyricDanceEmbed lyricDanceId="dance-1" songTitle="Song" prefetchedData={prefetchedData} live />,
     );
 
-    const textLayer = container.querySelector('div[style*="z-index: 3"]') as HTMLDivElement;
-    expect(textLayer).toBeTruthy();
-    expect(textLayer.style.opacity).toBe("1");
+    const canvasLayer = container.querySelector('div[style*="z-index: 1"][style*="opacity: 0"]') as HTMLDivElement;
+    expect(canvasLayer).toBeTruthy();
+    expect(canvasLayer.style.opacity).toBe("0");
 
     expect(h.firstFrameListeners).toHaveLength(1);
     act(() => {
-      h.firstFrameListeners[0]();
       h.firstFrameListeners[0]();
     });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(50);
     });
-    expect(textLayer.style.opacity).toBe("0");
+    expect(canvasLayer.style.opacity).toBe("1");
+
+    rerender(<LyricDanceEmbed lyricDanceId="dance-1" songTitle="Song" prefetchedData={prefetchedData} live={false} />);
+    expect(canvasLayer.style.opacity).toBe("0");
   });
 });

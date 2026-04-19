@@ -26,7 +26,6 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 vi.mock("@/hooks/useLyricSections", () => ({ useLyricSections: () => ({ sections: [], allLines: [] }) }));
-vi.mock("@/hooks/useResolvedTypography", () => ({ useResolvedTypography: () => null }));
 vi.mock("@/components/lyric/LyricInteractionLayer", () => ({ LyricInteractionLayer: () => null }));
 vi.mock("@/components/lyric/PlayerHeader", () => ({ PlayerHeader: () => null }));
 vi.mock("@/components/lyric/modes/ModeDispatcher", () => ({
@@ -39,7 +38,6 @@ vi.mock("@/components/lyric/modes/ModeDispatcher", () => ({
 }));
 vi.mock("@/components/lyric/modes/registry", () => ({ CARD_MODES: [] }));
 vi.mock("@/components/lyric/ViralClipModal", () => ({ ViralClipModal: () => null }));
-vi.mock("@/components/lyric/LyricTextLayer", () => ({ LyricTextLayer: () => <div>text</div> }));
 vi.mock("@/lib/fire", () => ({ emitFire: vi.fn(), fetchFireData: vi.fn(async () => ({})), upsertPlay: vi.fn() }));
 vi.mock("@/lib/reelsAudioUnlock", () => ({ unlockAudio: vi.fn() }));
 vi.mock("@/lib/sharedAudio", () => ({ getSharedAudio: () => document.createElement("audio") }));
