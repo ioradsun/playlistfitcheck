@@ -4517,7 +4517,7 @@ export class LyricDancePlayer {
     this.ctx.fillText(
       this._echoState.text,
       this.width / 2,
-      this.height * 0.22,
+      this.height * 0.82,
       this.width * 0.85,
     );
     this.ctx.restore();
