@@ -4505,21 +4505,27 @@ export class LyricDancePlayer {
     const alpha = 0.5 * (1 - elapsed / this._echoState.duration);
     const palette = this.data.palette ?? [];
     const warmColor = palette[2] ?? palette[1] ?? '#ffcc66';
+    const maxW = this.width * 0.85;
+    const fontSize = Math.round(this.width * 0.05);
 
     this.ctx.save();
     this.ctx.globalAlpha = alpha;
-    this.ctx.font = `600 ${Math.round(this.width * 0.05)}px "Montserrat", sans-serif`;
+    this.ctx.font = `600 ${fontSize}px "Montserrat", sans-serif`;
     this.ctx.textAlign = 'center';
     this.setCanvasBaseline('middle');
     this.ctx.fillStyle = warmColor;
     this.ctx.shadowColor = warmColor;
     this.ctx.shadowBlur = 12;
-    this.ctx.fillText(
-      this._echoState.text,
-      this.width / 2,
-      this.height * 0.82,
-      this.width * 0.85,
-    );
+
+    let text = this._echoState.text;
+    if (this.ctx.measureText(text).width > maxW) {
+      while (text.length > 1 && this.ctx.measureText(`${text}…`).width > maxW) {
+        text = text.slice(0, -1);
+      }
+      text = `${text}…`;
+    }
+
+    this.ctx.fillText(text, this.width / 2, this.height * 0.82);
     this.ctx.restore();
   }
 
