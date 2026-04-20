@@ -5,6 +5,7 @@ import { usePrimaryArbiter } from "@/components/fmly/feed/usePrimaryArbiter";
 class MockIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null = null;
   readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
   readonly thresholds = [0];
   takeRecords = vi.fn(() => []);
   disconnect = vi.fn();
