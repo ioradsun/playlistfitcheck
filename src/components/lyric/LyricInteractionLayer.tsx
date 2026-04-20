@@ -37,7 +37,6 @@ export function FmlyBar({
   comments = [],
   onToastTap,
 }: FmlyBarProps) {
-  const [renderTick, setRenderTick] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState<{ text: string; momentIndex: number } | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -61,6 +60,7 @@ export function FmlyBar({
   const toastTimerRef = useRef<number | null>(null);
   const activeHoldMomentRef = useRef<number>(-1);
   const holdStartTimeRef = useRef<number>(0);
+  const pressAttributedIndexRef = useRef<number>(0);
   const fireButtonRef = useRef<HTMLSpanElement>(null);
 
   const momentFireCounts = useMemo(
@@ -130,7 +130,6 @@ export function FmlyBar({
       }
       userFiresRef.current = accumulated;
       setHydrated(true);
-      setRenderTick((t) => t + 1);
     });
   }, [moments, danceId, hydrated]);
 
@@ -421,18 +420,19 @@ export function FmlyBar({
 
     animRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animRef.current);
-  }, [moments, momentFireCounts, renderTick, ready, totalDuration]);
+  }, [moments, momentFireCounts, ready, totalDuration]);
 
   // ── Fire handlers ───────────────────────────────────────────────────────
   const addUserFire = (idx: number, holdMs: number) => {
     if (idx < 0) return;
     userFiresRef.current[idx] = (userFiresRef.current[idx] ?? 0) + holdMs;
-    setRenderTick((t) => t + 1);
   };
 
   const handleFireTap = useCallback(() => {
-    addUserFire(currentMomentIdx, 150);
-    const burstMomentIdx = activeHoldMomentRef.current >= 0 ? activeHoldMomentRef.current : currentMomentIdx;
+    const fireMomentIdx = activeHoldMomentRef.current >= 0
+      ? activeHoldMomentRef.current
+      : currentMomentIdx;
+    addUserFire(fireMomentIdx, 150);
     if (activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0) {
       const elapsed = performance.now() - holdStartTimeRef.current;
       const peakBoost = (elapsed / 2000) * Math.max(prevMaxFireRef.current, 5);
@@ -442,16 +442,19 @@ export function FmlyBar({
         releaseTime: performance.now(),
       };
     }
-    pendingBurstRef.current = { count: 2, intensity: 0.3, momentIdx: burstMomentIdx };
+    pendingBurstRef.current = { count: 2, intensity: 0.3, momentIdx: fireMomentIdx };
     activeHoldMomentRef.current = -1;
     holdStartTimeRef.current = 0;
     if (!danceId) return;
-    onFire(getLineIndex(), 0);
-  }, [currentMomentIdx, danceId, getLineIndex, onFire]);
+    onFire(pressAttributedIndexRef.current, 0);
+  }, [currentMomentIdx, danceId, onFire]);
+
   const handleFireHoldEnd = useCallback((holdMs: number) => {
-    addUserFire(currentMomentIdx, holdMs);
+    const fireMomentIdx = activeHoldMomentRef.current >= 0
+      ? activeHoldMomentRef.current
+      : currentMomentIdx;
+    addUserFire(fireMomentIdx, holdMs);
     const intensity = Math.min(1.0, holdMs / 2000);
-    const burstMomentIdx = activeHoldMomentRef.current >= 0 ? activeHoldMomentRef.current : currentMomentIdx;
     if (activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0) {
       const elapsed = performance.now() - holdStartTimeRef.current;
       const peakBoost = (elapsed / 2000) * Math.max(prevMaxFireRef.current, 5);
@@ -461,17 +464,36 @@ export function FmlyBar({
         releaseTime: performance.now(),
       };
     }
-    pendingBurstRef.current = { count: Math.floor(3 + intensity * 5), intensity, momentIdx: burstMomentIdx };
+    pendingBurstRef.current = {
+      count: Math.floor(3 + intensity * 5),
+      intensity,
+      momentIdx: fireMomentIdx,
+    };
     activeHoldMomentRef.current = -1;
     holdStartTimeRef.current = 0;
     if (!danceId) return;
-    onFire(getLineIndex(), holdMs);
-  }, [currentMomentIdx, danceId, getLineIndex, onFire]);
+    onFire(pressAttributedIndexRef.current, holdMs);
+  }, [currentMomentIdx, danceId, onFire]);
 
   const handleDown = () => {
-    activeHoldMomentRef.current = currentMomentIdx;
+    let momentIdx = currentMomentIdx;
+    if (momentIdx < 0 && moments.length > 0) {
+      let minDist = Infinity;
+      for (let i = 0; i < moments.length; i += 1) {
+        const mid = (moments[i].startSec + moments[i].endSec) / 2;
+        const dist = Math.abs(currentTimeSec - mid);
+        if (dist < minDist) {
+          minDist = dist;
+          momentIdx = i;
+        }
+      }
+    }
+    if (momentIdx < 0) return;
+
+    activeHoldMomentRef.current = momentIdx;
     holdStartTimeRef.current = performance.now();
-    pendingBurstRef.current = { count: 3, intensity: 0.5, momentIdx: currentMomentIdx };
+    pressAttributedIndexRef.current = getLineIndex();
+    pendingBurstRef.current = { count: 3, intensity: 0.5, momentIdx };
     fireHoldControllerRef.current?.start();
   };
 
