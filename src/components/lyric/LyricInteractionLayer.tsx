@@ -7,6 +7,27 @@ import { fetchSessionFires } from "@/lib/fire";
 import { createFireHold } from "@/lib/fireHold";
 
 const BAR_HEIGHT = 44;
+const SPRITE_SIZE = 16;
+
+const bakeGlowSprite = (r: number, g: number, b: number): HTMLCanvasElement | null => {
+  if (typeof document === "undefined") return null;
+  const off = document.createElement("canvas");
+  off.width = SPRITE_SIZE;
+  off.height = SPRITE_SIZE;
+  const octx = off.getContext("2d");
+  if (!octx) return null;
+  const cx = SPRITE_SIZE / 2;
+  const grad = octx.createRadialGradient(cx, cx, 0, cx, cx, cx);
+  grad.addColorStop(0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.3, `rgba(${r},${g},${b},0.85)`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  octx.fillStyle = grad;
+  octx.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+  return off;
+};
+
+const ORANGE_SPRITE = bakeGlowSprite(255, 140, 40);
+const GREEN_SPRITE = bakeGlowSprite(74, 222, 128);
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -47,8 +68,7 @@ export function FmlyBar({
   const embersRef = useRef<Array<{
     x: number; y: number; vy: number; vx: number;
     life: number; size: number; opacity: number;
-    r: number; g: number; b: number;
-    segIdx: number; x0: number; x1: number;
+    green: boolean;
   }>>([]);
   const pendingBurstRef = useRef<{ count: number; intensity: number; momentIdx: number } | null>(null);
   const prevMaxFireRef = useRef(1);
@@ -166,33 +186,19 @@ export function FmlyBar({
     };
     resize();
 
-    const getSegmentRanges = (w: number) => {
-      const ranges: Array<{ x0: number; x1: number }> = [];
-      for (const m of moments) {
-        const x0 = (m.startSec / Math.max(0.0001, totalDuration)) * w;
-        const x1 = (m.endSec / Math.max(0.0001, totalDuration)) * w;
-        ranges.push({ x0, x1 });
-      }
-      return ranges;
-    };
-
     const spawnEmber = (
       segIdx: number,
-      r: number,
-      g: number,
-      b: number,
       intensity: number,
       fast = false,
       green = false,
+      segRanges: Array<{ x0: number; x1: number }>,
+      rect: DOMRect,
     ) => {
-      const rect = canvas.parentElement?.getBoundingClientRect();
-      if (!rect) return;
-      const ranges = getSegmentRanges(rect.width);
-      const seg = ranges[segIdx];
+      const seg = segRanges[segIdx];
       if (!seg) return;
       const count = fast ? 1 : (green ? Math.floor(1 + intensity * 2) : Math.floor(2 + intensity * 3));
       for (let i = 0; i < count; i++) {
-        if (embers.length >= 80) break;
+        if (embers.length >= 120) break;
         embers.push({
           x: seg.x0 + Math.random() * (seg.x1 - seg.x0),
           y: rect.height - 2 + Math.random() * 4,
@@ -217,7 +223,7 @@ export function FmlyBar({
             : green
               ? (0.6 + intensity * 0.4)
               : (0.4 + intensity * 0.4),
-          r, g, b, segIdx, x0: seg.x0, x1: seg.x1,
+          green,
         });
       }
     };
@@ -231,20 +237,29 @@ export function FmlyBar({
       if (!rect || rect.width === 0) return;
       if (Math.abs(canvas.width / dpr - rect.width) > 2) resize();
 
+      const now = performance.now();
+      const ranges: Array<{ x0: number; x1: number }> = [];
+      for (const m of moments) {
+        ranges.push({
+          x0: (m.startSec / Math.max(0.0001, totalDuration)) * rect.width,
+          x1: (m.endSec / Math.max(0.0001, totalDuration)) * rect.width,
+        });
+      }
+
       ctx.clearRect(0, 0, rect.width, rect.height);
 
       const getMomentWeight = (idx: number) => {
         const base = momentFireCounts[idx] ?? 0;
         const committedUser = (userFiresRef.current[idx] ?? 0) / 150;
         if (activeHoldMomentRef.current === idx && holdStartTimeRef.current > 0) {
-          const elapsed = performance.now() - holdStartTimeRef.current;
+          const elapsed = now - holdStartTimeRef.current;
           const holdBoost = (elapsed / 2000) * Math.max(prevMaxFireRef.current, 5);
           return base + committedUser + holdBoost;
         }
 
         const decay = releaseDecayRef.current;
         if (decay && decay.momentIdx === idx) {
-          const since = performance.now() - decay.releaseTime;
+          const since = now - decay.releaseTime;
           if (since >= 500) {
             releaseDecayRef.current = null;
           } else {
@@ -333,39 +348,36 @@ export function FmlyBar({
       const isHolding = activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0;
       if (isHolding) {
         const holdIdx = activeHoldMomentRef.current;
-        const elapsed = performance.now() - holdStartTimeRef.current;
+        const elapsed = now - holdStartTimeRef.current;
         const holdIntensity = Math.min(1, elapsed / 2000);
         const streamCount = 1 + Math.floor(holdIntensity * 2);
         for (let s = 0; s < streamCount; s += 1) {
-          spawnEmber(holdIdx, 255, 140, 40, 0.6 + holdIntensity * 0.4, true);
+          spawnEmber(holdIdx, 0.6 + holdIntensity * 0.4, true, false, ranges, rect);
         }
       }
 
-      // Ambient embers: collective fires (everyone) + hottest (green)
-      // Runs every ~30 frames (~2× per second) — background warmth
-      if (frame % 30 === 0) {
-        const maxFC = Math.max(1, ...moments.map((_, i) => momentFireCounts[i] ?? 0));
-
-        let hottestIdx = -1;
-        let hottestCount = 0;
-        for (let i = 0; i < moments.length; i += 1) {
-          const c = momentFireCounts[i] ?? 0;
-          if (c > hottestCount) {
-            hottestCount = c;
-            hottestIdx = i;
-          }
+      // Ambient embers: spawn frequency scales with fire intensity.
+      const maxFC = Math.max(1, ...moments.map((_, i) => momentFireCounts[i] ?? 0));
+      let hottestIdx = -1;
+      let hottestCount = 0;
+      for (let i = 0; i < moments.length; i += 1) {
+        const count = momentFireCounts[i] ?? 0;
+        if (count > hottestCount) {
+          hottestCount = count;
+          hottestIdx = i;
         }
-
-        for (let i = 0; i < moments.length; i += 1) {
-          const count = momentFireCounts[i] ?? 0;
-          if (count <= 0) continue;
-          const intensity = Math.min(1, count / maxFC);
-          spawnEmber(i, 255, 140, 40, intensity);
+        if (count <= 0) continue;
+        const intensity = Math.min(1, count / maxFC);
+        const interval = Math.max(10, Math.round(60 - intensity * 50));
+        if (frame % interval === 0) {
+          spawnEmber(i, intensity, false, false, ranges, rect);
         }
-
-        if (hottestIdx >= 0 && hottestCount > 0) {
-          const intensity = Math.min(1, hottestCount / maxFC);
-          spawnEmber(hottestIdx, 74, 222, 128, intensity, false, true);
+      }
+      if (hottestIdx >= 0 && hottestCount > 0) {
+        const intensity = Math.min(1, hottestCount / maxFC);
+        const interval = Math.max(8, Math.round(40 - intensity * 32));
+        if (frame % interval === 0) {
+          spawnEmber(hottestIdx, intensity, false, true, ranges, rect);
         }
       }
 
@@ -373,7 +385,7 @@ export function FmlyBar({
       if (burst) {
         pendingBurstRef.current = null;
         for (let i = 0; i < burst.count; i += 1) {
-          spawnEmber(burst.momentIdx, 255, 140, 40, burst.intensity, true);
+          spawnEmber(burst.momentIdx, burst.intensity, true, false, ranges, rect);
         }
       }
 
@@ -385,30 +397,18 @@ export function FmlyBar({
         e.life -= 0.008;
         if (e.life <= 0 || e.y < -4) { embers.splice(i, 1); continue; }
 
-        const flicker = 0.7 + Math.sin(performance.now() * 0.004 + i * 2.3) * 0.3;
-        const alpha = e.opacity * e.life * flicker;
-        const rad = e.size * (0.8 + flicker * 0.4);
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(e.x0, -10, e.x1 - e.x0, rect.height + 10);
-        ctx.clip();
-        const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, rad * 2.5);
-        grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
-        grad.addColorStop(0.3, `rgba(${e.r},${e.g},${e.b},${alpha * 0.85})`);
-        grad.addColorStop(1, `rgba(${e.r},${e.g},${e.b},0)`);
-        ctx.fillStyle = grad;
-        ctx.shadowColor = `rgba(${e.r},${e.g},${e.b},${alpha * 0.6})`;
-        ctx.shadowBlur = rad * 2;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, rad * 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        const alpha = e.opacity * e.life;
+        const drawSize = e.size * 2.5;
+        const sprite = e.green ? GREEN_SPRITE : ORANGE_SPRITE;
+        if (!sprite) continue;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(sprite, e.x - drawSize / 2, e.y - drawSize / 2, drawSize, drawSize);
       }
+      ctx.globalAlpha = 1;
 
       if (fireButtonRef.current) {
         if (activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0) {
-          const elapsed = performance.now() - holdStartTimeRef.current;
+          const elapsed = now - holdStartTimeRef.current;
           const intensity = Math.min(1, elapsed / 2000);
           const scale = 1 + intensity * 0.4;
           fireButtonRef.current.style.transform = `scale(${scale})`;
