@@ -2,13 +2,20 @@
  * FmlyFeed — the FMLY feed.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { useFeedPosts } from "./useFeedPosts";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { useFeedWindow } from "@/components/fmly/feed/useFeedWindow";
 import { usePrimaryArbiter } from "@/components/fmly/feed/usePrimaryArbiter";
 import { usePrefetchNearbyScenes } from "@/components/fmly/feed/usePrefetchNearbyScenes";
+import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
+import { preloadImageForCanvas } from "@/lib/imagePreloadCache";
+import { cdnImage } from "@/lib/cdnImage";
 import { FeedCard } from "@/components/fmly/feed/FeedCard";
 import { FeedHeader } from "@/components/fmly/feed/FeedHeader";
 import { SkeletonCard } from "@/components/fmly/feed/SkeletonCard";
@@ -22,6 +29,7 @@ function FeedList({
   hasMore,
   loadMore,
   lyricDataMap,
+  setLyricDataMap,
   reelsMode,
   onScrolledChange,
 }: {
@@ -31,6 +39,7 @@ function FeedList({
   hasMore: boolean;
   loadMore: () => Promise<void>;
   lyricDataMap: Map<string, any>;
+  setLyricDataMap: Dispatch<SetStateAction<Map<string, any>>>;
   reelsMode: boolean;
   onScrolledChange?: (scrolled: boolean) => void;
 }) {
@@ -74,6 +83,43 @@ function FeedList({
   );
 
   usePrefetchNearbyScenes({ posts, lyricDataMap, primaryIndex });
+
+  useEffect(() => {
+    if (primaryIndex == null || primaryIndex < 0) return;
+    const promoteIdx = primaryIndex + 1;
+    if (promoteIdx >= posts.length) return;
+
+    const post = posts[promoteIdx];
+    const projectId = post?.project_id;
+    if (!projectId || lyricDataMap.has(projectId)) return;
+
+    let cancelled = false;
+    supabase
+      .from("lyric_projects" as any)
+      .select(LYRIC_DANCE_COLUMNS)
+      .eq("id", projectId)
+      .maybeSingle()
+      .then(({ data: row }: any) => {
+        if (cancelled || !row) return;
+        const hydrated = {
+          ...row,
+          cinematic_direction: row.cinematic_direction
+            ? normalizeCinematicDirection(row.cinematic_direction)
+            : null,
+        } as LyricDanceData;
+
+        setLyricDataMap((prev) => {
+          const next = new Map(prev);
+          next.set(projectId, hydrated);
+          return next;
+        });
+
+        const poster = row.section_images?.[0] ?? row.album_art_url;
+        if (poster) void preloadImageForCanvas(cdnImage(poster, "live"));
+      });
+
+    return () => { cancelled = true; };
+  }, [primaryIndex, posts, lyricDataMap, setLyricDataMap]);
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
     if (el) feedWindow.cardRefs.current.set(id, el);
@@ -268,6 +314,7 @@ export function FmlyFeed({ reelsMode = false, onScrolledChange }: FmlyFeedProps)
           hasMore={hasSearchQuery ? false : feed.hasMore}
           loadMore={hasSearchQuery ? async () => {} : feed.loadMore}
           lyricDataMap={feed.lyricDataMap}
+          setLyricDataMap={feed.setLyricDataMap}
           reelsMode={reelsMode}
           onScrolledChange={onScrolledChange}
         />

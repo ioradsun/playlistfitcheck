@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { FmlyPost, FeedView, BillboardMode } from "./types";
@@ -24,8 +25,6 @@ import {
   getCachedLyricText,
   cacheWrite,
 } from "@/lib/prefetch";
-import { preloadImage } from "@/lib/imagePreloadCache";
-import { cdnImage } from "@/lib/cdnImage";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 
 const PAGE_SIZE = 20;
@@ -34,6 +33,10 @@ const POST_SELECT =
   "id, user_id, project_id, caption, created_at, status, " +
   "profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified), " +
   "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id, palette, cinematic_direction, beat_grid, section_images, auto_palettes, lines, words, physics_spec, empowerment_promise)";
+const SHELL_COLUMNS =
+  "id, user_id, project_id, caption, created_at, status, " +
+  "profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified), " +
+  "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id, section_images, palette, auto_palettes, lines)";
 
 // ── Filter helpers ──────────────────────────────────────────────────────────
 function matchesView(p: FmlyPost, view: FeedView): boolean {
@@ -57,17 +60,18 @@ function hydratePosts(rows: FmlyPost[]): FmlyPost[] {
 /**
  * Merge incoming lyric_projects rows into the map. Returns the next map and
  * an object of entries that should be written to the split localStorage caches.
- * Side effect: triggers preloadImage() for section_images + album_art.
  */
 function hydrateLyricRows(
   posts: FmlyPost[],
   currentMap: Map<string, LyricDanceData>,
+  fullIds?: Set<string>,
 ): { nextMap: Map<string, LyricDanceData>; cachePatch: Record<string, LyricDanceData>; grew: boolean } {
   const nextMap = new Map(currentMap);
   const cachePatch: Record<string, LyricDanceData> = {};
 
   for (const post of posts) {
     const lp = (post as any).lyric_projects;
+    if (fullIds && !fullIds.has(post.id)) continue;
     const lpHasLines = Array.isArray(lp?.lines) && lp.lines.length > 0;
     if (!lp?.id || !lpHasLines) continue;
 
@@ -83,54 +87,9 @@ function hydrateLyricRows(
     } as LyricDanceData;
     nextMap.set(lp.id, merged);
     cachePatch[lp.id] = merged;
-
-    // Preload the CDN-resized (WebP) variants — that's what the shell + engine
-    // will actually consume. Raw PNGs are 1.5 MB; transformed are ~30–100 KB.
-    (lp.section_images ?? []).filter(Boolean).forEach((url: string) => preloadImage(cdnImage(url, "live")));
-    if (lp.album_art_url) preloadImage(cdnImage(lp.album_art_url, "live"));
   }
 
   return { nextMap, cachePatch, grew: nextMap.size > currentMap.size };
-}
-
-/**
- * Inject <link rel="preload" as="image"> for a URL — elevates resource priority
- * above all other page fetches. Deduped via a module-level Set.
- */
-const injectedPreloadLinks = new Set<string>();
-function injectImagePreloadLink(url: string): void {
-  if (typeof document === "undefined" || !url || injectedPreloadLinks.has(url)) return;
-  injectedPreloadLinks.add(url);
-  const link = document.createElement("link");
-  link.rel = "preload";
-  link.as = "image";
-  link.href = url;
-  // No crossOrigin: matches the plain <img> consumer in LyricDanceShell.
-  // Setting crossOrigin="anonymous" here would create a CORS-mode preload
-  // that the no-CORS <img> tag can't reuse, triggering the
-  // "credentials mode does not match" warning and a duplicate fetch.
-  (link as any).fetchPriority = "high";
-  document.head.appendChild(link);
-}
-
-/**
- * Prioritize poster decodes for the top-of-feed cards.
- * Top 3 also get <link rel="preload"> injected to elevate above all page resources.
- */
-function preloadFirstVisible(posts: FmlyPost[], count = 3): void {
-  posts.slice(0, count).forEach((post) => {
-    const lp = (post as any).lyric_projects;
-    const rawPoster = lp?.section_images?.[0] || lp?.album_art_url;
-    const poster = rawPoster ? cdnImage(rawPoster, "live") : null;
-    if (poster) injectImagePreloadLink(poster);
-    if (lp?.album_art_url) void preloadImage(cdnImage(lp.album_art_url, "live"), { priority: "high" });
-    if (lp?.section_images?.[0]) void preloadImage(cdnImage(lp.section_images[0], "live"), { priority: "high" });
-  });
-  posts.slice(count).forEach((post) => {
-    const lp = (post as any).lyric_projects;
-    if (lp?.album_art_url) void preloadImage(cdnImage(lp.album_art_url, "live"));
-    if (lp?.section_images?.[0]) void preloadImage(cdnImage(lp.section_images[0], "live"));
-  });
 }
 
 // ── Billboard scoring ───────────────────────────────────────────────────────
@@ -219,6 +178,7 @@ export interface FeedState {
   feedView: FeedView;
   billboardMode: BillboardMode;
   lyricDataMap: Map<string, LyricDanceData>;
+  setLyricDataMap: Dispatch<SetStateAction<Map<string, LyricDanceData>>>;
 
   setFeedView: (v: FeedView) => void;
   setBillboardMode: (m: BillboardMode) => void;
@@ -321,16 +281,16 @@ export function useFeedPosts(): FeedState {
     if (posts.length === 0) setLoading(true);
 
     const prefetched = consumeFeedPrefetch();
-    const { data: raw } = prefetched
+    const { data: raw, fullIds } = prefetched
       ? await prefetched
       : await supabase
           .from("feed_posts" as any)
-          .select(POST_SELECT)
+          .select(SHELL_COLUMNS)
           .eq("status", "live")
           .limit(PAGE_SIZE)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false }).then((r) => ({ ...r, fullIds: new Set<string>() }));
 
-    let allPosts = (raw ?? []) as unknown as FmlyPost[];
+    const allPosts = (raw ?? []) as unknown as FmlyPost[];
     const filtered = allPosts.filter((p) => matchesView(p, feedView));
     const normalized = hydratePosts(filtered);
 
@@ -350,17 +310,18 @@ export function useFeedPosts(): FeedState {
     });
     try {
       cacheWrite("feed_posts", allPosts);
-    } catch {}
+    } catch {
+      // Best-effort only.
+    }
     cursorRef.current = normalized[normalized.length - 1]?.created_at ?? null;
     newestRef.current = normalized[0]?.created_at ?? null;
     setHasMore(allPosts.length === PAGE_SIZE);
     setLoading(false);
     setPendingNewCount(0);
 
-    const { nextMap, cachePatch, grew } = hydrateLyricRows(filtered, lyricDataMap);
+    const { nextMap, cachePatch, grew } = hydrateLyricRows(filtered, lyricDataMap, fullIds);
     if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
     if (grew) setLyricDataMap(nextMap);
-    preloadFirstVisible(normalized);
 
     // Font preloading handled by prefetch.ts (module eval) and engine (kickFontStabilizationLoad).
     // ensureFontReady deduplicates, so this was a no-op burning dynamic import overhead.
@@ -375,7 +336,7 @@ export function useFeedPosts(): FeedState {
     try {
       const { data } = await supabase
         .from("feed_posts" as any)
-        .select(POST_SELECT)
+        .select(SHELL_COLUMNS)
         .eq("status", "live")
         .lt("created_at", cursorRef.current)
         .order("created_at", { ascending: false })
@@ -394,10 +355,9 @@ export function useFeedPosts(): FeedState {
           return merged;
         });
 
-        const { nextMap, cachePatch, grew } = hydrateLyricRows(normalized, lyricDataMap);
+        const { nextMap, cachePatch, grew } = hydrateLyricRows(normalized, lyricDataMap, new Set<string>());
         if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
         if (grew) setLyricDataMap(nextMap);
-        preloadFirstVisible(normalized);
       }
       setHasMore((data ?? []).length === PAGE_SIZE);
     } finally {
@@ -459,7 +419,6 @@ export function useFeedPosts(): FeedState {
         const { nextMap, cachePatch, grew } = hydrateLyricRows(results, lyricDataMap);
         if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
         if (grew) setLyricDataMap(nextMap);
-        preloadFirstVisible(results);
       } catch (err) {
         console.error("[useFeedPosts] search error:", err);
       } finally {
@@ -498,6 +457,7 @@ export function useFeedPosts(): FeedState {
     feedView,
     billboardMode,
     lyricDataMap,
+    setLyricDataMap,
     setFeedView,
     setBillboardMode,
     loadMore,
