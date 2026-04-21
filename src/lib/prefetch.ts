@@ -332,9 +332,10 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
         preloadAudio(result.data.audio_url);
       }
       const sectionImages = result.data.section_images ?? [];
-      // Embed pages use a larger canvas — preload the engine variant so the
-      // browser cache hit lines up with what loadSectionImages requests.
-      sectionImages.filter(Boolean).forEach((url: string) => preloadImage(cdnImage(url, "engine")));
+      // Embed pages use a larger canvas — preload the same variant the engine requests.
+      sectionImages
+        .filter(Boolean)
+        .forEach((url: string) => preloadImageForCanvas(cdnImage(url, "live")));
       // Parallel font preload — font ready before engine init()
       _preloadFontsFromDirection(result.data.cinematic_direction);
     }

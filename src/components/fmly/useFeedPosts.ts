@@ -308,10 +308,23 @@ export function useFeedPosts(): FeedState {
       }
       return normalized;
     });
-    try {
-      cacheWrite("feed_posts", allPosts);
-    } catch {
-      // Best-effort only.
+    const postsToCache = allPosts;
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(() => {
+        try {
+          cacheWrite("feed_posts", postsToCache);
+        } catch {
+          // Best-effort only.
+        }
+      }, { timeout: 5000 });
+    } else {
+      setTimeout(() => {
+        try {
+          cacheWrite("feed_posts", postsToCache);
+        } catch {
+          // Best-effort only.
+        }
+      }, 0);
     }
     cursorRef.current = normalized[normalized.length - 1]?.created_at ?? null;
     newestRef.current = normalized[0]?.created_at ?? null;
