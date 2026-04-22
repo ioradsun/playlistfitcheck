@@ -5787,8 +5787,7 @@ export class LyricDancePlayer {
             // No else-if ramp — word is fully visible (1.0) from its effective start.
           }
         }
-        const exitOwnsGroup = this._exitTriggeredForGroup === groupIdx;
-        chunk.alpha = (exitOwnsGroup || ws.soloHeroHidden) ? 0 : wordEntryAlpha;
+        chunk.alpha = ws.soloHeroHidden ? 0 : wordEntryAlpha;
         chunk.scaleX = scale;
         chunk.scaleY = scale;
         chunk.scale = 1;

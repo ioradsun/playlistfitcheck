@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { RecentItem } from "@/components/AppSidebar";
@@ -65,7 +66,7 @@ export function useAudioProject(config: UseAudioProjectConfig) {
 
       setIsCreating(true);
       try {
-        const projectId = existingProjectId ?? preGeneratedId ?? crypto.randomUUID();
+        const projectId = existingProjectId ?? preGeneratedId ?? uuidv4();
         const storagePath = getUnifiedStoragePath(user.id, config.tool, projectId, file.name);
         const audioUrl = await uploadAudioFile(storagePath, file);
 

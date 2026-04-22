@@ -25,7 +25,6 @@ import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { LyricWaveform } from "./LyricWaveform";
 import { VideoOptionsPanel } from "@/components/lyric/VideoOptionsPanel";
-import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import type { WaveformData } from "@/hooks/useAudioEngine";
@@ -43,8 +42,7 @@ import { useVoteGate } from "@/hooks/useVoteGate";
 import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { fetchFireStrength, fetchFireData } from "@/lib/fire";
 import { persistQueue } from "@/lib/persistQueue";
-import { preloadImageForCanvas } from "@/lib/imagePreloadCache";
-import { cdnImage } from "@/lib/cdnImage";
+import { preloadImage } from "@/lib/imagePreloadCache";
 import { resolveTypographyFromDirection, getFontNamesForPreload } from "@/lib/fontResolver";
 
 const ExportStudio = lazy(() => import("./ExportStudio").then((m) => ({ default: m.ExportStudio })));
@@ -634,9 +632,7 @@ export function FitTab({
   // playerReady + audio bridge moved below danceData declaration
 
   useEffect(() => {
-    sectionImageUrls.filter(Boolean).forEach((url) =>
-      preloadImageForCanvas(cdnImage(url!, "live")),
-    );
+    sectionImageUrls.filter(Boolean).forEach((url) => preloadImage(url!));
   }, [sectionImageUrls]);
 
   const allCoreDone =
@@ -715,6 +711,18 @@ export function FitTab({
       audio.removeEventListener("ended", onEnded);
     };
   }, [playerReady]);
+
+  const LyricDanceEmbedModule = useMemo(
+    () =>
+      danceId
+        ? lazy(() =>
+            import("@/components/lyric/LyricDanceEmbed").then((m) => ({
+              default: m.LyricDanceEmbed,
+            })),
+          )
+        : null,
+    [danceId],
+  );
 
   useEffect(() => {
     if (playerReady || !danceId) {
@@ -1179,28 +1187,41 @@ export function FitTab({
             {/* Video player */}
             <div className="relative rounded-xl overflow-hidden w-full" style={{ height: 480 }}>
               {playerReady || imageWaitExpired ? (
-                <LyricDanceEmbed
-                  ref={dancePlayerRef}
-                  lyricDanceId={danceId}
-                  songTitle={lyricData.title || "Untitled"}
-                  artistName={profile?.display_name || ""}
-                  avatarUrl={profile?.avatar_url ?? null}
-                  isVerified={profile?.is_verified ?? false}
-                  userId={user?.id ?? null}
-                  prefetchedData={danceData}
-                  lyricDanceUrl={danceUrl ?? null}
-                  previewPaletteColor={
-                    (danceData as any)?.auto_palettes?.[0]?.[0]
-                    ?? (danceData as any)?.palette?.[0]
-                    ?? null
+                <Suspense
+                  fallback={
+                    <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-3">
+                      <Loader2 size={20} className="animate-spin text-white/20" />
+                      <span className="text-[10px] font-mono text-white/25 tracking-wider uppercase">
+                        loading...
+                      </span>
+                    </div>
                   }
-                  previewImageUrl={
-                    (danceData as any)?.section_images?.[0]
-                    ?? (danceData as any)?.album_art_url
-                    ?? null
-                  }
-                  autoPlay={autoPlay}
-                />
+                >
+                  {LyricDanceEmbedModule ? (
+                    <LyricDanceEmbedModule
+                      ref={dancePlayerRef}
+                      lyricDanceId={danceId}
+                      songTitle={lyricData.title || "Untitled"}
+                      artistName={profile?.display_name || ""}
+                      avatarUrl={profile?.avatar_url ?? null}
+                      isVerified={profile?.is_verified ?? false}
+                      userId={user?.id ?? null}
+                      prefetchedData={danceData}
+                      lyricDanceUrl={danceUrl ?? null}
+                      previewPaletteColor={
+                        (danceData as any)?.auto_palettes?.[0]?.[0]
+                        ?? (danceData as any)?.palette?.[0]
+                        ?? null
+                      }
+                      previewImageUrl={
+                        (danceData as any)?.section_images?.[0]
+                        ?? (danceData as any)?.album_art_url
+                        ?? null
+                      }
+                      autoPlay={autoPlay}
+                    />
+                  ) : null}
+                </Suspense>
               ) : (
                 <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center gap-3">
                   <Loader2 size={20} className="animate-spin text-white/20" />

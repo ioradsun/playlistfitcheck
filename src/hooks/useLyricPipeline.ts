@@ -9,18 +9,9 @@ import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { extractPeaks } from "@/lib/audioUtils";
 import { getCachedAudioBuffer } from "@/lib/audioDecodeCache";
 import { buildPhrases } from "@/lib/phraseEngine";
-import { preloadImageForCanvas } from "@/lib/imagePreloadCache";
-import { cdnImage } from "@/lib/cdnImage";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type { FilmMode } from "@/components/lyric/LyricFitTab";
-
-const preloadSectionImagesForCanvas = (urls: (string | null)[]) => {
-  urls.forEach((url) => {
-    if (!url) return;
-    preloadImageForCanvas(cdnImage(url, "live"));
-  });
-};
 
 export type FitReadiness = "not_started" | "running" | "ready" | "error";
 export type PipelineStageStatus = "pending" | "running" | "done" | "error";
@@ -316,7 +307,6 @@ async function createDanceRowAndGenerateImages({
 
   const urls: (string | null)[] = result?.urls || result?.section_images || [];
   const allComplete = result?.success === true || urls.every(Boolean);
-  preloadSectionImagesForCanvas(urls);
   setSectionImageUrls(urls);
   setSectionImageProgress({
     done: urls.filter(Boolean).length,
@@ -515,7 +505,6 @@ export function usePipelineScheduler({
           if (error) throw error;
           const urls: (string | null)[] = result?.urls || result?.section_images || [];
           const allComplete = result?.success === true || urls.every(Boolean);
-          preloadSectionImagesForCanvas(urls);
           setSectionImageUrls(urls);
           setSectionImageProgress({ done: urls.filter(Boolean).length, total: sections.length });
           setGenerationStatus((prev) => ({ ...prev, sectionImages: allComplete ? "done" : "error" }));
@@ -709,7 +698,6 @@ export function usePipelineScheduler({
       total: number;
       error?: string | null;
     }) => {
-      preloadSectionImagesForCanvas(urls);
       setSectionImageUrls(urls);
       setSectionImageProgress({
         done: urls.filter(Boolean).length,
@@ -995,31 +983,6 @@ export function useLyricPipeline({
       _phraseSource: "client_v1",
     }));
   }, [words, cinematicDirection]);
-
-  // ── Font preloading — start as soon as cinematic direction arrives ──
-  useEffect(() => {
-    if (!cinematicDirection) return;
-    import("@/lib/fontResolver")
-      .then(({ resolveTypographyFromDirection, getFontNamesForPreload }) => {
-        import("@/lib/fontReadinessCache")
-          .then(({ ensureFontReady }) => {
-            try {
-              const typo = resolveTypographyFromDirection(cinematicDirection);
-              getFontNamesForPreload(typo).forEach((name) => ensureFontReady(name));
-            } catch {
-              // noop
-            }
-          })
-          .catch(() => {});
-      })
-      .catch(() => {});
-  }, [cinematicDirection]);
-
-  // ── Audio pre-warm — cache the mp3 before player boots ──
-  useEffect(() => {
-    if (!audioUrl) return;
-    fetch(audioUrl, { priority: "low" } as RequestInit).catch(() => {});
-  }, [audioUrl]);
 
   useEffect(() => {
     if (audioBuffer) return;
