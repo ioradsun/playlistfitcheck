@@ -1950,6 +1950,7 @@ export class LyricDancePlayer {
   private _audioListenerAbort: AbortController = new AbortController();
   private _ownsAudio = true;
   private _exportFrameCount?: number;
+  private _exportPinnedSectionIdx: number | null = null;
   private options?: {
     preloadedImages?: HTMLImageElement[];
     externalAudio?: HTMLAudioElement;
@@ -2542,11 +2543,34 @@ export class LyricDancePlayer {
     return Math.max(0, this.songEndSec - this.songStartSec);
   }
 
-  setupExportResolution(width: number, height: number): void {
+  /**
+   * Resolve the cinematic-direction section index that contains the given
+   * absolute audio time. Returns 0 if no sections are defined. Used by
+   * the export pipeline to pin a single section image for the whole clip.
+   */
+  resolveSectionAtTime(tSec: number): number {
+    const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
+    const sections = (cd?.sections as any[]) ?? [];
+    if (sections.length === 0) return 0;
+    const dur = this.getSongDuration() || 1;
+    return this.resolveSectionIndex(sections, tSec, dur);
+  }
+
+  /**
+   * Seek to the beginning of the song region. Used by clip-share modals
+   * on close to reset the inline feed card after an export.
+   */
+  seekToStart(): void {
+    this.seek(this.songStartSec);
+  }
+
+  setupExportResolution(width: number, height: number, pinSectionIdx: number | null = null): void {
     this.pause();
     this.displayWidth = this.width;
     this.displayHeight = this.height;
     this.isExporting = true;
+    this._exportPinnedSectionIdx =
+      (pinSectionIdx != null && pinSectionIdx >= 0) ? pinSectionIdx : null;
     this._exportFrameCount = undefined;
 
     // Export resolution IS the target pixel resolution — DPR must be 1.0
@@ -2692,6 +2716,15 @@ export class LyricDancePlayer {
       this._frameSectionIdx = sections.length > 0
         ? this.resolveSectionIndex(sections, clamped, dur)
         : -1;
+      // During export with a pinned section, force the index to stay fixed
+      // for the entire clip. Otherwise the background image changes mid-clip
+      // when the moment spans a section boundary.
+      if (this.isExporting && this._exportPinnedSectionIdx != null) {
+        this._frameSectionIdx = Math.min(
+          this._exportPinnedSectionIdx,
+          Math.max(0, sections.length - 1),
+        );
+      }
       const secIdx = this._frameSectionIdx;
       if (secIdx !== this._framePaletteTime) {
         this._framePaletteTime = secIdx;
@@ -2765,10 +2798,10 @@ export class LyricDancePlayer {
   teardownExportResolution(): void {
     this.isExporting = false;
     this._exportFrameCount = undefined;
-    this.dpr = this._exportSavedDpr; // restore display DPR
-    this._textVerticalBias = this._exportSavedVerticalBias; // restore live overlay bias
-    this.resize(this.displayWidth, this.displayHeight); // recompile scene for live viewport
-    // Restore normal GPU-backed context
+    this._exportPinnedSectionIdx = null;
+    this.dpr = this._exportSavedDpr;
+    this._textVerticalBias = this._exportSavedVerticalBias;
+    this.resize(this.displayWidth, this.displayHeight);
     this.ctx = this.canvas.getContext('2d')!;
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
   }
@@ -4025,7 +4058,7 @@ export class LyricDancePlayer {
       // Draw full background stack into snapshot (gradient + chapter image + sims + lighting)
       this._drawBackgroundToCtx(snapCtx, frame);
       const imgIdx = Math.min(this._frameSectionIdx >= 0 ? this._frameSectionIdx : 0, Math.max(0, this.chapterImages.length - 1));
-      const nextImgIdx = this.data.region_start != null
+      const nextImgIdx = (this.isExporting && this._exportPinnedSectionIdx != null) || this.data.region_start != null
         ? imgIdx
         : Math.min(imgIdx + 1, Math.max(0, this.chapterImages.length - 1));
       const duration = this.audio?.duration || 1;
@@ -5890,7 +5923,10 @@ export class LyricDancePlayer {
     const chapterCount = Math.max(1, chapters.length);
     const songDuration = Math.max(1, this.songEndSec - this.songStartSec);
     const songProgress = Math.max(0, Math.min(1, (this.currentTSec - this.songStartSec) / songDuration));
-    const chapterIdx = Math.min(Math.floor(songProgress * chapterCount), chapterCount - 1);
+    let chapterIdx = Math.min(Math.floor(songProgress * chapterCount), chapterCount - 1);
+    if (this.isExporting && this._exportPinnedSectionIdx != null) {
+      chapterIdx = Math.min(this._exportPinnedSectionIdx, chapterCount - 1);
+    }
 
     const bgCanvas = this.bgCaches[chapterIdx] ?? this.bgCaches[0];
     if (bgCanvas) {

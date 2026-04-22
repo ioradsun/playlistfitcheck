@@ -250,6 +250,34 @@ export function ExportStudio({
     setMobileTab("config");
   }, [isOpen]);
 
+  // Invalidate cached export when any input affecting the output changes.
+  // ExportStudio keeps all controls visible in exportStage === "done",
+  // so without this reset, clicking "Download again" after switching
+  // moments would re-download a blob for the previous selection.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (exportStage === "rendering") return;
+    setDownloadBlob(null);
+    if (exportStage === "done" || exportStage === "error") {
+      setExportStage("ready");
+      setExportProgress(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedMomentIdx,
+    platformIdx,
+    includeAudio,
+    includeCredit,
+    includeBeatVis,
+    includeWickBar,
+    includeFireReaction,
+    captionMode,
+    selectedHookIdx,
+    customCaption,
+    captionStyle,
+    captionPos,
+  ]);
+
   useEffect(() => {
     if (!avatarUrl) {
       avatarImgRef.current = null;
@@ -415,6 +443,11 @@ export function ExportStudio({
       if (prev) {
         player.resize(prev.w, prev.h);
       }
+      // Reset inline state: seek back to the song's start and paint a
+      // clean identity frame so the feed card behind the Studio doesn't
+      // stay frozen on the last-exported frame.
+      player.seekToStart();
+      player.paintIdentityFrame();
     }
     prevSizeRef.current = null;
   }, [isOpen, getPlayer]);
@@ -443,6 +476,9 @@ export function ExportStudio({
     const { w, h } = PLATFORMS[platformIdx];
     const startSec = activeSelection?.isFull ? 0 : activeSelection.moment.startSec;
     const endSec = activeSelection?.isFull ? durationSec : activeSelection.moment.endSec;
+    const pinSectionIdx = activeSelection?.isFull
+      ? null
+      : player.resolveSectionAtTime(activeSelection.moment.startSec);
 
     const abort = new AbortController();
     abortRef.current = abort;
@@ -461,6 +497,7 @@ export function ExportStudio({
         fps: 30,
         songDuration: Math.max(0, endSec - startSec),
         startOffset: startSec,
+        pinSectionIdx,
         captionText: activeCaption.trim() || undefined,
         captionOptions: activeCaption.trim()
           ? {

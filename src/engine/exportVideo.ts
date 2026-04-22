@@ -31,6 +31,12 @@ interface ExportOptions {
    *  Internally converted to song-relative time before calling drawAtTime.
    *  Use this for clip export: set startOffset = moment.startSec, songDuration = moment.endSec - moment.startSec. */
   startOffset?: number;
+  /**
+   * When set, the player pins the background image to this section index
+   * for the entire clip, preventing mid-clip image changes when the moment
+   * spans a section boundary. Compute via `player.resolveSectionAtTime(startSec)`.
+   */
+  pinSectionIdx?: number | null;
   onProgress?: (percent: number) => void;
   signal?: AbortSignal;
   /** Max encoder queue depth before backpressure kicks in (default: 8) */
@@ -147,7 +153,7 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
   }
 
   // ── Resize player once ──
-  player.setupExportResolution(width, height);
+  player.setupExportResolution(width, height, options.pinSectionIdx ?? null);
   // drawAtTime(tSec) adds songStartSec internally: timeSec = songStartSec + tSec.
   // So tSec must be RELATIVE to songStart (0 = first beat).
   // ExportStudio passes startOffset as absolute audio time (e.g. 24.22s).

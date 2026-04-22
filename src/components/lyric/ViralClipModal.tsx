@@ -112,6 +112,18 @@ export function ViralClipModal({
     setCaption(next);
   }, [selectedMoment, commentSuggestions, isOpen]);
 
+  // Invalidate cached export when any input affecting the output changes.
+  // Without this, the "Download again" button in "done" stage would
+  // re-download a blob that no longer matches the current selection.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (stage === "rendering") return;
+    setDownloadBlob(null);
+    if (stage === "done") setStage("config");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMoment, caption, includeAudio, platform, quality]);
+
+
   const drawCaptionOverlay = useCallback(() => {
     const preview = previewCanvasRef.current;
     const snapshot = snapshotRef.current;
@@ -214,6 +226,12 @@ export function ViralClipModal({
     if (!isOpen && player) {
       player.pause();
       player.setRegion(undefined, undefined);
+      // Reset the inline feed card: seek back to the song's start and
+      // paint a clean identity frame. Without this, the feed card is
+      // left frozen on the last frame of the exported moment, which
+      // makes the inline version look like it "matches the download."
+      player.seekToStart();
+      player.paintIdentityFrame();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, selectedMoment]);
@@ -261,6 +279,7 @@ export function ViralClipModal({
         fps: 30,
         songDuration: selected.moment.endSec - selected.moment.startSec,
         startOffset: selected.moment.startSec,
+        pinSectionIdx: player.resolveSectionAtTime(selected.moment.startSec),
         captionText: caption.trim() || undefined,
         audioSlice: includeAudio && audioUrl
           ? {
