@@ -74,6 +74,11 @@ export function usePrimaryArbiter(
     const atTopBoundary = () => {
       const first = pickByPosition("first");
       if (!first) return false;
+      // Hard top: user hasn't scrolled (or barely has). Skip the geometry
+      // check and pick the first card unconditionally. Prevents card 1 from
+      // winning the intersection ratio at scrollTop=0 on desktop, where
+      // multiple cards fit in the middle-50% detection band simultaneously.
+      if (scrollContainer.scrollTop <= getCardHeight() * 0.5) return true;
       const el = cardRefs.current.get(first);
       if (!el) return false;
       const rect = el.getBoundingClientRect();
@@ -86,6 +91,10 @@ export function usePrimaryArbiter(
     const atBottomBoundary = () => {
       const last = pickByPosition("last");
       if (!last) return false;
+      // Mirror of atTopBoundary: hard bottom picks the last card even when
+      // intersection math would prefer an earlier one.
+      const maxScroll = getMaxScroll();
+      if (scrollContainer.scrollTop >= maxScroll - getCardHeight() * 0.5) return true;
       const el = cardRefs.current.get(last);
       if (!el) return false;
       const rect = el.getBoundingClientRect();
