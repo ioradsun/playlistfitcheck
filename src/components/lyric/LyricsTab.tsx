@@ -222,7 +222,7 @@ export function LyricsTab({
       const ms = () => `${(performance.now() - t0).toFixed(0)}ms`;
       setLoading(true);
 
-      const projectId = savedId ?? (user ? uuidv4() : null);
+      const projectId = savedId ?? (user ? crypto.randomUUID() : null);
       let storageAudioUrl: string | null = null;
       let uploadPromise: Promise<{ projectId: string; audioUrl: string; file: File } | null> | null = null;
       uploadPromise = handleFileSelected(
