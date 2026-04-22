@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsageQuota } from "@/hooks/useUsageQuota";
 import { useAudioProject } from "@/hooks/useAudioProject";
-import { v4 as uuidv4 } from "uuid";
 import { compressAudioFile } from "@/lib/compressAudio";
 import { sessionAudio } from "@/lib/sessionAudioCache";
 import { toast } from "sonner";
@@ -223,7 +222,7 @@ export function LyricsTab({
       const ms = () => `${(performance.now() - t0).toFixed(0)}ms`;
       setLoading(true);
 
-      const projectId = savedId ?? (user ? uuidv4() : null);
+      const projectId = savedId ?? (user ? crypto.randomUUID() : null);
       let storageAudioUrl: string | null = null;
       let uploadPromise: Promise<{ projectId: string; audioUrl: string; file: File } | null> | null = null;
       uploadPromise = handleFileSelected(
