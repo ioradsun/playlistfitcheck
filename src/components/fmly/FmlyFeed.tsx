@@ -12,7 +12,7 @@ import { usePrefetchNearbyScenes } from "@/components/fmly/feed/usePrefetchNearb
 import { FeedCard } from "@/components/fmly/feed/FeedCard";
 import { FeedHeader } from "@/components/fmly/feed/FeedHeader";
 import { SkeletonCard } from "@/components/fmly/feed/SkeletonCard";
-import { CARD_TOTAL_HEIGHT_PX, FEED_MAX_WIDTH_PX } from "@/components/fmly/feed/constants";
+import { FEED_MAX_WIDTH_PX } from "@/components/fmly/feed/constants";
 import type { ContentFilter } from "./types";
 
 function FeedList({
@@ -41,8 +41,6 @@ function FeedList({
   useEffect(() => {
     setScrollContainer(document.getElementById("fmly-feed-scroll"));
   }, []);
-
-  const supportsCV = typeof CSS !== "undefined" && CSS.supports("content-visibility: auto");
 
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const feedWindow = useFeedWindow(posts.length, postIds, reelsMode, scrollContainer);
@@ -140,12 +138,7 @@ function FeedList({
       {feedWindow.windowStart > 0 && <div style={{ height: topSpacerHeight }} />}
 
       {renderedPosts.map((post) => (
-        <div
-          key={post.id}
-          style={post.id !== primaryId && !reelsMode && supportsCV
-            ? { contentVisibility: "auto", containIntrinsicSize: `0 ${CARD_TOTAL_HEIGHT_PX}px` }
-            : undefined}
-        >
+        <div key={post.id}>
           <FeedCard
             post={post}
             lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
