@@ -129,7 +129,7 @@ ${lyrics ? `Lyrics:\n${(lyrics as string).slice(0, 1000)}` : ""}${hitfitContext}
     }
 
     // --- Step 2: Generate 3 cover art images ---
-    const defaultArtPrompt = `Create a modern, high-quality album cover art. Square format (1:1 ratio). Spotify-ready aesthetic. NO TEXT on the image. Style should match current streaming platform trends.`;
+    const defaultArtPrompt = `Create a modern, high-quality album cover art. Square format (1:1 ratio). Spotify-ready aesthetic. Clean, typography-free composition — no artist names, track titles, captions, watermarks, logos, or rendered lyric words anywhere in the frame. If text appears as part of the depicted subject (a sign, a tattoo, a painted wall), it must be blurred, partial, or clearly incidental. Style should match current streaming platform trends.`;
 
     const artSystemPrompt = await fetchPrompt("vibefit-art", defaultArtPrompt);
 
