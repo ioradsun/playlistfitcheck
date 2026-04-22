@@ -157,7 +157,22 @@ const FEED_COLUMNS =
   "palette, cinematic_direction, beat_grid, section_images, auto_palettes, lines, words," +
   "physics_spec, empowerment_promise)";
 
-export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
+export const FEED_SHELL_COLUMNS =
+  "id, user_id, project_id, caption, created_at, status, " +
+  "profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified), " +
+  "lyric_projects(id, title, artist_name, artist_slug, url_slug, album_art_url, section_images, palette, auto_palettes, spotify_track_id)";
+
+export let feedShellPrefetch: Promise<{ data: any[] | null; error: any }> | null =
+  _isEmbedRoute
+    ? null
+    : (supabase
+        .from("feed_posts" as any)
+        .select(FEED_SHELL_COLUMNS)
+        .eq("status", "live")
+        .limit(FEED_PAGE_SIZE)
+        .order("created_at", { ascending: false }) as any);
+
+export let feedFullPrefetch: Promise<{ data: any[] | null; error: any }> | null =
   _isEmbedRoute
     ? null
     : Promise.resolve(
@@ -229,9 +244,15 @@ export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
         return result;
       });
 
-export function consumeFeedPrefetch() {
-  const p = feedPrefetch;
-  feedPrefetch = null;
+export function consumeFeedShellPrefetch() {
+  const p = feedShellPrefetch;
+  feedShellPrefetch = null;
+  return p;
+}
+
+export function consumeFeedFullPrefetch() {
+  const p = feedFullPrefetch;
+  feedFullPrefetch = null;
   return p;
 }
 
