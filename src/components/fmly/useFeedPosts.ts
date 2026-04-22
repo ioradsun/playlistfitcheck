@@ -274,6 +274,15 @@ export function useFeedPosts(): FeedState {
       setHasMore(false);
       setLoading(false);
       setPendingNewCount(0);
+
+      // Billboard fetches POST_SELECT (full columns), so every row already
+      // contains lines/words/beat_grid/cinematic_direction. Hydrate directly
+      // instead of letting the staged hydration effect in FmlyFeed re-fetch
+      // each card's lyric_projects row over the network.
+      const { nextMap, cachePatch, grew } = hydrateLyricRows(billboardPosts, lyricDataMap);
+      if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
+      if (grew) setLyricDataMap(nextMap);
+
       return;
     }
 
