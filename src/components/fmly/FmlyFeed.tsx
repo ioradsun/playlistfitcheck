@@ -69,12 +69,26 @@ function FeedList({
   const [manualPrimaryId, setManualPrimaryId] = useState<string | null>(null);
   const primaryId = manualPrimaryId ?? arbiterPrimaryId;
 
-  // Clear manual override on scroll so the arbiter can resume.
+  // Clear manual override on the next user-initiated scroll. Listening for
+  // input events (wheel/touch/pointer/key) instead of the scroll event lets
+  // the programmatic smooth-scroll from handleRequestPrimary complete without
+  // clearing the override mid-animation — which would cause the tapped card
+  // to flicker shell→live→shell→live as the arbiter bounces during the
+  // velocity-threshold window.
   useEffect(() => {
     if (!scrollContainer || !manualPrimaryId) return;
-    const onScroll = () => setManualPrimaryId(null);
-    scrollContainer.addEventListener("scroll", onScroll, { passive: true });
-    return () => scrollContainer.removeEventListener("scroll", onScroll);
+    const clear = () => setManualPrimaryId(null);
+    const opts: AddEventListenerOptions = { passive: true };
+    scrollContainer.addEventListener("wheel", clear, opts);
+    scrollContainer.addEventListener("touchstart", clear, opts);
+    scrollContainer.addEventListener("pointerdown", clear, opts);
+    window.addEventListener("keydown", clear);
+    return () => {
+      scrollContainer.removeEventListener("wheel", clear);
+      scrollContainer.removeEventListener("touchstart", clear);
+      scrollContainer.removeEventListener("pointerdown", clear);
+      window.removeEventListener("keydown", clear);
+    };
   }, [scrollContainer, manualPrimaryId]);
 
   const primaryIndex = useMemo(
