@@ -42,8 +42,6 @@ function FeedList({
     setScrollContainer(document.getElementById("fmly-feed-scroll"));
   }, []);
 
-  const supportsCV = typeof CSS !== "undefined" && CSS.supports("content-visibility: auto");
-
   const postIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const feedWindow = useFeedWindow(posts.length, postIds, reelsMode, scrollContainer);
   const { primaryId: arbiterPrimaryId } = usePrimaryArbiter(
@@ -140,12 +138,7 @@ function FeedList({
       {feedWindow.windowStart > 0 && <div style={{ height: topSpacerHeight }} />}
 
       {renderedPosts.map((post) => (
-        <div
-          key={post.id}
-          style={post.id !== primaryId && !reelsMode && supportsCV
-            ? { contentVisibility: "auto", containIntrinsicSize: `0 ${CARD_TOTAL_HEIGHT_PX}px` }
-            : undefined}
-        >
+        <div key={post.id}>
           <FeedCard
             post={post}
             lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
