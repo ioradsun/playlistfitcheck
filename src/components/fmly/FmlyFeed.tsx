@@ -86,39 +86,63 @@ function FeedList({
 
   useEffect(() => {
     if (primaryIndex == null || primaryIndex < 0) return;
-    const promoteIdx = primaryIndex + 1;
-    if (promoteIdx >= posts.length) return;
 
-    const post = posts[promoteIdx];
-    const projectId = post?.project_id;
-    if (!projectId || lyricDataMap.has(projectId)) return;
+    // Hydrate the current primary + LOOKAHEAD cards ahead. On desktop,
+    // primaryIndex can skip values (multiple cards fit in the arbiter's
+    // detection band at once), so a simple +1 advance breaks the chain.
+    // Reels works with +1 only because snap-mandatory forces sequential
+    // primary traversal — desktop has no such guarantee.
+    const LOOKAHEAD = 3;
+    const start = primaryIndex;
+    const end = Math.min(posts.length - 1, primaryIndex + LOOKAHEAD);
+
+    const missing: string[] = [];
+    for (let i = start; i <= end; i++) {
+      const projectId = posts[i]?.project_id;
+      if (!projectId) continue;
+      if (lyricDataMap.has(projectId)) continue;
+      missing.push(projectId);
+    }
+    if (missing.length === 0) return;
 
     let cancelled = false;
-    supabase
-      .from("lyric_projects" as any)
-      .select(LYRIC_DANCE_COLUMNS)
-      .eq("id", projectId)
-      .maybeSingle()
-      .then(({ data: row }: any) => {
-        if (cancelled || !row) return;
-        const hydrated = {
-          ...row,
-          cinematic_direction: row.cinematic_direction
-            ? normalizeCinematicDirection(row.cinematic_direction)
-            : null,
-        } as LyricDanceData;
+    Promise.all(
+      missing.map((projectId) =>
+        supabase
+          .from("lyric_projects" as any)
+          .select(LYRIC_DANCE_COLUMNS)
+          .eq("id", projectId)
+          .maybeSingle()
+          .then(({ data }: any) => (data ? { projectId, row: data } : null))
+          .catch(() => null),
+      ),
+    ).then((results) => {
+      if (cancelled) return;
+      const valid = results.filter(Boolean) as { projectId: string; row: any }[];
+      if (valid.length === 0) return;
 
-        setLyricDataMap((prev) => {
-          const next = new Map(prev);
-          next.set(projectId, hydrated);
-          return next;
-        });
-
-        const poster = row.section_images?.[0] ?? row.album_art_url;
-        if (poster) void preloadImageForCanvas(cdnImage(poster, "live"));
+      setLyricDataMap((prev) => {
+        const next = new Map(prev);
+        for (const { projectId, row } of valid) {
+          next.set(projectId, {
+            ...row,
+            cinematic_direction: row.cinematic_direction
+              ? normalizeCinematicDirection(row.cinematic_direction)
+              : null,
+          } as LyricDanceData);
+        }
+        return next;
       });
 
-    return () => { cancelled = true; };
+      for (const { row } of valid) {
+        const poster = row.section_images?.[0] ?? row.album_art_url;
+        if (poster) void preloadImageForCanvas(cdnImage(poster, "live"));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [primaryIndex, posts, lyricDataMap, setLyricDataMap]);
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
