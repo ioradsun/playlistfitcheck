@@ -2,20 +2,13 @@
  * FmlyFeed — the FMLY feed.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import type { Dispatch, SetStateAction } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { useFeedPosts } from "./useFeedPosts";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { useFeedWindow } from "@/components/fmly/feed/useFeedWindow";
 import { usePrimaryArbiter } from "@/components/fmly/feed/usePrimaryArbiter";
 import { usePrefetchNearbyScenes } from "@/components/fmly/feed/usePrefetchNearbyScenes";
-import type { LyricDanceData } from "@/engine/LyricDancePlayer";
-import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
-import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
-import { preloadImageForCanvas } from "@/lib/imagePreloadCache";
-import { cdnImage } from "@/lib/cdnImage";
 import { FeedCard } from "@/components/fmly/feed/FeedCard";
 import { FeedHeader } from "@/components/fmly/feed/FeedHeader";
 import { SkeletonCard } from "@/components/fmly/feed/SkeletonCard";
@@ -29,7 +22,6 @@ function FeedList({
   hasMore,
   loadMore,
   lyricDataMap,
-  setLyricDataMap,
   reelsMode,
   onScrolledChange,
 }: {
@@ -39,7 +31,6 @@ function FeedList({
   hasMore: boolean;
   loadMore: () => Promise<void>;
   lyricDataMap: Map<string, any>;
-  setLyricDataMap: Dispatch<SetStateAction<Map<string, any>>>;
   reelsMode: boolean;
   onScrolledChange?: (scrolled: boolean) => void;
 }) {
@@ -69,26 +60,12 @@ function FeedList({
   const [manualPrimaryId, setManualPrimaryId] = useState<string | null>(null);
   const primaryId = manualPrimaryId ?? arbiterPrimaryId;
 
-  // Clear manual override on the next user-initiated scroll. Listening for
-  // input events (wheel/touch/pointer/key) instead of the scroll event lets
-  // the programmatic smooth-scroll from handleRequestPrimary complete without
-  // clearing the override mid-animation — which would cause the tapped card
-  // to flicker shell→live→shell→live as the arbiter bounces during the
-  // velocity-threshold window.
+  // Clear manual override on scroll so the arbiter can resume.
   useEffect(() => {
     if (!scrollContainer || !manualPrimaryId) return;
-    const clear = () => setManualPrimaryId(null);
-    const opts: AddEventListenerOptions = { passive: true };
-    scrollContainer.addEventListener("wheel", clear, opts);
-    scrollContainer.addEventListener("touchstart", clear, opts);
-    scrollContainer.addEventListener("pointerdown", clear, opts);
-    window.addEventListener("keydown", clear);
-    return () => {
-      scrollContainer.removeEventListener("wheel", clear);
-      scrollContainer.removeEventListener("touchstart", clear);
-      scrollContainer.removeEventListener("pointerdown", clear);
-      window.removeEventListener("keydown", clear);
-    };
+    const onScroll = () => setManualPrimaryId(null);
+    scrollContainer.addEventListener("scroll", onScroll, { passive: true });
+    return () => scrollContainer.removeEventListener("scroll", onScroll);
   }, [scrollContainer, manualPrimaryId]);
 
   const primaryIndex = useMemo(
@@ -97,67 +74,6 @@ function FeedList({
   );
 
   usePrefetchNearbyScenes({ posts, lyricDataMap, primaryIndex });
-
-  useEffect(() => {
-    if (primaryIndex == null || primaryIndex < 0) return;
-
-    // Hydrate the current primary + LOOKAHEAD cards ahead. On desktop,
-    // primaryIndex can skip values (multiple cards fit in the arbiter's
-    // detection band at once), so a simple +1 advance breaks the chain.
-    // Reels works with +1 only because snap-mandatory forces sequential
-    // primary traversal — desktop has no such guarantee.
-    const LOOKAHEAD = 3;
-    const start = primaryIndex;
-    const end = Math.min(posts.length - 1, primaryIndex + LOOKAHEAD);
-
-    const missing: string[] = [];
-    for (let i = start; i <= end; i++) {
-      const projectId = posts[i]?.project_id;
-      if (!projectId) continue;
-      if (lyricDataMap.has(projectId)) continue;
-      missing.push(projectId);
-    }
-    if (missing.length === 0) return;
-
-    let cancelled = false;
-    Promise.all(
-      missing.map((projectId) =>
-        supabase
-          .from("lyric_projects" as any)
-          .select(LYRIC_DANCE_COLUMNS)
-          .eq("id", projectId)
-          .maybeSingle()
-          .then(({ data }: any) => (data ? { projectId, row: data } : null))
-          .catch(() => null),
-      ),
-    ).then((results) => {
-      if (cancelled) return;
-      const valid = results.filter(Boolean) as { projectId: string; row: any }[];
-      if (valid.length === 0) return;
-
-      setLyricDataMap((prev) => {
-        const next = new Map(prev);
-        for (const { projectId, row } of valid) {
-          next.set(projectId, {
-            ...row,
-            cinematic_direction: row.cinematic_direction
-              ? normalizeCinematicDirection(row.cinematic_direction)
-              : null,
-          } as LyricDanceData);
-        }
-        return next;
-      });
-
-      for (const { row } of valid) {
-        const poster = row.section_images?.[0] ?? row.album_art_url;
-        if (poster) void preloadImageForCanvas(cdnImage(poster, "live"));
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [primaryIndex, posts, lyricDataMap, setLyricDataMap]);
 
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
     if (el) feedWindow.cardRefs.current.set(id, el);
@@ -352,7 +268,6 @@ export function FmlyFeed({ reelsMode = false, onScrolledChange }: FmlyFeedProps)
           hasMore={hasSearchQuery ? false : feed.hasMore}
           loadMore={hasSearchQuery ? async () => {} : feed.loadMore}
           lyricDataMap={feed.lyricDataMap}
-          setLyricDataMap={feed.setLyricDataMap}
           reelsMode={reelsMode}
           onScrolledChange={onScrolledChange}
         />
