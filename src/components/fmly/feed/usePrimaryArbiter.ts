@@ -3,7 +3,6 @@ import { liveCard } from "@/lib/liveCard";
 
 const SETTLE_MS = 80;
 const SCROLL_REST_MS = 150;
-const VELOCITY_THRESHOLD_PX_PER_SEC = 2500;
 
 export interface ArbiterResult {
   primaryId: string | null;
@@ -29,9 +28,6 @@ export function usePrimaryArbiter(
   const restTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncRafRef = useRef<number | null>(null);
   const resyncRef = useRef<(() => void) | null>(null);
-  const velocityRef = useRef(0);
-  const lastScrollYRef = useRef(0);
-  const lastScrollTRef = useRef(performance.now());
 
   useEffect(() => {
     if (typeof window === "undefined" || !scrollContainer || !("IntersectionObserver" in window)) {
@@ -42,8 +38,6 @@ export function usePrimaryArbiter(
 
     const observedEntries = new Map<Element, IntersectionObserverEntry>();
     const observedElements = new Set<Element>();
-
-    const getY = () => scrollContainer.scrollTop;
 
     const getMaxScroll = () => Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
 
@@ -146,8 +140,15 @@ export function usePrimaryArbiter(
     };
 
     const applyMeasurement = (measurement: { primaryId: string | null }) => {
-      const fastMidScroll = velocityRef.current > VELOCITY_THRESHOLD_PX_PER_SEC && !isExtremeScroll();
-      const resolvedPrimary = fastMidScroll ? null : measurement.primaryId ?? hitTestCenter();
+      // Always resolve to a real card. Thrash prevention during active scroll
+      // is handled by the SETTLE_MS debounce in commit(): scheduled commits
+      // get repeatedly rescheduled while scroll is ongoing and only fire once
+      // it slows down. The previous velocity-based null gate stranded desktop
+      // feeds because velocity has no decay path: after an abrupt wheel or
+      // trackpad flick ends at peak velocity, no further scroll events fire,
+      // so the stale velocity kept resolving primary to null until the user
+      // scrolled again.
+      const resolvedPrimary = measurement.primaryId ?? hitTestCenter();
       setResult((prev) => (prev.primaryId === resolvedPrimary ? prev : { primaryId: resolvedPrimary }));
       liveCard.set(resolvedPrimary);
     };
@@ -172,19 +173,6 @@ export function usePrimaryArbiter(
     const io = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) observedEntries.set(entry.target, entry);
-
-        const latest = entries.reduce<IntersectionObserverEntry | null>((acc, entry) => {
-          if (!acc || entry.time > acc.time) return entry;
-          return acc;
-        }, null);
-
-        if (latest) {
-          const y = getY();
-          const dt = latest.time - lastScrollTRef.current;
-          if (dt > 0) velocityRef.current = Math.abs((y - lastScrollYRef.current) / dt) * 1000;
-          lastScrollYRef.current = y;
-          lastScrollTRef.current = latest.time;
-        }
 
         commit(measure(), isExtremeScroll());
       },
@@ -233,12 +221,6 @@ export function usePrimaryArbiter(
 
     const onScroll = () => {
       scheduleSync();
-      const now = performance.now();
-      const y = getY();
-      const dt = now - lastScrollTRef.current;
-      if (dt > 0) velocityRef.current = Math.abs((y - lastScrollYRef.current) / dt) * 1000;
-      lastScrollYRef.current = y;
-      lastScrollTRef.current = now;
 
       if (restTimerRef.current) clearTimeout(restTimerRef.current);
       restTimerRef.current = setTimeout(() => {
@@ -249,9 +231,6 @@ export function usePrimaryArbiter(
     };
 
     scrollContainer.addEventListener("scroll", onScroll, { passive: true });
-
-    lastScrollYRef.current = getY();
-    lastScrollTRef.current = performance.now();
 
     syncObserved();
     commit(measure(), true);
