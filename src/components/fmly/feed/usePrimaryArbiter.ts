@@ -74,6 +74,7 @@ export function usePrimaryArbiter(
     const atTopBoundary = () => {
       const first = pickByPosition("first");
       if (!first) return false;
+      if (scrollContainer.scrollTop <= getCardHeight() * 0.5) return true;
       const el = cardRefs.current.get(first);
       if (!el) return false;
       const rect = el.getBoundingClientRect();
@@ -86,6 +87,8 @@ export function usePrimaryArbiter(
     const atBottomBoundary = () => {
       const last = pickByPosition("last");
       if (!last) return false;
+      const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+      if (scrollContainer.scrollTop >= maxScroll - getCardHeight() * 0.5) return true;
       const el = cardRefs.current.get(last);
       if (!el) return false;
       const rect = el.getBoundingClientRect();
