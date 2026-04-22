@@ -137,18 +137,21 @@ function FeedList({
       {reelsMode && <div ref={reelsTopSentinelRef} className="h-px w-full" />}
       {feedWindow.windowStart > 0 && <div style={{ height: topSpacerHeight }} />}
 
-      {renderedPosts.map((post) => (
-        <div key={post.id}>
-          <FeedCard
-            post={post}
-            lyricData={post.project_id ? lyricDataMap.get(post.project_id) ?? null : null}
-            live={post.id === primaryId}
-            registerRef={registerRef}
-            onRequestPrimary={handleRequestPrimary}
-            reelsMode={reelsMode}
-          />
-        </div>
-      ))}
+      {renderedPosts.map((post) => {
+        const lyricData = post.project_id ? lyricDataMap.get(post.project_id) ?? null : null;
+        return (
+          <div key={post.id}>
+            <FeedCard
+              post={post}
+              lyricData={lyricData}
+              live={post.id === primaryId && !!lyricData}
+              registerRef={registerRef}
+              onRequestPrimary={handleRequestPrimary}
+              reelsMode={reelsMode}
+            />
+          </div>
+        );
+      })}
 
       {feedWindow.windowEnd < posts.length - 1 && <div style={{ height: bottomSpacerHeight }} />}
       {hasMore && feedView !== "billboard" && <div ref={sentinelRef} className="h-1" />}

@@ -17,7 +17,9 @@ import { useAuth } from "@/hooks/useAuth";
 import type { FmlyPost, FeedView, BillboardMode } from "./types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import {
-  consumeFeedPrefetch,
+  consumeFeedShellPrefetch,
+  consumeFeedFullPrefetch,
+  FEED_SHELL_COLUMNS,
   getCachedFeed,
   getCachedLyricData,
   getCachedLyricScene,
@@ -320,19 +322,20 @@ export function useFeedPosts(): FeedState {
     // Non-billboard path
     if (posts.length === 0) setLoading(true);
 
-    const prefetched = consumeFeedPrefetch();
-    const { data: raw } = prefetched
-      ? await prefetched
+    // Stage 1: Shell query — render posters quickly while full lyric rows hydrate.
+    const shellPrefetched = consumeFeedShellPrefetch();
+    const { data: shellRaw } = shellPrefetched
+      ? await shellPrefetched
       : await supabase
           .from("feed_posts" as any)
-          .select(POST_SELECT)
+          .select(FEED_SHELL_COLUMNS)
           .eq("status", "live")
           .limit(PAGE_SIZE)
           .order("created_at", { ascending: false });
 
-    let allPosts = (raw ?? []) as unknown as FmlyPost[];
-    const filtered = allPosts.filter((p) => matchesView(p, feedView));
-    const normalized = hydratePosts(filtered);
+    const shellPosts = (shellRaw ?? []) as unknown as FmlyPost[];
+    const shellFiltered = shellPosts.filter((p) => matchesView(p, feedView));
+    const shellNormalized = hydratePosts(shellFiltered);
 
     // ── Only update if data actually changed — prevents cache→fresh double render ──
     // On warm-cache visits, the prefetch returns the same posts that were already
@@ -340,27 +343,54 @@ export function useFeedPosts(): FeedState {
     // identical data but new object references, causing a visible flash.
     setPosts((prev) => {
       if (
-        prev.length === normalized.length &&
+        prev.length === shellNormalized.length &&
         prev.length > 0 &&
-        prev.every((p, i) => p.id === normalized[i].id)
+        prev.every((p, i) => p.id === shellNormalized[i].id)
       ) {
         return prev; // Same posts, same order — keep reference stable
       }
-      return normalized;
+      return shellNormalized;
     });
-    try {
-      cacheWrite("feed_posts", allPosts);
-    } catch {}
-    cursorRef.current = normalized[normalized.length - 1]?.created_at ?? null;
-    newestRef.current = normalized[0]?.created_at ?? null;
-    setHasMore(allPosts.length === PAGE_SIZE);
+    cursorRef.current = shellNormalized[shellNormalized.length - 1]?.created_at ?? null;
+    newestRef.current = shellNormalized[0]?.created_at ?? null;
+    setHasMore(shellPosts.length === PAGE_SIZE);
     setLoading(false);
     setPendingNewCount(0);
+    preloadFirstVisible(shellNormalized);
 
-    const { nextMap, cachePatch, grew } = hydrateLyricRows(filtered, lyricDataMap);
+    // Stage 2: Full query — hydrate lyric rows so cards can go live.
+    const fullPrefetched = consumeFeedFullPrefetch();
+    const { data: fullRaw } = fullPrefetched
+      ? await fullPrefetched
+      : await supabase
+          .from("feed_posts" as any)
+          .select(POST_SELECT)
+          .eq("status", "live")
+          .limit(PAGE_SIZE)
+          .order("created_at", { ascending: false });
+
+    const fullPosts = (fullRaw ?? []) as unknown as FmlyPost[];
+    const fullFiltered = fullPosts.filter((p) => matchesView(p, feedView));
+    const fullNormalized = hydratePosts(fullFiltered);
+
+    setPosts((prev) => {
+      if (
+        prev.length === fullNormalized.length &&
+        prev.length > 0 &&
+        prev.every((p, i) => p.id === fullNormalized[i].id)
+      ) {
+        return prev;
+      }
+      return fullNormalized;
+    });
+
+    const { nextMap, cachePatch, grew } = hydrateLyricRows(fullFiltered, lyricDataMap);
     if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
     if (grew) setLyricDataMap(nextMap);
-    preloadFirstVisible(normalized);
+
+    try {
+      cacheWrite("feed_posts", fullPosts);
+    } catch {}
 
     // Font preloading handled by prefetch.ts (module eval) and engine (kickFontStabilizationLoad).
     // ensureFontReady deduplicates, so this was a no-op burning dynamic import overhead.
