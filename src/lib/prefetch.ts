@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
-import { preloadImageForCanvas } from "@/lib/imagePreloadCache";
+import { preloadImage } from "@/lib/imagePreloadCache";
 import { cdnImage } from "@/lib/cdnImage";
 
 /**
@@ -24,7 +24,6 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const DANCE_CACHE_PREFIX = "dance:";
 const DANCE_CACHE_TTL_MS = 10 * 60 * 1000;
 const _preloadedAudio = new Set<string>();
-const _injectedPreloadLinks = new Set<string>();
 
 function preloadAudio(url: string) {
   if (!url || _preloadedAudio.has(url)) return;
@@ -32,18 +31,6 @@ function preloadAudio(url: string) {
   // Warm the HTTP cache — the engine's Audio element will hit it.
   // No orphan Audio element: fetch() is lighter and cache-equivalent.
   fetch(url, { priority: "high" } as RequestInit).catch(() => {});
-}
-
-function injectImagePreloadLink(url: string): void {
-  if (typeof document === "undefined" || !url || _injectedPreloadLinks.has(url)) return;
-  _injectedPreloadLinks.add(url);
-  const link = document.createElement("link");
-  link.rel = "preload";
-  link.as = "image";
-  link.href = url;
-  link.crossOrigin = "anonymous";
-  (link as any).fetchPriority = "high";
-  document.head.appendChild(link);
 }
 
 /** Kick font loading from cinematic_direction — runs parallel with DB/audio/image prefetch. */
@@ -169,68 +156,35 @@ const FEED_COLUMNS =
   "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id," +
   "palette, cinematic_direction, beat_grid, section_images, auto_palettes, lines, words," +
   "physics_spec, empowerment_promise)";
-const SHELL_COLUMNS =
-  "id, user_id, project_id, caption, created_at, status, " +
-  "profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified), " +
-  "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id, section_images, palette, auto_palettes, lines)";
 
-export let feedPrefetch: Promise<{ data: any[] | null; fullIds: Set<string>; error: any }> | null =
+export let feedPrefetch: Promise<{ data: any[] | null; error: any }> | null =
   _isEmbedRoute
     ? null
-    : Promise.all([
+    : Promise.resolve(
         supabase
           .from("feed_posts" as any)
           .select(FEED_COLUMNS)
           .eq("status", "live")
-          .limit(3)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("feed_posts" as any)
-          .select(SHELL_COLUMNS)
-          .eq("status", "live")
           .limit(FEED_PAGE_SIZE)
-          .order("created_at", { ascending: false }),
-      ]).then(([fullResult, shellResult]) => {
-        const fullPosts = (fullResult.data ?? []) as any[];
-        const shellPosts = (shellResult.data ?? []) as any[];
-        const fullIds = new Set(fullPosts.map((p: any) => p.id));
-        const merged = [...fullPosts, ...shellPosts.filter((p: any) => !fullIds.has(p.id))];
+          .order("created_at", { ascending: false })
+      ).then((result) => {
+        if (result.data && result.data.length > 0) {
+          cacheWrite("feed_posts", result.data);
 
-        const card0 = fullPosts[0];
-        if (card0?.lyric_projects?.audio_url) preloadAudio(card0.lyric_projects.audio_url);
+          // Warm primary post's audio HTTP cache immediately — saves 100-400ms
+          // off time-to-first-play. The engine's <audio> element will hit the
+          // browser cache instead of issuing a fresh request.
+          const primaryAudio = (result.data as any[])[0]?.lyric_projects?.audio_url;
+          if (primaryAudio) preloadAudio(primaryAudio);
 
-        const card0PosterRaw = card0?.lyric_projects?.section_images?.[0] ?? card0?.lyric_projects?.album_art_url;
-        if (card0PosterRaw) {
-          const card0Poster = cdnImage(card0PosterRaw, "live");
-          void preloadImageForCanvas(card0Poster, { priority: "high" });
-          injectImagePreloadLink(card0Poster);
-        }
-
-        for (let i = 1; i < Math.min(3, merged.length); i++) {
-          const lp = merged[i]?.lyric_projects;
-          const poster = lp?.section_images?.[0] ?? lp?.album_art_url;
-          if (poster) void preloadImageForCanvas(cdnImage(poster, "live"));
-        }
-
-        const card0Images = card0?.lyric_projects?.section_images ?? [];
-        for (let i = 1; i < card0Images.length; i++) {
-          if (card0Images[i]) void preloadImageForCanvas(cdnImage(card0Images[i], "live"));
-        }
-
-        for (const post of fullPosts) {
-          if (post?.lyric_projects?.cinematic_direction) {
-            _preloadFontsFromDirection(post.lyric_projects.cinematic_direction);
-          }
-        }
-
-        const idleWrite = () => {
-          cacheWrite("feed_posts", merged);
-          const textCache: Record<string, any> = getCachedLyricText() ?? {};
-          const sceneCache: Record<string, any> = getCachedLyricScene() ?? {};
-          for (const post of fullPosts) {
+          const lyricTextCache: Record<string, any> = getCachedLyricText() ?? {};
+          const lyricSceneCache: Record<string, any> = getCachedLyricScene() ?? {};
+          for (let pi = 0; pi < (result.data as any[]).length; pi++) {
+            const post = (result.data as any[])[pi];
             const lp = post.lyric_projects;
             if (!lp?.id) continue;
-            textCache[lp.id] = {
+
+            lyricTextCache[lp.id] = {
               id: lp.id,
               lines: lp.lines,
               words: lp.words,
@@ -240,8 +194,9 @@ export let feedPrefetch: Promise<{ data: any[] | null; fullIds: Set<string>; err
               album_art_url: lp.album_art_url,
               spotify_track_id: lp.spotify_track_id,
             };
+
             if (lp.cinematic_direction) {
-              sceneCache[lp.id] = {
+              lyricSceneCache[lp.id] = {
                 id: lp.id,
                 cinematic_direction: lp.cinematic_direction,
                 section_images: lp.section_images,
@@ -252,22 +207,26 @@ export let feedPrefetch: Promise<{ data: any[] | null; fullIds: Set<string>; err
                 empowerment_promise: lp.empowerment_promise,
               };
             }
+
+            const sectionImages = lp.section_images ?? [];
+            sectionImages.filter(Boolean).forEach((url: string, imgIdx: number) => {
+              // Preload the same variant consumed by shell + identity frame.
+              preloadImage(cdnImage(url, "live"), pi === 0 && imgIdx === 0 ? { priority: "high" } : undefined);
+            });
+            // Parallel font preload — font ready before engine init()
+            _preloadFontsFromDirection(lp.cinematic_direction);
+
+            if (lp.album_art_url) {
+              const img = new Image();
+              img.src = cdnImage(lp.album_art_url, "live");
+            }
           }
-          if (Object.keys(textCache).length > 0) cacheWrite("lyric_text", textCache);
-          if (Object.keys(sceneCache).length > 0) cacheWrite("lyric_scene", sceneCache);
-        };
 
-        if (typeof requestIdleCallback === "function") {
-          requestIdleCallback(idleWrite, { timeout: 5000 });
-        } else {
-          setTimeout(idleWrite, 0);
+          if (Object.keys(lyricTextCache).length > 0) cacheWrite("lyric_text", lyricTextCache);
+          if (Object.keys(lyricSceneCache).length > 0) cacheWrite("lyric_scene", lyricSceneCache);
+
         }
-
-        return {
-          data: merged,
-          fullIds,
-          error: fullResult.error ?? shellResult.error,
-        };
+        return result;
       });
 
 export function consumeFeedPrefetch() {
@@ -332,10 +291,9 @@ if (_segments.length === 3 && _segments[2] === "lyric-dance") {
         preloadAudio(result.data.audio_url);
       }
       const sectionImages = result.data.section_images ?? [];
-      // Embed pages use a larger canvas — preload the same variant the engine requests.
-      sectionImages
-        .filter(Boolean)
-        .forEach((url: string) => preloadImageForCanvas(cdnImage(url, "live")));
+      // Embed pages use a larger canvas — preload the engine variant so the
+      // browser cache hit lines up with what loadSectionImages requests.
+      sectionImages.filter(Boolean).forEach((url: string) => preloadImage(cdnImage(url, "engine")));
       // Parallel font preload — font ready before engine init()
       _preloadFontsFromDirection(result.data.cinematic_direction);
     }
