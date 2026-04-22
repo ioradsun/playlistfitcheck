@@ -316,6 +316,15 @@ export function useFeedPosts(): FeedState {
       setHasMore(false);
       setLoading(false);
       setPendingNewCount(0);
+
+      // scoreBillboard fetches with POST_SELECT (full columns), so each row
+      // already contains lines/words/beat_grid/cinematic_direction. Hydrate
+      // directly instead of letting LyricDanceEmbed's fallback fetch
+      // re-request the same data per-card when each becomes primary.
+      const { nextMap, cachePatch, grew } = hydrateLyricRows(billboardPosts, lyricDataMap);
+      if (Object.keys(cachePatch).length > 0) mergeLyricCaches(cachePatch);
+      if (grew) setLyricDataMap(nextMap);
+
       return;
     }
 
