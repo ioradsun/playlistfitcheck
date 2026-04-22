@@ -70,8 +70,11 @@ export interface ModeContext {
   onFireMoment: (lineIndex: number, timeSec: number, holdMs: number) => void;
   onPlayLine: (startSec: number, endSec: number) => void;
   onCommentAdded: (comment: Comment) => void;
-  /** Invoked by ListenMode's share button. Opens the viral-clip export modal. */
-  onShareClip: () => void;
+  /** True when the embed container is in native or CSS-pseudo fullscreen. */
+  isFullscreen: boolean;
+  /** Toggles fullscreen on the embed container. Uses native Fullscreen API
+   *  with CSS pseudo-fullscreen fallback for iOS Safari. */
+  onToggleFullscreen: () => void;
 }
 
 /**
