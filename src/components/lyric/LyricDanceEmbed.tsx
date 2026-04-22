@@ -13,7 +13,6 @@ import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { ModeDispatcher } from "@/components/lyric/modes/ModeDispatcher";
 import { CARD_MODES } from "@/components/lyric/modes/registry";
 import type { CardMode, Comment, ModeContext } from "@/components/lyric/modes/types";
-import { ViralClipModal } from "@/components/lyric/ViralClipModal";
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { getSharedAudio } from "@/lib/sharedAudio";
@@ -149,7 +148,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [fireUserMap, setFireUserMap] = useState<Record<number, string[]>>({});
   const [fireAnonCount, setFireAnonCount] = useState<Record<number, number>>({});
   const [comments, setComments] = useState<Comment[]>([]);
-  const [viralClipOpen, setViralClipOpen] = useState(false);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
   const [profileMap, setProfileMap] = useState<Record<string, { avatarUrl: string | null; displayName: string | null }>>({});
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
@@ -533,6 +533,69 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     player.setMoments(moments);
   }, [player, fireHeat, moments]);
 
+  // Track native Fullscreen API state changes (ESC key, OS-level exit).
+  useEffect(() => {
+    const sync = () => {
+      setIsNativeFullscreen(document.fullscreenElement === containerRef.current);
+    };
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  // ESC key exits CSS pseudo-fullscreen (native mode already handles ESC).
+  useEffect(() => {
+    if (!isPseudoFullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsPseudoFullscreen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isPseudoFullscreen]);
+
+  // Prevent background scroll while in CSS pseudo-fullscreen.
+  useEffect(() => {
+    if (!isPseudoFullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isPseudoFullscreen]);
+
+  const onToggleFullscreen = useCallback(async () => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    // If currently fullscreen in either mode, exit.
+    if (document.fullscreenElement === el) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // Ignore — state will sync via fullscreenchange listener.
+      }
+      return;
+    }
+    if (isPseudoFullscreen) {
+      setIsPseudoFullscreen(false);
+      return;
+    }
+
+    // Try native Fullscreen API first.
+    const req =
+      (el as HTMLElement & { requestFullscreen?: () => Promise<void> }).requestFullscreen ??
+      (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen;
+    if (typeof req === "function") {
+      try {
+        await req.call(el);
+        return;
+      } catch {
+        // Native rejected (most commonly iOS Safari on non-video elements).
+        // Fall through to CSS pseudo-fullscreen.
+      }
+    }
+    setIsPseudoFullscreen(true);
+  }, [isPseudoFullscreen]);
+
   // Comments state + hydration + realtime
   useEffect(() => {
     if (!live || !danceId) return;
@@ -675,8 +738,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       userId: userId ?? null,
     });
   }, [danceId, durationSec, player, userId]);
-
-  const getPlayer = useCallback(() => playerRef.current, []);
 
   // Play tracking (progress, duration, flush interval)
   useEffect(() => {
@@ -848,12 +909,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     },
     onCommentAdded: (comment) => setComments((prev) =>
       (prev.some((c) => c.id === comment.id) ? prev : [...prev, comment])),
-    onShareClip: () => setViralClipOpen(true),
+    isFullscreen: isNativeFullscreen || isPseudoFullscreen,
+    onToggleFullscreen,
   }), [
     cardMode, live, playerReady, player, fetchedData, danceId, postId, lyricDanceUrl,
     spotifyTrackId, userId, moments, fireHeat, fireUserMap, fireAnonCount,
     profileMap, comments, currentTimeSec, muted, showMuteIndicator,
     setCardMode, setComments, handleCanvasTap, seekOnly, playRegion,
+    isNativeFullscreen, isPseudoFullscreen, onToggleFullscreen,
   ]);
 
   const disabledModes = useMemo(() => {
@@ -885,6 +948,13 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       <div
         ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
+        style={isPseudoFullscreen ? {
+          position: "fixed",
+          inset: 0,
+          zIndex: 9999,
+          background: "#000",
+          flex: "none",
+        } : undefined}
         onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
         <canvas
@@ -945,19 +1015,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         )}
       </div>
 
-      {live && (
-        <ViralClipModal
-          isOpen={viralClipOpen}
-          onClose={() => setViralClipOpen(false)}
-          getPlayer={getPlayer}
-          moments={moments}
-          fireHeat={fireHeat}
-          comments={comments}
-          songTitle={songTitle}
-          artistName={artistName ?? "artist"}
-          audioUrl={effectiveData?.audio_url ?? ""}
-        />
-      )}
     </div>
   );
 }));

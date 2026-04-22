@@ -1,4 +1,4 @@
-import { Share2, VolumeX } from "lucide-react";
+import { Maximize2, Minimize2, VolumeX } from "lucide-react";
 import type { ModeContext } from "./types";
 
 /**
@@ -9,7 +9,7 @@ import type { ModeContext } from "./types";
  * above that surface.
  */
 export function ListenMode({ ctx }: { ctx: ModeContext }) {
-  const { muted, showMuteIndicator, onShareClip } = ctx;
+  const { muted, showMuteIndicator, isFullscreen, onToggleFullscreen } = ctx;
 
   return (
     <>
@@ -39,7 +39,7 @@ export function ListenMode({ ctx }: { ctx: ModeContext }) {
       <button
         onClick={(e) => {
           e.stopPropagation();
-          onShareClip();
+          onToggleFullscreen();
         }}
         style={{
           position: "absolute",
@@ -56,9 +56,9 @@ export function ListenMode({ ctx }: { ctx: ModeContext }) {
           alignItems: "center",
           justifyContent: "center",
         }}
-        aria-label="Share clip"
+        aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
       >
-        <Share2 size={14} />
+        {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
       </button>
     </>
   );
