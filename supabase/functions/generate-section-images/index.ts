@@ -100,6 +100,11 @@ const MOOD_COLOR_VERBAL: Record<string, string> = {
 function buildImagePrompt(section: SectionInput, totalSections: number): string {
   const parts: string[] = [];
 
+  // ── Anti-typography directive — front-loaded because image models weight early tokens ──
+  parts.push(
+    "Clean, typography-free cinematic photography. Every surface — walls, clothing, skin, signs, objects — free of rendered text, captions, logos, band names, song titles, or graphic design. No baked-in lyric words, title cards, watermarks, subtitles, or jersey-number-style typography on garments. Incidental environmental text (a distant street sign, graffiti on a wall) is acceptable only when blurred, partial, or clearly out of focus — never a focal element."
+  );
+
   // ── Layer 0: WORLD — cinematic universe that all images belong to ──
   if (section.world) {
     parts.push(`Cinematic world: ${section.world}`);
@@ -120,7 +125,9 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
   const lyrics = section.lyrics?.trim();
   if (lyrics) {
     const excerpt = lyrics.length > 100 ? lyrics.slice(0, 100).replace(/\s+\S*$/, "...") : lyrics;
-    parts.push(`The lyrics over this image: "${excerpt}"`);
+    parts.push(
+      `Emotional context from the lyrics — DO NOT render these words in the image; they will be composited separately as video text: "${excerpt}"`
+    );
   }
 
   // ── Layer 4: CINEMATOGRAPHY — how it's shot ──
@@ -159,9 +166,8 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
 
   // ── Technical constraints (always last — lowest priority) ──
   parts.push(
-    "Background for a lyric video — white text will overlay this image, so keep the center area darker or less busy. " +
-      "Cinematic composition. No faces, no readable text, no writing. " +
-      "Silhouettes, hands, and body outlines are fine — no detailed facial features. " +
+    "Composed for a lyric video — keep the central area darker or less busy to preserve negative space. " +
+      "Cinematic composition. No faces — silhouettes, hands, and body outlines are fine. " +
       "Photorealistic, 35mm film grain, shallow depth of field. " +
       "16:9 landscape aspect ratio. Ensure background detail is visible — avoid large pure black regions.",
   );
