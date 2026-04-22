@@ -12,7 +12,7 @@ import { usePrefetchNearbyScenes } from "@/components/fmly/feed/usePrefetchNearb
 import { FeedCard } from "@/components/fmly/feed/FeedCard";
 import { FeedHeader } from "@/components/fmly/feed/FeedHeader";
 import { SkeletonCard } from "@/components/fmly/feed/SkeletonCard";
-import { CARD_TOTAL_HEIGHT_PX, FEED_MAX_WIDTH_PX } from "@/components/fmly/feed/constants";
+import { FEED_MAX_WIDTH_PX } from "@/components/fmly/feed/constants";
 import type { ContentFilter } from "./types";
 
 function FeedList({
