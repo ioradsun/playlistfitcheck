@@ -1497,12 +1497,28 @@ export class LyricDancePlayer {
 
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
   private lastSimFrame = -1;
-  // ═══ Dynamite Wick Bar (always enabled) ═══
+  // ═══ Dynamite Wick Bar (lazily initialized on first enable) ═══
   private _globalWickBar: DynamiteWickBar | null = null;
   private _wickSeekOverlay: HTMLDivElement | null = null;
   private _beatBarVisible = false;
   private _intensityScale = 1.0;
-  public wickBarEnabled = false;
+  // Backing store for the wickBarEnabled accessor. Direct writes (e.g.
+  // `player.wickBarEnabled = true` from ExportStudio) go through the setter,
+  // which lazily constructs the DynamiteWickBar on first enable.
+  private _wickBarEnabled = false;
+
+  public get wickBarEnabled(): boolean {
+    return this._wickBarEnabled;
+  }
+
+  public set wickBarEnabled(value: boolean) {
+    if (this._wickBarEnabled === value) return;
+    this._wickBarEnabled = value;
+    if (value) {
+      // First enable — allocate DWB if not already present.
+      this._ensureWickBar();
+    }
+  }
   private chapterImages: HTMLImageElement[] = [];
   private _sectionScrimOpacity: number[] = [];
   // Pre-blurred images removed — background renders sharp
@@ -4835,6 +4851,48 @@ export class LyricDancePlayer {
   }
 
 
+  /**
+   * Lazy-construct the DynamiteWickBar on first use. Called from the
+   * wickBarEnabled setter the first time it flips to true. Idempotent —
+   * subsequent calls short-circuit if already constructed.
+   *
+   * This keeps ~500KB of canvas + Float32Array memory out of feed players
+   * that never enable the wick bar (which is the default — enabled only
+   * by ViralClipModal and ExportStudio during export preview/render).
+   */
+  private _ensureWickBar(): void {
+    if (this._globalWickBar) return;
+
+    // Palette may not yet be resolved if the caller enabled wick bar before
+    // scene bake completed. Use _currentSectionPalette.accent — it's
+    // initialized to a sensible default in the class field declaration.
+    const accentColor = this._currentSectionPalette.accent;
+    this._globalWickBar = new DynamiteWickBar(accentColor, this._effectiveDpr);
+
+    // Seed waveform preview from audio analysis if available, else derive from beats.
+    const analysisRef = (this.conductor as any)?._analysis as import('@/engine/audioAnalyzer').AudioAnalysis | null;
+    if (analysisRef?.beatEnergies) {
+      this._globalWickBar.setWaveformPreview(analysisRef.beatEnergies);
+    } else {
+      const beatGridBeats = this.data.beat_grid?.beats ?? [];
+      const derived = DynamiteWickBar.deriveWaveformFromBeats(beatGridBeats, DWB_W);
+      this._globalWickBar.setWaveformPreview(derived);
+    }
+
+    // Seed moments if they've already been set on the player.
+    if (this._moments.length > 0 && this.songEndSec > this.songStartSec) {
+      const duration = Math.max(0.01, this.songEndSec - this.songStartSec);
+      this._globalWickBar.setMoments(
+        this._moments.map((m) => ({
+          startSec: m.startSec,
+          endSec: m.endSec,
+          sectionIndex: m.sectionIndex ?? 0,
+        })),
+        duration,
+      );
+    }
+  }
+
   private buildChapterSims(): void {
     
     try {
@@ -4856,26 +4914,20 @@ export class LyricDancePlayer {
           this._globalBeatVis.setWaveformBaseline(derived);
         }
       }
-      if (!this._globalWickBar) {
-        this._globalWickBar = new DynamiteWickBar(accentColor, this._effectiveDpr);
-        const analysisRef = (this.conductor as any)?._analysis as import('@/engine/audioAnalyzer').AudioAnalysis | null;
-        if (analysisRef?.beatEnergies) {
-          this._globalWickBar.setWaveformPreview(analysisRef.beatEnergies);
-        } else {
-          const beatGridBeats = this.data.beat_grid?.beats ?? [];
-          const derived = DynamiteWickBar.deriveWaveformFromBeats(beatGridBeats, DWB_W);
-          this._globalWickBar.setWaveformPreview(derived);
-        }
+      // DWB construction is now lazy — see _ensureWickBar(). If it was already
+      // built (e.g. user enabled wick bar, closed export, reopened for this song),
+      // keep moments in sync. Otherwise defer entirely.
+      if (this._globalWickBar) {
+        const duration = Math.max(0.01, this.songEndSec - this.songStartSec);
+        this._globalWickBar.setMoments(
+          this._moments.map((m) => ({
+            startSec: m.startSec,
+            endSec: m.endSec,
+            sectionIndex: m.sectionIndex ?? 0,
+          })),
+          duration,
+        );
       }
-      const duration = Math.max(0.01, this.songEndSec - this.songStartSec);
-      this._globalWickBar.setMoments(
-        this._moments.map((m) => ({
-          startSec: m.startSec,
-          endSec: m.endSec,
-          sectionIndex: m.sectionIndex ?? 0,
-        })),
-        duration,
-      );
 
 
 
