@@ -65,44 +65,6 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
     return active?.index ?? null;
   }, [moments, currentTimeSec]);
 
-  const momentFireAvatars = useMemo(() => {
-    const result: Record<number, { avatars: Array<{ url: string | null; name: string | null }>; anonCount: number }> = {};
-    moments.forEach((moment) => {
-      const lineIndices = moment.lines.length > 0
-        ? moment.lines.map((line) => line.lineIndex)
-        : [moment.sectionIndex];
-      const userIds = new Set<string>();
-      let anon = 0;
-      for (const idx of lineIndices) {
-        for (const uid of (fireUserMap[idx] ?? [])) userIds.add(uid);
-        anon += fireAnonCount[idx] ?? 0;
-      }
-      const avatars = [...userIds].slice(0, 3).map((uid) => ({
-        url: profileMap[uid]?.avatarUrl ?? null,
-        name: profileMap[uid]?.displayName ?? null,
-      }));
-      result[moment.index] = { avatars, anonCount: anon + Math.max(0, userIds.size - 3) };
-    });
-    return result;
-  }, [moments, fireUserMap, fireAnonCount, profileMap]);
-
-  const topReactionsByMoment = useMemo(() => {
-    const result: Record<number, Array<{ emoji: string; count: number }>> = {};
-    Object.entries(commentsByMoment).forEach(([idx, ms]) => {
-      const counts: Record<string, number> = {};
-      ms.forEach((c) => {
-        Object.entries(c.reactions.emojiCounts).forEach(([emoji, n]) => {
-          counts[emoji] = (counts[emoji] ?? 0) + n;
-        });
-      });
-      result[+idx] = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([emoji, count]) => ({ emoji, count }));
-    });
-    return result;
-  }, [commentsByMoment]);
-
   const handleCardTap = useCallback((momentIdx: number) => {
     const m = moments[momentIdx];
     if (!m) return;
@@ -132,36 +94,44 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
     const m = moments[expandedMomentIdx];
     if (!m) return null;
     const threadComments = commentsByMoment[expandedMomentIdx] ?? [];
-    const fireAvatarData = momentFireAvatars[expandedMomentIdx];
+    const lineIndices = m.lines.length > 0
+      ? m.lines.map((line) => line.lineIndex)
+      : [m.sectionIndex];
+    const userIds = new Set<string>();
+    let anon = 0;
+    for (const idx of lineIndices) {
+      for (const uid of (fireUserMap[idx] ?? [])) userIds.add(uid);
+      anon += fireAnonCount[idx] ?? 0;
+    }
+    const fireAvatarData = {
+      avatars: [...userIds].slice(0, 3).map((uid) => ({
+        url: profileMap[uid]?.avatarUrl ?? null,
+        name: profileMap[uid]?.displayName ?? null,
+      })),
+      anonCount: anon + Math.max(0, userIds.size - 3),
+    };
 
     const header = (
       <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.4)" }}>
-            {Math.floor(m.startSec / 60)}:{String(Math.floor(m.startSec % 60)).padStart(2, "0")}
-            {" → "}
-            {Math.floor(m.endSec / 60)}:{String(Math.floor(m.endSec % 60)).padStart(2, "0")}
-          </span>
-          {fireAvatarData && (fireAvatarData.avatars.length > 0 || fireAvatarData.anonCount > 0) && (
-            <div style={{ display: "flex", alignItems: "center" }}>
-              {fireAvatarData.avatars.map((avatar, i) => (
-                <div key={i} style={{
-                  width: 16, height: 16, borderRadius: "50%",
-                  border: "1.5px solid #0a0a0a",
-                  marginLeft: i > 0 ? -5 : 0,
-                  overflow: "hidden", background: "rgba(255,255,255,0.08)",
-                }}>
-                  {avatar.url ? <img src={avatar.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
-                </div>
-              ))}
-              {fireAvatarData.anonCount > 0 && (
-                <span style={{ fontSize: 9, fontFamily: "monospace", color: "rgba(255,255,255,0.25)", marginLeft: 4 }}>
-                  +{fireAvatarData.anonCount}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        {fireAvatarData && (fireAvatarData.avatars.length > 0 || fireAvatarData.anonCount > 0) && (
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+            {fireAvatarData.avatars.map((avatar, i) => (
+              <div key={i} style={{
+                width: 16, height: 16, borderRadius: "50%",
+                border: "1.5px solid #0a0a0a",
+                marginLeft: i > 0 ? -5 : 0,
+                overflow: "hidden", background: "rgba(255,255,255,0.08)",
+              }}>
+                {avatar.url ? <img src={avatar.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+              </div>
+            ))}
+            {fireAvatarData.anonCount > 0 && (
+              <span style={{ fontSize: 9, fontFamily: "monospace", color: "rgba(255,255,255,0.25)", marginLeft: 4 }}>
+                +{fireAvatarData.anonCount}
+              </span>
+            )}
+          </div>
+        )}
         {isInstrumental ? (
           <p style={{ margin: 0, fontSize: 13, fontFamily: "monospace", color: "rgba(255,255,255,0.55)" }}>{m.label}</p>
         ) : (
@@ -188,12 +158,10 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
 
   return (
     <ModePanel scroll="y">
-      <div style={{ maxWidth: 440, margin: "0 auto", padding: "8px 12px 32px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ maxWidth: 440, margin: "0 auto", padding: "4px 0 32px" }}>
         {moments.map((moment) => {
           const fireTotal = momentFireCounts[moment.index] ?? 0;
           const mComments = commentsByMoment[moment.index] ?? [];
-          const latestComment = mComments.length > 0 ? mComments[mComments.length - 1].text : null;
-          const topReactions = topReactionsByMoment[moment.index] ?? [];
 
           return (
             <div key={moment.index} ref={(el) => { cardRefs.current[moment.index] = el; }}>
@@ -202,12 +170,7 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
                 fireTotal={fireTotal}
                 isConsensus={moment.index === hottestIdx && fireTotal > 0}
                 isLive={currentMomentIndex === moment.index}
-                isSelected={false}
                 commentCount={mComments.length}
-                latestComment={latestComment}
-                topReactions={topReactions}
-                fireAvatars={momentFireAvatars[moment.index]?.avatars ?? []}
-                fireAnonCount={momentFireAvatars[moment.index]?.anonCount ?? 0}
                 onTap={() => handleCardTap(moment.index)}
               >
                 {isInstrumental ? (
@@ -235,10 +198,10 @@ function LyricContent({
 }) {
   const momentWords = words.filter((w) => w.start >= moment.startSec - 0.05 && w.start < moment.endSec + 0.05);
   if (momentWords.length === 0) {
-    return <p style={{ margin: 0, fontSize: 14, fontFamily: "monospace", color: "rgba(255,255,255,0.45)" }}>{moment.label}</p>;
+    return <p style={{ margin: 0, fontSize: 13, lineHeight: 1.4, fontFamily: "monospace", color: "rgba(255,255,255,0.45)" }}>{moment.label}</p>;
   }
   return (
-    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, fontFamily: "monospace", color: "rgba(255,255,255,0.5)" }}>
+    <p style={{ margin: 0, fontSize: 13, lineHeight: 1.4, fontFamily: "monospace", color: "rgba(255,255,255,0.5)" }}>
       {momentWords.map((w) => {
         const active = currentTimeSec >= w.start - 0.05 && currentTimeSec < w.end + 0.05;
         return (

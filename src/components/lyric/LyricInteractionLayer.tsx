@@ -23,6 +23,14 @@ interface FmlyBarProps {
   danceId?: string;
   comments?: Array<{ text: string; line_index: number | null }> ;
   onToastTap?: (momentIndex: number) => void;
+  /** When true, show comment input overlaying the curve area */
+  composing?: boolean;
+  /** Author name for reply chip (null = not replying) */
+  replyTargetAuthor?: string | null;
+  /** Called when user submits a comment */
+  onCommentSubmit?: (text: string) => void;
+  /** Called when user dismisses reply target */
+  onClearReply?: () => void;
 }
 
 export function FmlyBar({
@@ -36,10 +44,15 @@ export function FmlyBar({
   danceId,
   comments = [],
   onToastTap,
+  composing = false,
+  replyTargetAuthor = null,
+  onCommentSubmit,
+  onClearReply,
 }: FmlyBarProps) {
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState<{ text: string; momentIndex: number } | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
+  const [commentText, setCommentText] = useState("");
 
   const fireHoldControllerRef = useRef<ReturnType<typeof createFireHold> | null>(null);
   const userFiresRef = useRef<Record<number, number>>({});
@@ -75,6 +88,7 @@ export function FmlyBar({
   const holdStartTimeRef = useRef<number>(0);
   const pressAttributedIndexRef = useRef<number>(0);
   const fireButtonRef = useRef<HTMLSpanElement>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
   const momentFireCounts = useMemo(
     () => deriveMomentFireCounts(fireHeat, moments),
@@ -127,6 +141,11 @@ export function FmlyBar({
   useEffect(() => () => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    setCommentText("");
+    if (composing) commentInputRef.current?.focus();
+  }, [composing]);
 
   // ── Hydrate user fires from DB on mount ─────────────────────────────────
   useEffect(() => {
@@ -559,6 +578,8 @@ export function FmlyBar({
               zIndex: 1,
               cursor: ready ? "pointer" : "default",
               touchAction: "none",
+              opacity: composing ? 0 : 1,
+              pointerEvents: composing ? "none" : "auto",
             }}
             onPointerDown={(e) => {
               if (!ready) return;
@@ -631,6 +652,8 @@ export function FmlyBar({
               userSelect: "none",
               WebkitUserSelect: "none",
               touchAction: "none",
+              opacity: composing ? 0 : 1,
+              pointerEvents: composing ? "none" : "auto",
             }}
           >
             <span
@@ -645,6 +668,120 @@ export function FmlyBar({
               🔥
             </span>
           </button>
+
+          {composing && (
+            <>
+              {replyTargetAuthor && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: -22,
+                    zIndex: 11,
+                    fontSize: 10,
+                    fontFamily: "monospace",
+                    color: "rgba(255,255,255,0.5)",
+                    background: "rgba(20,20,24,0.9)",
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span>↳ @{replyTargetAuthor}</span>
+                  <button
+                    type="button"
+                    onClick={onClearReply}
+                    style={{
+                      fontSize: 10,
+                      color: "rgba(255,255,255,0.4)",
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 10,
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0 12px",
+                  gap: 8,
+                  background: "rgba(10,10,15,0.92)",
+                }}
+              >
+                <input
+                  ref={commentInputRef}
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      const trimmed = commentText.trim();
+                      if (trimmed) {
+                        onCommentSubmit?.(trimmed);
+                        setCommentText("");
+                      }
+                    }
+                  }}
+                  placeholder={replyTargetAuthor ? "reply..." : "add a thought..."}
+                  maxLength={140}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    height: 30,
+                    border: "none",
+                    background: "rgba(255,255,255,0.04)",
+                    color: "rgba(255,255,255,0.9)",
+                    fontSize: 13,
+                    fontFamily: "monospace",
+                    padding: "0 10px",
+                    borderRadius: 999,
+                    outline: "none",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const trimmed = commentText.trim();
+                    if (trimmed) {
+                      onCommentSubmit?.(trimmed);
+                      setCommentText("");
+                    }
+                  }}
+                  disabled={commentText.trim().length === 0}
+                  style={{
+                    flexShrink: 0,
+                    width: 30,
+                    height: 30,
+                    borderRadius: "50%",
+                    border: "none",
+                    background: commentText.trim().length > 0 ? "rgba(74,222,128,0.8)" : "rgba(255,255,255,0.08)",
+                    color: commentText.trim().length > 0 ? "#0a0a0f" : "rgba(255,255,255,0.3)",
+                    fontSize: 14,
+                    cursor: commentText.trim().length > 0 ? "pointer" : "default",
+                    transition: "background 150ms ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  aria-label="send"
+                >
+                  ↑
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </>
