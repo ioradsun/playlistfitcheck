@@ -38,9 +38,7 @@ describe("LyricDancePlayer.paintIdentityFrame", () => {
     } as any;
 
     const bgCanvas = document.createElement("canvas");
-    const textCanvas = document.createElement("canvas");
     vi.spyOn(bgCanvas, "getContext").mockReturnValue(ctx);
-    vi.spyOn(textCanvas, "getContext").mockReturnValue({ clearRect: vi.fn() } as any);
 
     const container = document.createElement("div");
     Object.defineProperty(container, "offsetWidth", { value: 320, configurable: true });
@@ -65,7 +63,7 @@ describe("LyricDancePlayer.paintIdentityFrame", () => {
       words: [],
       beat_grid: { bpm: 120, beats: [0, 0.5], confidence: 1 },
       cinematic_direction: { sections: [] },
-    } as any, bgCanvas, textCanvas, container, { externalAudio: document.createElement("audio") });
+    } as any, bgCanvas, container, { externalAudio: document.createElement("audio") });
 
     expect(paintSpy).toHaveBeenCalledTimes(1);
     expect(createLinearGradient).toHaveBeenCalled();
