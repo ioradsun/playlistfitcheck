@@ -147,6 +147,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const panelPlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFiresRef = useRef<Array<{ line_index: number | null; hold_ms: number | null }>>([]);
   const retriedRef = useRef(false);
+  const liveRef = useRef(live);
+  liveRef.current = live;
 
   // Core state
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(
@@ -242,26 +244,48 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   // chapter images mid-load, and RAF loops. That perpetual-rebuild loop is
   // the regression PR #1369 exposed after removing the stale-keeping guard.
   useEffect(() => {
-    const teardown = () => {
+    // ── SUSPEND: live went false → keep player alive ──
+    if (!live) {
+      if (playerRef.current && !playerRef.current.destroyed) {
+        playerRef.current.suspend();
+      }
       setPlayerReady(false);
+      return; // No cleanup returned → player survives in memory
+    }
+
+    const data = fetchedDataRef.current;
+    if (!danceId || !data?.audio_url || !canvasRef.current || !containerRef.current) {
+      // Missing data → hard teardown
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
         setPlayer(null);
       }
-    };
-
-    if (!live) {
-      teardown();
+      setPlayerReady(false);
       return;
     }
 
-    const data = fetchedDataRef.current;
-    if (!danceId || !data?.audio_url || !canvasRef.current || !containerRef.current) {
-      teardown();
-      return;
+    // ── WARM RESUME: player exists and isn't destroyed ──
+    if (playerRef.current && !playerRef.current.destroyed) {
+      playerRef.current.resume();
+      setPlayer(playerRef.current);
+      setPlayerReady(true);
+      // Play state effect will fire on next render (playerReady changed)
+      // and handle setRegion (no-op via guard), setMuted, play()
+      return () => {
+        // Cleanup fires when danceId/audio_url/retryNonce changes while live
+        // liveRef distinguishes "live toggled" from "song changed"
+        if (!liveRef.current) return; // live went false → don't destroy (suspend path handles it)
+        playerRef.current?.destroy();
+        if (playerRef.current) {
+          playerRef.current = null;
+          setPlayer(null);
+        }
+        setPlayerReady(false);
+      };
     }
 
+    // ── COLD CREATE: first time for this song ──
     let cancelled = false;
     setPlayerReady(false);
 
@@ -300,6 +324,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       });
 
     return () => {
+      // Cleanup: fires when deps change while live, or on unmount
+      if (!liveRef.current) return; // live went false → suspend path handles it
       cancelled = true;
       window.clearTimeout(bootDeadline);
       p.destroy();
@@ -309,6 +335,16 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, danceId, fetchedData?.audio_url, retryNonce]);
+
+  // Destroy player on unmount (regardless of live state)
+  useEffect(() => {
+    return () => {
+      if (playerRef.current && !playerRef.current.destroyed) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+    };
+  }, []);
 
   // 4b. Container resize observation — keeps engine layout in sync with container size
   // Fixes: text off-center or clipped after card transitions (reels mode primary change,
