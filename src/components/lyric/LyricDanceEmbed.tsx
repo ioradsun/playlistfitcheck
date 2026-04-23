@@ -140,6 +140,19 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [fetchedData, setFetchedData] = useState<LyricDanceData | null>(
     () => (prefetchedData ? hydrateRow(prefetchedData) : null),
   );
+  // Always-current ref to fetchedData. The engine lifecycle effect reads this
+  // without listing fetchedData in its dep array — so late-arriving data
+  // (section_images, empowerment_promise, etc.) does NOT destroy and rebuild
+  // the entire player. Late data flows through dedicated reactive effects
+  // (e.g. updateSectionImages push) instead.
+  const fetchedDataRef = useRef(fetchedData);
+  fetchedDataRef.current = fetchedData;
+
+  // Explicit nonce for forcing a player rebuild. Bumped by the init-failure
+  // retry path, which used to trigger re-mount via setFetchedData({...d}) —
+  // that no longer works now that the lifecycle effect doesn't depend on
+  // fetchedData identity.
+  const [retryNonce, setRetryNonce] = useState(0);
   const [player, setPlayer] = useState<LyricDancePlayer | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
@@ -196,7 +209,18 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     };
   }, [lyricDanceId, prefetchedData]);
 
-  // Engine lifecycle
+  // Engine lifecycle.
+  //
+  // The dep array is deliberately narrow: `live`, `danceId`, `audio_url`, and
+  // an explicit retry nonce. Any *other* change to fetchedData (late-arriving
+  // section_images, empowerment_promise, etc.) flows through dedicated reactive
+  // effects elsewhere in this component — it does NOT rebuild the engine.
+  //
+  // If this effect listed fetchedData itself, every hydration (once per
+  // prefetchedData prop update in FitTab) would destroy and reconstruct the
+  // entire LyricDancePlayer, tearing down scene compilation, audio bindings,
+  // chapter images mid-load, and RAF loops. That perpetual-rebuild loop is
+  // the regression PR #1369 exposed after removing the stale-keeping guard.
   useEffect(() => {
     const teardown = () => {
       setPlayerReady(false);
@@ -212,7 +236,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       return;
     }
 
-    if (!danceId || !fetchedData?.audio_url || !canvasRef.current || !textCanvasRef.current || !containerRef.current) {
+    const data = fetchedDataRef.current;
+    if (!danceId || !data?.audio_url || !canvasRef.current || !textCanvasRef.current || !containerRef.current) {
       teardown();
       return;
     }
@@ -221,7 +246,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     setPlayerReady(false);
 
     const p = new LyricDancePlayer(
-      fetchedData,
+      data,
       canvasRef.current,
       textCanvasRef.current,
       containerRef.current,
@@ -249,7 +274,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         console.error("[LyricDanceEmbed] init failed", { danceId, err });
         if (!retriedRef.current) {
           retriedRef.current = true;
-          setFetchedData((d) => (d ? { ...d } : d));
+          setRetryNonce((n) => n + 1);
           return;
         }
         setPlayerReady(true);
@@ -263,7 +288,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       setPlayer((prev) => (prev === p ? null : prev));
       setPlayerReady(false);
     };
-  }, [live, fetchedData, danceId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, danceId, fetchedData?.audio_url, retryNonce]);
 
   // 4b. Container resize observation — keeps engine layout in sync with container size
   // Fixes: text off-center or clipped after card transitions (reels mode primary change,
