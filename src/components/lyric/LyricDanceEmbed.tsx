@@ -9,7 +9,6 @@ import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { enrichSections } from "@/engine/directionResolvers";
 import { fireWeight } from "@/lib/fireHold";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
-import { MomentsComposer } from "@/components/lyric/MomentsComposer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { ModeDispatcher } from "@/components/lyric/modes/ModeDispatcher";
 import { CARD_MODES } from "@/components/lyric/modes/registry";
@@ -1077,15 +1076,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         style={{ background: "#0a0a0a" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/*
-         * LyricInteractionLayer (bottom FMLY bar) is structurally outside the mode
-         * system — it's an embed-level frame element rendered in a separate flex child
-         * below the video container. The gate is on cardMode === "listen" because
-         * the interaction UI is only relevant in that mode, but the bar itself isn't
-         * a mode overlay. Moving it into ListenMode would require portals or DOM
-         * restructuring.
-         */}
-        {live && cardMode === "listen" ? (
+        {live ? (
           <LyricInteractionLayer
             moments={moments}
             fireHeat={fireHeat}
@@ -1103,24 +1094,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               if (m) playRegion(m.startSec, m.endSec);
               setCardMode("moments");
             }}
-          />
-        ) : live && cardMode === "moments" ? (
-          <MomentsComposer
-            activeMomentIdx={momentsModeState.expandedMomentIdx}
-            activeMomentLabel={
-              momentsModeState.expandedMomentIdx !== null
-                ? (() => {
-                  const m = moments[momentsModeState.expandedMomentIdx];
-                  if (!m) return null;
-                  const startMin = Math.floor(m.startSec / 60);
-                  const startSec = String(Math.floor(m.startSec % 60)).padStart(2, "0");
-                  const endMin = Math.floor(m.endSec / 60);
-                  const endSec = String(Math.floor(m.endSec % 60)).padStart(2, "0");
-                  return `${startMin}:${startSec} → ${endMin}:${endSec}`;
-                })()
-                : null
-            }
-            replyTargetId={momentsModeState.replyTargetId}
+            composing={cardMode === "moments" && momentsModeState.expandedMomentIdx !== null}
             replyTargetAuthor={
               momentsModeState.replyTargetId
                 ? (profileMap[
@@ -1128,7 +1102,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
                 ]?.displayName ?? "anon")
                 : null
             }
-            onSubmit={(text) => {
+            onCommentSubmit={(text) => {
               if (momentsModeState.expandedMomentIdx === null) return;
               if (momentsModeState.replyTargetId) {
                 modeCtx.onCommentReply(
@@ -1142,9 +1116,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               }
             }}
             onClearReply={() => momentsModeState.setReplyTargetId(null)}
-            totalDuration={player?.audio?.duration ?? 0}
-            currentTimeSec={currentTimeSec}
-            onSeekTo={seekOnly}
           />
         ) : (
           <div
