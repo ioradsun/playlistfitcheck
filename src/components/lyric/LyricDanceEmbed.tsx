@@ -1035,8 +1035,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
             comments={comments}
             onFire={(lineIndex, holdMs) => {
               modeCtx.onFireMoment(lineIndex, player?.audio.currentTime ?? 0, holdMs);
-              const phrase = effectiveData?.cinematic_direction?.phrases?.[lineIndex];
-              if (phrase?.text) player?.showEcho(phrase.text);
             }}
             getLineIndex={getAttributedPhraseIndex}
             onSeekTo={seekOnly}
