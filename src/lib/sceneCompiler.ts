@@ -13,7 +13,6 @@ import {
 import { getEffectTier } from "@/engine/timeTiers";
 import {
   resolveTypographyFromDirection,
-  getFontNamesForPreload,
   deriveSectionTypography,
   WEIGHT_MAP,
   TRACKING_MAP,
