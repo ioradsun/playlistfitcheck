@@ -90,9 +90,9 @@ export function EmpowermentMode({ ctx }: { ctx: ModeContext }) {
   };
 
   return (
-    <ModePanel>
+    <ModePanel scroll="y">
       <div
-        className="w-full h-full flex flex-col items-center justify-center px-6 py-8"
+        className="w-full min-h-full flex flex-col items-center justify-center px-6 py-8"
         style={{ fontFamily: "monospace", color: "rgba(255,255,255,0.88)" }}
       >
       {!empowermentPromise ? (
