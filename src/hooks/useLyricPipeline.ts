@@ -1014,18 +1014,14 @@ export function useLyricPipeline({
               getWaveformCacheKey({ savedId: id, audioUrl }),
               waveform,
             );
-            if (id) {
-              persistQueue.enqueue({
-                table: "lyric_projects",
-                id,
-                payload: {
-                  render_data: {
-                    waveformPeaks: peaks,
-                    waveformDuration: buf.duration,
-                  },
-                },
-              });
-            }
+            // Merge peaks into renderData state; the debounced renderData-persist
+            // effect writes the full merged blob back to the DB, preventing
+            // partial-column overwrites of fields like cinematicDirection.
+            setRenderData((prev: any) => ({
+              ...(prev ?? {}),
+              waveformPeaks: peaks,
+              waveformDuration: buf.duration,
+            }));
           }
         })
         .catch((err) => {
@@ -1053,18 +1049,14 @@ export function useLyricPipeline({
             getWaveformCacheKey({ savedId: id, audioUrl }),
             waveform,
           );
-          if (id) {
-            persistQueue.enqueue({
-              table: "lyric_projects",
-              id,
-              payload: {
-                render_data: {
-                  waveformPeaks: peaks,
-                  waveformDuration: buf.duration,
-                },
-              },
-            });
-          }
+          // Merge peaks into renderData state; the debounced renderData-persist
+          // effect writes the full merged blob back to the DB, preventing
+          // partial-column overwrites of fields like cinematicDirection.
+          setRenderData((prev: any) => ({
+            ...(prev ?? {}),
+            waveformPeaks: peaks,
+            waveformDuration: buf.duration,
+          }));
         }
       })
       .catch((err) => {
