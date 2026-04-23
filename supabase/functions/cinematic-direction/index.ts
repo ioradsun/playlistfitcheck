@@ -98,6 +98,32 @@ RULES:
 2. LYRIC ANCHORING — Every scene includes at least one image, action, or symbol from the lyrics at that timestamp. Symbolic is fine. Ignoring the lyric is not.
 3. VISUAL CLARITY — Describe what the viewer literally sees. No abstract commentary. "A chrome car climbs through low clouds" not "a feeling of tension."
 4. COLOR ARC — Colors should progress across the song. Different emotional beats need different color temperatures.
+5. COLOR MATCHES MOOD — The dominantColor hex MUST sit in the color family of the visualMood. See COLOR FAMILIES below. Picking an in-family shade is more important than picking a "creative" one.
+6. TEXTURE VARIETY — Across the whole song, try to use different textures per section. Repetition is boring. Match texture to mood but vary it where multiple sections share a mood.
+7. HERO WORDS ARE CONTENT WORDS — heroWords must be concrete nouns, action verbs, or vivid adjectives. NEVER articles, prepositions, pronouns, or auxiliaries. Banned forever: THE, A, AN, OF, TO, FOR, AT, BY, IT, IS, I, MY, WE, HIS, HER, HOW, WHEN, BE, BEEN, WAS, ARE.
+
+COLOR FAMILIES (pick a shade from the family — never outside it):
+  aggressive → blood reds, deep reds, neon reds (#B0002A, #FF1744, #8B0000). Never pink or candy-red.
+  anthemic → fiery oranges, amber, orange-reds (#E8632B, #FF4500, #FFB347).
+  intimate → warm ambers, firelight, deep warm reds (#C9A96E, #8B3A3A, #D87C59). Never saddle brown.
+  dreamy → soft lavenders, pastel pinks, pale sky blues (#B088F9, #FFB3D9, #A8C4E0).
+  melancholy → muted blue-greys, steel blues, slate (#3D4E6C, #5A6B7A, #4A5A7A). Never saturated corporate blue.
+  euphoric → golds, peaches, bright warm yellows (#FFD700, #FF8A00, #FFE5B4).
+  eerie → desaturated green-greys, sickly yellow-greens, deep violets (#2A3D35, #6B5D34, #4B3A5A). Never mint or teal.
+  vulnerable → dusty roses, plums, muted lavenders (#D4618C, #B88DA7, #A8809E).
+  triumphant → golds, bright oranges, warm creams (#FFD700, #E8632B, #F5DEB3).
+  nostalgic → sepia, tan, warm browns (#A0845C, #D2B48C, #8B7355).
+  defiant → bold blues or saturated reds (#4FA4D4, #FF0000, #000080).
+  hopeful → greens, soft yellows, sky blues (#34D058, #F5E050, #A8D8EA).
+  raw → concrete greys, slate, neutral mid-greys (#A0A4AC, #6C757D, #808080). Always low saturation.
+  hypnotic → deep violets, indigos, midnight blues (#4B0082, #6B21A8, #1A1F5C). Never gold or yellow.
+  ethereal → mist blues, lavender mists, pale whites (#A8C4E0, #E0BBE4, #F5F5F5).
+  haunted → pale slates, dim greys, muted blues (#5A6B7A, #2C3E50, #4A4A4A).
+  celestial → periwinkles, midnight blues, deep indigos (#7B8EC4, #2C3E50, #4B0082).
+  noir → charcoals, blue-blacks, smoky greys (#4A5568, #2D3748, #1A202C). Low saturation.
+  rebellious → rusts, aggressive oranges, dark reds (#C44E2B, #FF4500, #8B0000).
+
+EXCEPTION: if the scene has a specific in-world light source that dominates (a red exit sign, a green neon bar glow), you may pick that light's color regardless of mood — but only then.
 
 One moment per timestamp. Match the count exactly.
 Energy hints: low = tight/close, high = wide/overwhelming, rising = leaning forward, falling = letting go.`;
@@ -194,6 +220,61 @@ function extractJson(raw: string): Record<string, any> | null {
 
 // ── Validate + transform to client contract ──────────────────
 
+// Acceptable HSL bounds per mood. hMin/hMax can wrap (e.g. red at 0° crossing 360°).
+// sMin = minimum saturation; sMax = maximum saturation (for muted moods).
+// lMin/lMax constrain lightness to keep colors usable behind text.
+type MoodHslBounds = {
+  hRanges: Array<[number, number]>; // hue (0-360), can have multiple accepted arcs
+  sMin: number;
+  sMax: number; // saturation (0-1)
+  lMin: number;
+  lMax: number; // lightness (0-1)
+};
+
+const MOOD_HSL: Record<string, MoodHslBounds> = {
+  aggressive: { hRanges: [[345, 360], [0, 15]], sMin: 0.5, sMax: 1.0, lMin: 0.2, lMax: 0.55 },
+  anthemic: { hRanges: [[15, 45]], sMin: 0.55, sMax: 1.0, lMin: 0.4, lMax: 0.65 },
+  intimate: { hRanges: [[15, 45]], sMin: 0.3, sMax: 0.8, lMin: 0.3, lMax: 0.65 },
+  dreamy: { hRanges: [[260, 320], [320, 360]], sMin: 0.25, sMax: 0.75, lMin: 0.55, lMax: 0.85 },
+  melancholy: { hRanges: [[200, 240]], sMin: 0.1, sMax: 0.45, lMin: 0.3, lMax: 0.55 },
+  euphoric: { hRanges: [[35, 55]], sMin: 0.6, sMax: 1.0, lMin: 0.45, lMax: 0.75 },
+  eerie: { hRanges: [[60, 180], [250, 300]], sMin: 0.05, sMax: 0.45, lMin: 0.15, lMax: 0.5 },
+  vulnerable: { hRanges: [[320, 360], [0, 20]], sMin: 0.2, sMax: 0.6, lMin: 0.4, lMax: 0.7 },
+  triumphant: { hRanges: [[30, 55]], sMin: 0.55, sMax: 1.0, lMin: 0.45, lMax: 0.75 },
+  nostalgic: { hRanges: [[20, 45]], sMin: 0.2, sMax: 0.55, lMin: 0.3, lMax: 0.65 },
+  defiant: { hRanges: [[200, 240], [0, 15]], sMin: 0.5, sMax: 1.0, lMin: 0.25, lMax: 0.6 },
+  hopeful: { hRanges: [[80, 150]], sMin: 0.3, sMax: 0.9, lMin: 0.45, lMax: 0.75 },
+  raw: { hRanges: [[0, 360]], sMin: 0.0, sMax: 0.2, lMin: 0.3, lMax: 0.7 },
+  hypnotic: { hRanges: [[240, 290]], sMin: 0.4, sMax: 1.0, lMin: 0.2, lMax: 0.55 },
+  ethereal: { hRanges: [[200, 280]], sMin: 0.1, sMax: 0.5, lMin: 0.6, lMax: 0.9 },
+  haunted: { hRanges: [[200, 240]], sMin: 0.05, sMax: 0.35, lMin: 0.25, lMax: 0.55 },
+  celestial: { hRanges: [[220, 270]], sMin: 0.3, sMax: 0.8, lMin: 0.25, lMax: 0.65 },
+  noir: { hRanges: [[200, 240]], sMin: 0.05, sMax: 0.3, lMin: 0.15, lMax: 0.4 },
+  rebellious: { hRanges: [[0, 30]], sMin: 0.5, sMax: 1.0, lMin: 0.3, lMax: 0.6 },
+};
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0));
+  else if (max === gn) h = (bn - rn) / d + 2;
+  else h = (rn - gn) / d + 4;
+  h *= 60;
+  return [h, s, l];
+}
+
+function hueInRanges(h: number, ranges: Array<[number, number]>): boolean {
+  for (const [lo, hi] of ranges) {
+    if (h >= lo && h <= hi) return true;
+  }
+  return false;
+}
+
 function validateColor(hex: string, fallbackMood: string): string {
   if (typeof hex !== "string" || !/^#[0-9a-fA-F]{6}$/.test(hex)) {
     return MOOD_COLOR[fallbackMood] || "#C9A96E";
@@ -201,11 +282,30 @@ function validateColor(hex: string, fallbackMood: string): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
+
+  // Tier 1: luminance bound — keep readable behind text
   const luminance = (r * 299 + g * 587 + b * 114) / 1000 / 255;
   if (luminance < 0.12 || luminance > 0.85) {
     return MOOD_COLOR[fallbackMood] || "#C9A96E";
   }
-  return hex;
+
+  // Tier 2: color-family check — hue + saturation + lightness must match the mood
+  const bounds = MOOD_HSL[fallbackMood];
+  if (!bounds) return hex; // unknown mood — accept
+
+  const [h, s, l] = rgbToHsl(r, g, b);
+  const hueOk = hueInRanges(h, bounds.hRanges);
+  const satOk = s >= bounds.sMin && s <= bounds.sMax;
+  const lightOk = l >= bounds.lMin && l <= bounds.lMax;
+
+  if (hueOk && satOk && lightOk) return hex;
+
+  // Out of family — snap to mood baseline
+  console.warn(
+    `[cinematic-direction] color ${hex} out of family for mood "${fallbackMood}" ` +
+    `(h=${h.toFixed(0)} s=${s.toFixed(2)} l=${l.toFixed(2)}); snapping to ${MOOD_COLOR[fallbackMood]}`,
+  );
+  return MOOD_COLOR[fallbackMood] || "#C9A96E";
 }
 
 function validate(raw: Record<string, any>, sectionCount: number, body: RequestBody): Record<string, any> {
@@ -310,6 +410,39 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
     }
     if (sections.length > sectionCount) {
       sections = sections.slice(0, sectionCount);
+    }
+  }
+
+  // ── Texture variety enforcement ──
+  // No single texture should dominate. If sectionCount > 3, cap per-texture usage at ceil(n/3).
+  if (sections.length > 3) {
+    const maxPerTexture = Math.ceil(sections.length / 3);
+    const textureCounts: Record<string, number> = {};
+    const allTextures = VALID_TEXTURES as readonly string[];
+
+    // Prefer a round-robin based on mood → texture but skip overused textures
+    for (let i = 0; i < sections.length; i++) {
+      const sec = sections[i];
+      const current = sec.texture;
+      textureCounts[current] = (textureCounts[current] ?? 0) + 1;
+
+      if (textureCounts[current] > maxPerTexture) {
+        // Find a replacement: prefer mood-adjacent textures, then any unused, then any non-maxed
+        const candidates = [
+          MOOD_TEXTURE[sec.visualMood],
+          ...allTextures,
+        ].filter((t): t is string => typeof t === "string" && t !== current);
+
+        const replacement = candidates.find(
+          (t) => (textureCounts[t] ?? 0) < maxPerTexture,
+        );
+
+        if (replacement) {
+          textureCounts[current] -= 1;
+          textureCounts[replacement] = (textureCounts[replacement] ?? 0) + 1;
+          sec.texture = replacement;
+        }
+      }
     }
   }
 
