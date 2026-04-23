@@ -121,7 +121,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   } = props;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const textCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTimeSecRef = useRef(0);
   const hasPlayedRef = useRef(false);
@@ -237,7 +236,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
 
     const data = fetchedDataRef.current;
-    if (!danceId || !data?.audio_url || !canvasRef.current || !textCanvasRef.current || !containerRef.current) {
+    if (!danceId || !data?.audio_url || !canvasRef.current || !containerRef.current) {
       teardown();
       return;
     }
@@ -248,7 +247,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     const p = new LyricDancePlayer(
       data,
       canvasRef.current,
-      textCanvasRef.current,
       containerRef.current,
       { externalAudio: getSharedAudio() },
     );
@@ -1009,11 +1007,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
           ref={canvasRef}
           className="absolute inset-0 w-full h-full"
           style={{ zIndex: 1, pointerEvents: "none" }}
-        />
-        <canvas
-          ref={textCanvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{ zIndex: 2, pointerEvents: "none" }}
         />
 
         <ModeDispatcher ctx={modeCtx} />

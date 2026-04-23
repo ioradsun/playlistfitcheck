@@ -1377,7 +1377,6 @@ export class LyricDancePlayer {
 
   // DOM (React passes these in; engine owns them after construction)
   private bgCanvas: HTMLCanvasElement;
-  private textCanvas: HTMLCanvasElement;
   private container: HTMLDivElement;
 
   // Canvas core
@@ -1503,7 +1502,6 @@ export class LyricDancePlayer {
   private _wickSeekOverlay: HTMLDivElement | null = null;
   private _beatBarVisible = false;
   private _intensityScale = 1.0;
-  public textRenderMode: "dom" | "canvas" | "both" = "canvas";
   public wickBarEnabled = false;
   private chapterImages: HTMLImageElement[] = [];
   private _sectionScrimOpacity: number[] = [];
@@ -1676,7 +1674,6 @@ export class LyricDancePlayer {
   constructor(
     data: LyricDanceData,
     bgCanvas: HTMLCanvasElement,
-    textCanvas: HTMLCanvasElement,
     container: HTMLDivElement,
     options?: {
       preloadedImages?: HTMLImageElement[];
@@ -1696,7 +1693,6 @@ export class LyricDancePlayer {
       this.data = { ...this.data, lyrics: (this.data as any).lines };
     }
     this.bgCanvas = bgCanvas;
-    this.textCanvas = textCanvas;
     this.container = container;
     this.options = options;
 
@@ -1704,9 +1700,6 @@ export class LyricDancePlayer {
     this.canvas = bgCanvas;
     this.ctx = bgCanvas.getContext("2d", { alpha: false })!;
 
-    // Keep text canvas blank (React shell still mounts it).
-    const tctx = textCanvas.getContext("2d", { alpha: true });
-    if (tctx) tctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
     // Paint a synchronous still frame so the live surface is never visually empty.
     this.paintIdentityFrame();
@@ -2581,9 +2574,6 @@ export class LyricDancePlayer {
     this._globalWickBar?.setDpr(eDpr);
     this.canvas.width = Math.floor(this.width * eDpr);
     this.canvas.height = Math.floor(this.height * eDpr);
-    // Text canvas is kept matched (never drawn to, but must agree on dimensions)
-    this.textCanvas.width = this.canvas.width;
-    this.textCanvas.height = this.canvas.height;
     // Invalidate bg cache — was baked at previous DPR
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
@@ -2665,18 +2655,14 @@ export class LyricDancePlayer {
   }
 
   /**
-   * Swap the render target to a different canvas pair.
-   * Render one engine to two canvases alternately when needed.
+   * Swap the render target to a different canvas.
    * Preserves all compiled state — only the output surface changes.
    */
-  setRenderTarget(bgCanvas: HTMLCanvasElement, textCanvas: HTMLCanvasElement, container?: HTMLDivElement): void {
+  setRenderTarget(bgCanvas: HTMLCanvasElement, container?: HTMLDivElement): void {
     if (this.destroyed) return;
     this.bgCanvas = bgCanvas;
     this.canvas = bgCanvas;
     this.ctx = bgCanvas.getContext('2d', { alpha: false })!;
-    this.textCanvas = textCanvas;
-    const tctx = textCanvas.getContext('2d', { alpha: true });
-    if (tctx) tctx.clearRect(0, 0, textCanvas.width, textCanvas.height);
     if (container) this.container = container;
 
     const cw = container?.offsetWidth || bgCanvas.offsetWidth || this.width || 960;
@@ -2947,9 +2933,6 @@ export class LyricDancePlayer {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    const tctx = this.textCanvas.getContext("2d", { alpha: true });
-    if (tctx) tctx.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
-
     // Only clear local reference, not the global cache
     this.chunks = new Map();
     this._zeroCanvasList(this.bgCaches);
@@ -2995,14 +2978,12 @@ export class LyricDancePlayer {
     this._textMetricsCache.clear();
     this._watermarkCache = null;
     this._zeroCanvas(this._measureCanvas);
-    this._zeroCanvas(this.textCanvas);
     this._zeroCanvas(this.canvas);
     this._zeroCanvas(this.bgCanvas);
     revokeAnalyzerWorker();          // free blob URL (safe to call multiple times)
     this.ctx = null as any;
     this.canvas = null as any;
     this.bgCanvas = null as any;
-    this.textCanvas = null as any;
     this.container = null as any;
   }
 
@@ -3885,7 +3866,6 @@ export class LyricDancePlayer {
     // Camera zoom is now applied via CameraRig.getSubjectTransform() at the text rendering stage
     this.ctx.textAlign = 'left';
     this.setCanvasBaseline('middle');
-    const renderCanvasText = this.textRenderMode === 'canvas' || this.textRenderMode === 'both';
 
     let drawCalls = 0;
     const sortBuf = this._sortBuffer;
@@ -4058,7 +4038,7 @@ export class LyricDancePlayer {
     this._lastShadowColor = 'transparent';
 
     // ═══ HERO SMOKE: palette-colored flame wisps rising from hero words ═══
-    if (renderCanvasText && qTier < 3) {
+    if (qTier < 3) {
       const smokePalette = this._framePalette ?? this.data?.palette ?? ['#a855f7', '#ec4899', '#ffffff'];
       this._heroSmoke.update(sortBuf, smokePalette, qTier, this._smokePhraseAge);
       this.ctx.save();
@@ -4070,10 +4050,8 @@ export class LyricDancePlayer {
       this.setCanvasBaseline('middle');
     }
 
-    if (renderCanvasText) {
-      for (let ci = 0; ci < sortBuf.length; ci += 1) {
-        drawChunkText(sortBuf[ci]);
-      }
+    for (let ci = 0; ci < sortBuf.length; ci += 1) {
+      drawChunkText(sortBuf[ci]);
     }
 
     this.ctx.shadowBlur = 0;
@@ -4093,7 +4071,7 @@ export class LyricDancePlayer {
     this.setCanvasBaseline('alphabetic');
 
     // ═══ EXIT EFFECT: cinematic phrase exit ═══
-    if (renderCanvasText && this._exitEffect.active) {
+    if (this._exitEffect.active) {
       this._exitEffect.draw(this.ctx, tSec, this._effectiveDpr);
     }
 
@@ -4384,8 +4362,6 @@ export class LyricDancePlayer {
     this.canvas.width = Math.floor(width * this.dpr);
     this.canvas.height = Math.floor(height * this.dpr);
 
-    this.textCanvas.width = this.canvas.width;
-    this.textCanvas.height = this.canvas.height;
 
     this.ctx.setTransform(this._effectiveDpr, 0, 0, this._effectiveDpr, 0, 0);
     this.buildBgCache();
