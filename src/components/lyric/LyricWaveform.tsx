@@ -166,10 +166,14 @@ export const LyricWaveform = forwardRef<HTMLDivElement, LyricWaveformProps>(func
   );
 
   if (!waveform) {
+    // Silent skeleton — same dimensions, no "loading" confession.
+    // In the cache-hit case this branch never renders. In the first-decode
+    // case the shimmer communicates "something is coming" without words.
     return (
-      <div className="h-[88px] rounded-lg bg-muted/30 animate-pulse flex items-center justify-center">
-        <span className="text-xs text-muted-foreground">Loading waveform…</span>
-      </div>
+      <div
+        className="min-h-[88px] rounded-lg bg-muted/20 animate-pulse"
+        aria-label="Waveform loading"
+      />
     );
   }
 
