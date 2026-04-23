@@ -27,8 +27,6 @@ interface Props {
   isOpen: boolean;
   onOpen?: () => void;
   onClose: () => void;
-  trackTitle?: string;
-  reelsMode?: boolean;
   variant?: "embedded" | "reels";
   palette?: string[];
   caption?: string;
@@ -87,8 +85,6 @@ export function PostCommentPanel({
   isOpen,
   onOpen,
   onClose,
-  trackTitle,
-  reelsMode = false,
   variant = "embedded",
   palette,
   caption,
@@ -105,8 +101,6 @@ export function PostCommentPanel({
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [comments, setComments] = useState<Comment[]>([]);
   const [hasFired, setHasFired] = useState(false);
-  const [totalFireCount, setTotalFireCount] = useState(0);
-  const [lastFiredAt, setLastFiredAt] = useState<string | null>(null);
   const [commentReactions, setCommentReactions] = useState<
     Record<string, Record<string, number>>
   >({});
@@ -204,8 +198,6 @@ export function PostCommentPanel({
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         if (!data) return;
-        setTotalFireCount(data.length);
-        if (data.length > 0) setLastFiredAt((data[0] as any).created_at ?? null);
       });
   }, [postId]);
 
@@ -370,8 +362,6 @@ export function PostCommentPanel({
           onFireTap={() => {
             if (!hasFired) {
               setHasFired(true);
-              setTotalFireCount((c) => c + 1);
-              setLastFiredAt(new Date().toISOString());
               if (postId) {
                 logEngagementEvent(postId, user?.id ?? sessionId, "fire");
               }
@@ -379,7 +369,6 @@ export function PostCommentPanel({
           }}
           accent={accent}
           isLive={isLive}
-          totalFireCount={totalFireCount}
         />
       </div>
     </div>

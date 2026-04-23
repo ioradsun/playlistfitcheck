@@ -7,7 +7,6 @@ interface MomentThreadProps {
   header: ReactNode;
   comments: Comment[];
   profileMap: Record<string, { avatarUrl: string | null; displayName: string | null }>;
-  currentUserId: string | null;
   replyTargetId: string | null;
   onBack: () => void;
   onReplyTarget: (commentId: string | null) => void;
@@ -147,13 +146,11 @@ export function MomentThread({
   header,
   comments,
   profileMap,
-  currentUserId,
   replyTargetId,
   onBack,
   onReplyTarget,
   onReact,
 }: MomentThreadProps) {
-  void currentUserId;
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
 
   useEffect(() => {

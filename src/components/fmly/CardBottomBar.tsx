@@ -52,9 +52,6 @@ interface CardBottomBarProps {
   onPauseForInput?: () => void;
   onResumeAfterInput?: () => void;
   isLive?: boolean;
-  totalFireCount?: number;
-  /** True when the song has ended and closing screen is visible */
-  songEnded?: boolean;
 }
 
 function FireButton({
