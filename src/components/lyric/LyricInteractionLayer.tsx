@@ -7,27 +7,6 @@ import { fetchSessionFires } from "@/lib/fire";
 import { createFireHold } from "@/lib/fireHold";
 
 const BAR_HEIGHT = 44;
-const SPRITE_SIZE = 16;
-
-const bakeGlowSprite = (r: number, g: number, b: number): HTMLCanvasElement | null => {
-  if (typeof document === "undefined") return null;
-  const off = document.createElement("canvas");
-  off.width = SPRITE_SIZE;
-  off.height = SPRITE_SIZE;
-  const octx = off.getContext("2d");
-  if (!octx) return null;
-  const cx = SPRITE_SIZE / 2;
-  const grad = octx.createRadialGradient(cx, cx, 0, cx, cx, cx);
-  grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.3, `rgba(${r},${g},${b},0.85)`);
-  grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-  octx.fillStyle = grad;
-  octx.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
-  return off;
-};
-
-const ORANGE_SPRITE = bakeGlowSprite(255, 140, 40);
-const GREEN_SPRITE = bakeGlowSprite(74, 222, 128);
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -64,13 +43,18 @@ export function FmlyBar({
 
   const fireHoldControllerRef = useRef<ReturnType<typeof createFireHold> | null>(null);
   const userFiresRef = useRef<Record<number, number>>({});
-  const emberCanvasRef = useRef<HTMLCanvasElement>(null);
-  const embersRef = useRef<Array<{
-    x: number; y: number; vy: number; vx: number;
-    life: number; size: number; opacity: number;
-    green: boolean;
-  }>>([]);
-  const pendingBurstRef = useRef<{ count: number; intensity: number; momentIdx: number } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Memoization for the curve Path2D — rebuilt only when heat data or width changes.
+  const cachedPathRef = useRef<{
+    path: Path2D;
+    fillPath: Path2D;
+    points: Array<{ x: number; y: number; momentIdx: number }>;
+    maxFire: number;
+    width: number;
+    counts: Record<number, number>;
+    holdIdx: number;
+    holdBucket: number;
+  } | null>(null);
   const prevMaxFireRef = useRef(1);
   const releaseDecayRef = useRef<{ momentIdx: number; peakBoost: number; releaseTime: number } | null>(null);
   const animRef = useRef<number>(0);
@@ -165,14 +149,13 @@ export function FmlyBar({
     };
   }, [player]);
 
-  // ── Canvas ember animation ──────────────────────────────────────────────
+  // ── Canvas render loop: curve + peak marker + playhead + optional hold bar ──
   useEffect(() => {
-    const canvas = emberCanvasRef.current;
+    const canvas = canvasRef.current;
     if (!canvas || !moments.length) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const embers = embersRef.current;
     const dpr = window.devicePixelRatio || 1;
 
     const resize = () => {
@@ -186,226 +169,205 @@ export function FmlyBar({
     };
     resize();
 
-    const spawnEmber = (
-      segIdx: number,
-      intensity: number,
-      fast = false,
-      green = false,
-      segRanges: Array<{ x0: number; x1: number }>,
-      rect: DOMRect,
-    ) => {
-      const seg = segRanges[segIdx];
-      if (!seg) return;
-      const count = fast ? 1 : (green ? Math.floor(1 + intensity * 2) : Math.floor(2 + intensity * 3));
-      for (let i = 0; i < count; i++) {
-        if (embers.length >= 120) break;
-        embers.push({
-          x: seg.x0 + Math.random() * (seg.x1 - seg.x0),
-          y: rect.height - 2 + Math.random() * 4,
-          vy: fast
-            ? -(0.4 + Math.random() * 0.6)
-            : green
-              ? -(0.2 + Math.random() * 0.35)
-              : -(0.15 + Math.random() * 0.25),
-          vx: (Math.random() - 0.5) * (fast ? 0.3 : 0.15),
-          life: fast
-            ? (0.4 + Math.random() * 0.3)
-            : green
-              ? (0.8 + Math.random() * 0.5)
-              : (0.6 + Math.random() * 0.4),
-          size: fast
-            ? (1.8 + Math.random() * 2.0)
-            : green
-              ? (2.5 + Math.random() * 2.5)
-              : (1.2 + Math.random() * 1.8),
-          opacity: fast
-            ? (0.7 + intensity * 0.3)
-            : green
-              ? (0.6 + intensity * 0.4)
-              : (0.4 + intensity * 0.4),
-          green,
-        });
+    const getMomentWeight = (idx: number, now: number) => {
+      const base = momentFireCounts[idx] ?? 0;
+      const committedUser = (userFiresRef.current[idx] ?? 0) / 150;
+      if (activeHoldMomentRef.current === idx && holdStartTimeRef.current > 0) {
+        const elapsed = now - holdStartTimeRef.current;
+        const holdBoost = (elapsed / 2000) * Math.max(prevMaxFireRef.current, 5);
+        return base + committedUser + holdBoost;
       }
+      const decay = releaseDecayRef.current;
+      if (decay && decay.momentIdx === idx) {
+        const since = now - decay.releaseTime;
+        if (since >= 500) {
+          releaseDecayRef.current = null;
+        } else {
+          const remaining = decay.peakBoost * (1 - since / 500);
+          return base + committedUser + remaining;
+        }
+      }
+      return base + committedUser;
     };
 
-    let frame = 0;
+    const buildCurve = (rect: DOMRect, now: number) => {
+      const baseline = rect.height - 2;
+      const maxLineHeight = rect.height * 0.7;
+      const weights: number[] = [];
+      let maxFire = 1;
+      for (let i = 0; i < moments.length; i += 1) {
+        const w = getMomentWeight(i, now);
+        weights.push(w);
+        if (w > maxFire) maxFire = w;
+      }
+      prevMaxFireRef.current = maxFire;
+
+      const points: Array<{ x: number; y: number; momentIdx: number }> = [];
+      for (let i = 0; i < moments.length; i += 1) {
+        const moment = moments[i];
+        // Peaks land at moment END, not midpoint — users react AFTER a line, so
+        // heat attributed to a moment is really heat at the end of that line.
+        const endPct = moment.endSec / Math.max(0.0001, totalDuration);
+        const x = Math.max(0, Math.min(rect.width, endPct * rect.width));
+        const fireWeight = weights[i];
+        const normalized = fireWeight > 0
+          ? Math.log1p(fireWeight) / Math.log1p(maxFire)
+          : 0;
+        const y = baseline - normalized * maxLineHeight;
+        points.push({ x, y, momentIdx: i });
+      }
+
+      const path = new Path2D();
+      const fillPath = new Path2D();
+      if (points.length > 0) {
+        path.moveTo(0, baseline);
+        path.lineTo(points[0].x, points[0].y);
+        for (let i = 0; i < points.length - 1; i += 1) {
+          const curr = points[i];
+          const next = points[i + 1];
+          const cpx = (curr.x + next.x) / 2;
+          const cpy = (curr.y + next.y) / 2;
+          path.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
+        }
+        const last = points[points.length - 1];
+        path.lineTo(last.x, last.y);
+        path.lineTo(rect.width, baseline);
+
+        // Fill path: same shape, closed at baseline for the heat-floor fill
+        fillPath.moveTo(0, baseline);
+        fillPath.lineTo(points[0].x, points[0].y);
+        for (let i = 0; i < points.length - 1; i += 1) {
+          const curr = points[i];
+          const next = points[i + 1];
+          const cpx = (curr.x + next.x) / 2;
+          const cpy = (curr.y + next.y) / 2;
+          fillPath.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
+        }
+        fillPath.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+        fillPath.lineTo(rect.width, baseline);
+        fillPath.closePath();
+      }
+
+      return { path, fillPath, points, maxFire };
+    };
+
     const loop = () => {
       animRef.current = requestAnimationFrame(loop);
-      frame += 1;
 
       const rect = canvas.parentElement?.getBoundingClientRect();
       if (!rect || rect.width === 0) return;
       if (Math.abs(canvas.width / dpr - rect.width) > 2) resize();
 
       const now = performance.now();
-      const ranges: Array<{ x0: number; x1: number }> = [];
-      for (const m of moments) {
-        ranges.push({
-          x0: (m.startSec / Math.max(0.0001, totalDuration)) * rect.width,
-          x1: (m.endSec / Math.max(0.0001, totalDuration)) * rect.width,
-        });
+      const holdIdx = activeHoldMomentRef.current;
+      const holdBucket = holdIdx >= 0 && holdStartTimeRef.current > 0
+        ? Math.floor((now - holdStartTimeRef.current) / 100)
+        : 0;
+
+      // Cache invalidators: counts changed, width changed, hold state changed,
+      // or hold elapsed crossed a 100ms bucket.
+      const cached = cachedPathRef.current;
+      const needsRebuild =
+        !cached
+        || cached.width !== rect.width
+        || cached.counts !== momentFireCounts
+        || cached.holdIdx !== holdIdx
+        || cached.holdBucket !== holdBucket;
+
+      let curve = cached;
+      if (needsRebuild) {
+        const built = buildCurve(rect, now);
+        curve = {
+          path: built.path,
+          fillPath: built.fillPath,
+          points: built.points,
+          maxFire: built.maxFire,
+          width: rect.width,
+          counts: momentFireCounts,
+          holdIdx,
+          holdBucket,
+        };
+        cachedPathRef.current = curve;
       }
+      if (!curve) return;
 
       ctx.clearRect(0, 0, rect.width, rect.height);
 
-      const getMomentWeight = (idx: number) => {
-        const base = momentFireCounts[idx] ?? 0;
-        const committedUser = (userFiresRef.current[idx] ?? 0) / 150;
-        if (activeHoldMomentRef.current === idx && holdStartTimeRef.current > 0) {
-          const elapsed = now - holdStartTimeRef.current;
-          const holdBoost = (elapsed / 2000) * Math.max(prevMaxFireRef.current, 5);
-          return base + committedUser + holdBoost;
+      // ── Heat floor: translucent orange wash beneath the curve ─────────────
+      ctx.fillStyle = "rgba(255, 140, 40, 0.08)";
+      ctx.fill(curve.fillPath);
+
+      // ── Curve stroke: quiet white, reads as a shape not a signal ──────────
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke(curve.path);
+
+      // ── Peak marker: single dot at the FMLY-voted hottest moment ──────────
+      // Static: stays put regardless of playhead position (Option A).
+      let hottestIdx = -1;
+      let hottestY = Infinity;
+      for (let i = 0; i < curve.points.length; i += 1) {
+        if (curve.points[i].y < hottestY) {
+          hottestY = curve.points[i].y;
+          hottestIdx = i;
         }
-
-        const decay = releaseDecayRef.current;
-        if (decay && decay.momentIdx === idx) {
-          const since = now - decay.releaseTime;
-          if (since >= 500) {
-            releaseDecayRef.current = null;
-          } else {
-            const remaining = decay.peakBoost * (1 - since / 500);
-            return base + committedUser + remaining;
-          }
-        }
-
-        return base + committedUser;
-      };
-
-      const points: Array<{ x: number; y: number }> = [];
-      const maxFire = Math.max(1, ...moments.map((_, i) => getMomentWeight(i)));
-      prevMaxFireRef.current = maxFire;
-      const maxLineHeight = rect.height * 0.7;
-      for (let i = 0; i < moments.length; i += 1) {
-        const moment = moments[i];
-        const fireWeight = getMomentWeight(i);
-        const midPct = ((moment.startSec + moment.endSec) / 2) / Math.max(0.0001, totalDuration);
-        const x = midPct * rect.width;
-        const normalized = fireWeight > 0
-          ? Math.log1p(fireWeight) / Math.log1p(maxFire)
-          : 0;
-        const y = rect.height - 2 - normalized * maxLineHeight;
-        points.push({ x, y });
       }
-
-      if (points.length > 0) {
+      if (hottestIdx >= 0 && curve.maxFire > 1) {
+        const p = curve.points[hottestIdx];
+        // Outer white ring (push-pin effect)
         ctx.beginPath();
-        ctx.moveTo(0, rect.height - 2);
-        ctx.lineTo(points[0].x, points[0].y);
-        for (let i = 0; i < points.length - 1; i += 1) {
-          const curr = points[i];
-          const next = points[i + 1];
-          const cpx = (curr.x + next.x) / 2;
-          const cpy = (curr.y + next.y) / 2;
-          ctx.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
-        }
-        if (points.length > 1) {
-          const last = points[points.length - 1];
-          ctx.lineTo(last.x, last.y);
-        }
-        ctx.lineTo(rect.width, rect.height - 2);
-        ctx.strokeStyle = "rgba(255,255,255,0.35)";
-        ctx.lineWidth = 1.5;
-        ctx.lineJoin = "round";
-        ctx.lineCap = "round";
-        ctx.stroke();
-      }
-
-      if (ready && progressPctRef.current > 0) {
-        const currentPct = progressPctRef.current / 100;
-        const playheadX = currentPct * rect.width;
-        let playheadY = rect.height - 2;
-        if (points.length >= 2) {
-          let left = points[0];
-          let right = points[points.length - 1];
-          if (playheadX <= points[0].x) {
-            left = { x: 0, y: rect.height - 2 };
-            right = points[0];
-          } else if (playheadX >= points[points.length - 1].x) {
-            left = points[points.length - 1];
-            right = { x: rect.width, y: rect.height - 2 };
-          } else {
-            for (let i = 0; i < points.length - 1; i += 1) {
-              if (points[i].x <= playheadX && points[i + 1].x >= playheadX) {
-                left = points[i];
-                right = points[i + 1];
-                break;
-              }
-            }
-          }
-          const t = right.x === left.x ? 0 : (playheadX - left.x) / (right.x - left.x);
-          playheadY = left.y + (right.y - left.y) * t;
-        } else if (points.length === 1) {
-          playheadY = points[0].y;
-        }
-        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.fill();
+        // Inner accent fill
         ctx.beginPath();
-        ctx.arc(playheadX, playheadY, 3, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 140, 40, 1)";
         ctx.fill();
       }
 
-      // ── Ember spawning ──────────────────────────────────────────────
-      // During fire hold: continuous dense embers from the spike
-      const isHolding = activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0;
-      if (isHolding) {
-        const holdIdx = activeHoldMomentRef.current;
+      // ── Fire hold bar: rising flame at the held moment's end-x ────────────
+      // Height grows with hold time; bar color deepens bottom-to-top.
+      // On release (handled elsewhere), the bar disappears and the curve's
+      // point at that moment has already been lifted via the hold boost in
+      // getMomentWeight — so the curve smoothly rises to meet it.
+      if (holdIdx >= 0 && holdStartTimeRef.current > 0 && curve.points[holdIdx]) {
         const elapsed = now - holdStartTimeRef.current;
-        const holdIntensity = Math.min(1, elapsed / 2000);
-        const streamCount = 1 + Math.floor(holdIntensity * 2);
-        for (let s = 0; s < streamCount; s += 1) {
-          spawnEmber(holdIdx, 0.6 + holdIntensity * 0.4, true, false, ranges, rect);
-        }
+        const t = Math.min(1, elapsed / 2000);
+        const maxLineHeight = rect.height * 0.7;
+        const baseline = rect.height - 2;
+        const barH = Math.min(rect.height - 4, t * maxLineHeight * 1.05);
+        const holdX = curve.points[holdIdx].x;
+        const barW = 3;
+
+        // Rounded-top rectangle
+        const barTop = baseline - barH;
+        const grad = ctx.createLinearGradient(holdX, baseline, holdX, barTop);
+        grad.addColorStop(0, "rgba(255, 140, 40, 0.9)");
+        grad.addColorStop(1, "rgba(255, 210, 128, 0.7)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(holdX - barW / 2, baseline);
+        ctx.lineTo(holdX - barW / 2, barTop + barW / 2);
+        ctx.arc(holdX, barTop + barW / 2, barW / 2, Math.PI, 0);
+        ctx.lineTo(holdX + barW / 2, baseline);
+        ctx.closePath();
+        ctx.fill();
       }
 
-      // Ambient embers: spawn frequency scales with fire intensity.
-      const maxFC = Math.max(1, ...moments.map((_, i) => momentFireCounts[i] ?? 0));
-      let hottestIdx = -1;
-      let hottestCount = 0;
-      for (let i = 0; i < moments.length; i += 1) {
-        const count = momentFireCounts[i] ?? 0;
-        if (count > hottestCount) {
-          hottestCount = count;
-          hottestIdx = i;
-        }
-        if (count <= 0) continue;
-        const intensity = Math.min(1, count / maxFC);
-        const interval = Math.max(10, Math.round(60 - intensity * 50));
-        if (frame % interval === 0) {
-          spawnEmber(i, intensity, false, false, ranges, rect);
-        }
-      }
-      if (hottestIdx >= 0 && hottestCount > 0) {
-        const intensity = Math.min(1, hottestCount / maxFC);
-        const interval = Math.max(8, Math.round(40 - intensity * 32));
-        if (frame % interval === 0) {
-          spawnEmber(hottestIdx, intensity, false, true, ranges, rect);
-        }
+      // ── Playhead: dot at fixed baseline, x only ───────────────────────────
+      if (ready && progressPctRef.current > 0) {
+        const baseline = rect.height - 2;
+        const playheadX = (progressPctRef.current / 100) * rect.width;
+        ctx.beginPath();
+        ctx.arc(playheadX, baseline, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.fill();
       }
 
-      const burst = pendingBurstRef.current;
-      if (burst) {
-        pendingBurstRef.current = null;
-        for (let i = 0; i < burst.count; i += 1) {
-          spawnEmber(burst.momentIdx, burst.intensity, true, false, ranges, rect);
-        }
-      }
-
-      // Update and draw particles
-      for (let i = embers.length - 1; i >= 0; i--) {
-        const e = embers[i];
-        e.y += e.vy;
-        e.x += e.vx;
-        e.life -= 0.008;
-        if (e.life <= 0 || e.y < -4) { embers.splice(i, 1); continue; }
-
-        const alpha = e.opacity * e.life;
-        const drawSize = e.size * 2.5;
-        const sprite = e.green ? GREEN_SPRITE : ORANGE_SPRITE;
-        if (!sprite) continue;
-        ctx.globalAlpha = alpha;
-        ctx.drawImage(sprite, e.x - drawSize / 2, e.y - drawSize / 2, drawSize, drawSize);
-      }
-      ctx.globalAlpha = 1;
-
+      // ── Fire button scale during hold (preserved from previous behavior) ──
       if (fireButtonRef.current) {
         if (activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0) {
           const elapsed = now - holdStartTimeRef.current;
@@ -442,7 +404,6 @@ export function FmlyBar({
         releaseTime: performance.now(),
       };
     }
-    pendingBurstRef.current = { count: 2, intensity: 0.3, momentIdx: fireMomentIdx };
     activeHoldMomentRef.current = -1;
     holdStartTimeRef.current = 0;
     if (!danceId) return;
@@ -454,7 +415,6 @@ export function FmlyBar({
       ? activeHoldMomentRef.current
       : currentMomentIdx;
     addUserFire(fireMomentIdx, holdMs);
-    const intensity = Math.min(1.0, holdMs / 2000);
     if (activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0) {
       const elapsed = performance.now() - holdStartTimeRef.current;
       const peakBoost = (elapsed / 2000) * Math.max(prevMaxFireRef.current, 5);
@@ -464,11 +424,6 @@ export function FmlyBar({
         releaseTime: performance.now(),
       };
     }
-    pendingBurstRef.current = {
-      count: Math.floor(3 + intensity * 5),
-      intensity,
-      momentIdx: fireMomentIdx,
-    };
     activeHoldMomentRef.current = -1;
     holdStartTimeRef.current = 0;
     if (!danceId) return;
@@ -493,7 +448,6 @@ export function FmlyBar({
     activeHoldMomentRef.current = momentIdx;
     holdStartTimeRef.current = performance.now();
     pressAttributedIndexRef.current = getLineIndex();
-    pendingBurstRef.current = { count: 3, intensity: 0.5, momentIdx };
     fireHoldControllerRef.current?.start();
   };
 
@@ -528,9 +482,9 @@ export function FmlyBar({
         >
           {/* Moments container */}
           <div style={{ position: "absolute", inset: 0, display: "flex", minWidth: 0 }}>
-          {/* Ember canvas — overlaid on moments, pointer-events: none */}
+          {/* Heat curve canvas — overlaid on moments, pointer-events: none */}
           <canvas
-            ref={emberCanvasRef}
+            ref={canvasRef}
             style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 3 }}
           />
 
