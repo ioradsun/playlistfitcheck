@@ -469,11 +469,12 @@ export function FmlyBar({
     userFireTimesRef.current[idx] = performance.now();
   };
 
-  const commitFire = useCallback((holdMs: number) => {
+  const commitFire = useCallback((rawHoldMs: number) => {
+    const isTap = rawHoldMs < 180;
     const fireMomentIdx = activeHoldMomentRef.current >= 0
       ? activeHoldMomentRef.current
       : currentMomentIdx;
-    addUserFire(fireMomentIdx, holdMs);
+    addUserFire(fireMomentIdx, isTap ? 150 : rawHoldMs);
     if (activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0) {
       const elapsed = performance.now() - holdStartTimeRef.current;
       const peakBoost = (elapsed / 2000) * Math.max(prevMaxFireRef.current, 5);
@@ -486,7 +487,7 @@ export function FmlyBar({
     activeHoldMomentRef.current = -1;
     holdStartTimeRef.current = 0;
     if (!danceId) return;
-    onFire(pressAttributedIndexRef.current, holdMs);
+    onFire(pressAttributedIndexRef.current, isTap ? 0 : rawHoldMs);
   }, [currentMomentIdx, danceId, onFire]);
 
   const handleDown = () => {
@@ -513,7 +514,7 @@ export function FmlyBar({
   const handleUp = () => {
     const holdData = fireHoldControllerRef.current?.stop();
     if (!holdData) return;
-    commitFire(holdData.holdMs < 180 ? 150 : holdData.holdMs);
+    commitFire(holdData.holdMs);
   };
 
   return (
