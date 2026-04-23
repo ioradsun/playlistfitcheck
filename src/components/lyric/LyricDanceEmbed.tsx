@@ -657,7 +657,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       .limit(300)
       .then(({ data: rows }) => {
         if (!mounted || !rows) return;
-        setComments((rows as Array<Partial<Comment> & Pick<Comment, "id" | "text" | "created_at">>).map((row) => normalizeComment(row)));
+        setComments((rows as unknown as Array<Partial<Comment> & Pick<Comment, "id" | "text" | "created_at">>).map((row) => normalizeComment(row)));
       });
 
     const channel = supabase
