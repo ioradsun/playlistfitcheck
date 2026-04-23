@@ -711,7 +711,7 @@ export function FmlyBar({
                       }
                     }
                   }}
-                  placeholder={replyTargetAuthor ? "reply..." : "add a thought..."}
+                  placeholder={replyTargetAuthor ? "reply..." : "What hit?"}
                   maxLength={140}
                   style={{
                     flex: 1,
