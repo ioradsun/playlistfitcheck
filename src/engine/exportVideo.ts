@@ -144,9 +144,6 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
     }
   }
 
-  const prevTextRenderMode = player.textRenderMode;
-  player.textRenderMode = 'canvas';
-
   // ── Prime render pipeline (images/Ken Burns/sims) before resize/export ──
   if (typeof player.prepareExportFramePipeline === 'function') {
     await player.prepareExportFramePipeline();
@@ -490,7 +487,6 @@ export async function exportVideoAsMP4(options: ExportOptions): Promise<Blob> {
     try { videoEncoder.close(); } catch (_) { /* already closed */ }
     throw err;
   } finally {
-    player.textRenderMode = prevTextRenderMode;
     player.teardownExportResolution();
   }
 }
