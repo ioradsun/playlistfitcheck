@@ -158,11 +158,15 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const danceId: string | null = effectiveData?.id ?? null;
 
   // Data fetching (prefetched or Supabase)
+  // When prefetchedData updates (e.g. FitTab pipeline finishing section images
+  // after initial mount), we re-hydrate so downstream consumers see the new data.
+  // The earlier version of this effect short-circuited when `cinematic_direction`
+  // was already set, which silently dropped all subsequent field updates —
+  // including late-arriving `section_images` and `empowerment_promise`.
   useEffect(() => {
     if (prefetchedData) {
       setFetchedData((prev) => {
-        if (prev === prefetchedData) return prev;
-        if (prev && prev.id === prefetchedData.id && prev.cinematic_direction) return prev;
+        if (prev === prefetchedData) return prev; // identity bail — same object, no work
         return hydrateRow(prefetchedData);
       });
       return;
@@ -729,6 +733,26 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
     return 0;
   }, [player, effectiveData, getCurrentFireIndex]);
+
+  // Push late-arriving section_images into the engine.
+  // The engine's loadSectionImages() runs once at init; if images weren't ready
+  // yet (common when FitTab mounts the embed before the image pipeline finishes),
+  // they never load without an explicit update call.
+  const lastPushedSectionImagesRef = useRef<string[] | null>(null);
+  useEffect(() => {
+    if (!player) return;
+    const urls = (effectiveData?.section_images ?? []).filter(Boolean) as string[];
+    if (urls.length === 0) return;
+
+    const prev = lastPushedSectionImagesRef.current;
+    const same = prev
+      && prev.length === urls.length
+      && prev.every((u, i) => u === urls[i]);
+    if (same) return;
+
+    lastPushedSectionImagesRef.current = urls;
+    player.updateSectionImages(urls);
+  }, [player, effectiveData?.section_images]);
 
   const flushPlay = useCallback(() => {
     if (!danceId || !durationSec) return;

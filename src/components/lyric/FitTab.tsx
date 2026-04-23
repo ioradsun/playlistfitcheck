@@ -685,7 +685,19 @@ export function FitTab({
     initialLyric,
   ]);
 
-  const playerReady = !!(danceData && fontReady);
+  const sectionImagesReady = (() => {
+    // If image generation is explicitly complete or errored out, we're done waiting.
+    if (generationStatus.sectionImages === "done" || generationStatus.sectionImages === "error") {
+      return true;
+    }
+    // Otherwise, compare loaded count vs expected section count from the direction.
+    const expected = (cinematicDirection as any)?.sections?.length ?? 0;
+    if (expected === 0) return true; // No sections expected — nothing to wait for.
+    const loaded = sectionImageUrls.filter(Boolean).length;
+    return loaded >= expected;
+  })();
+
+  const playerReady = !!(danceData && fontReady && sectionImagesReady);
 
   useEffect(() => {
     const audio = dancePlayerRef.current?.getPlayer()?.audio;
