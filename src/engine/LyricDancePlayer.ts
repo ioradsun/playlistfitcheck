@@ -1666,6 +1666,7 @@ export class LyricDancePlayer {
   private _playPromise: Promise<void> | null = null;
   private _audioListenerAbort: AbortController = new AbortController();
   private _ownsAudio = true;
+  private _suspendedTime: number = 0;
   private _exportFrameCount?: number;
   private _exportPinnedSectionIdx: number | null = null;
   private options?: {
@@ -2188,6 +2189,46 @@ export class LyricDancePlayer {
     }
   }
 
+  /**
+   * Suspend the player for warm pooling. Stops rendering, pauses audio,
+   * and saves playback position. The player remains alive — scene compiled,
+   * images decoded, beat conductor ready. Call resume() to reactivate.
+   */
+  suspend(): void {
+    if (this.destroyed) return;
+    if (!this.playing && this.rafHandle === 0) return; // already suspended
+    this._suspendedTime = this.audio.currentTime;
+    this.stopRendering();
+    this.audio.pause();
+    this._playPromise = null;
+  }
+
+  /**
+   * Resume a suspended player. Restores the audio source if another player
+   * changed it on the shared element, seeks to the saved position, and
+   * restarts the render loop. Caller should let the play state effect
+   * handle mute/unmute and play() — resume() only restores visual state.
+   */
+  resume(): void {
+    if (this.destroyed) return;
+    if (this.playing) return; // already active
+    // Restore audio source if the shared element was taken by another player
+    const myUrl = this.data.audio_url;
+    if (myUrl && this.audio.src !== myUrl && this.audio.currentSrc !== myUrl) {
+      this.audio.src = myUrl;
+      this.audio.preload = "auto";
+    }
+    // Restore playback position
+    if (this._suspendedTime > 0) {
+      try {
+        this.audio.currentTime = this._suspendedTime;
+      } catch {
+        // Audio not ready yet — _startAudioPlayback will handle
+      }
+    }
+    this.startRendering();
+  }
+
   seek(timeSec: number): void {
     this._wallClockOrigin = null;
     this.audio.currentTime = timeSec;
@@ -2672,6 +2713,8 @@ export class LyricDancePlayer {
    */
   setRegion(regionStart: number | undefined, regionEnd: number | undefined): void {
     if (this.destroyed) return;
+    // Skip recompile if region hasn't actually changed
+    if (regionStart === this.data.region_start && regionEnd === this.data.region_end) return;
     this.data = { ...this.data, region_start: regionStart, region_end: regionEnd };
     if (regionStart != null && regionEnd != null) {
       this.audio.loop = false;
