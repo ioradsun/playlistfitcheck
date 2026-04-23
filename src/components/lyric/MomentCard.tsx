@@ -108,19 +108,35 @@ export function MomentCard({
           onPointerUp={onFireUp}
           onPointerLeave={onFireUp}
           style={{
-            minHeight: 44,
-            width: 44,
-            borderRadius: 10,
-            border: `1px solid ${pressing ? "rgba(255,140,40,0.35)" : "rgba(255,255,255,0.08)"}`,
+            width: 48,
+            height: 48,
+            minHeight: 48,
+            borderRadius: "50%",
+            border: "none",
             background: "none",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             cursor: "pointer",
-            transition: "border-color 200ms ease",
+            padding: 0,
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            touchAction: "none",
+            flexShrink: 0,
           }}
+          aria-label="Fire this moment"
         >
-          <span style={{ fontSize: 16 }}>🔥</span>
+          <span
+            style={{
+              fontSize: 22,
+              lineHeight: 1,
+              display: "inline-block",
+              transform: pressing ? "scale(1.2)" : "scale(1)",
+              transition: "transform 150ms ease-out",
+            }}
+          >
+            🔥
+          </span>
         </button>
 
         {(fireAvatars.length > 0 || fireAnonCount > 0) && (
@@ -196,56 +212,32 @@ export function MomentCard({
         }}
       >
         <div style={{ overflow: "hidden" }}>
-          <p style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginBottom: 4, fontFamily: "monospace" }}>
-            what hit here?
-          </p>
-          <div style={{ display: "flex", gap: 6 }}>
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  const trimmed = text.trim();
-                  if (!trimmed) return;
-                  onSubmitComment(trimmed);
-                  setText("");
-                }
-              }}
-              placeholder="say it"
-              style={{
-                flex: 1,
-                minHeight: 32,
-                borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.1)",
-                background: "rgba(0,0,0,0.2)",
-                color: "rgba(255,255,255,0.75)",
-                fontSize: 11,
-                fontFamily: "monospace",
-                padding: "0 10px",
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => {
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
                 const trimmed = text.trim();
                 if (!trimmed) return;
                 onSubmitComment(trimmed);
                 setText("");
-              }}
-              style={{
-                minHeight: 32,
-                minWidth: 32,
-                borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(255,255,255,0.04)",
-                color: "rgba(255,255,255,0.6)",
-                cursor: "pointer",
-              }}
-            >
-              ↑
-            </button>
-          </div>
+              }
+            }}
+            placeholder="What hit?"
+            maxLength={80}
+            style={{
+              width: "100%",
+              minHeight: 32,
+              border: "none",
+              background: "transparent",
+              color: "rgba(255,255,255,0.85)",
+              fontSize: 12,
+              fontFamily: "monospace",
+              padding: "4px 0",
+              outline: "none",
+            }}
+          />
         </div>
       </div>
     </div>
