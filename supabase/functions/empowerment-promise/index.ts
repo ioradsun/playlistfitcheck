@@ -27,10 +27,10 @@ Examples: confused→clear, rejected→worthy, heartbroken→detached, invisible
 Return exactly 3 social media caption hooks. Rules:
 - Never use genre labels — name the MOMENT instead
 - Be ruthlessly specific about who this is for
-- Max 80 characters per hook (hard limit — count carefully)
-- Write like a music fan, not a marketer. Specific > general.
-  "for when you're driving home and finally stop pretending you're fine"
-  beats "for listeners experiencing emotional growth."
+- Max 50 characters per hook (HARD LIMIT — count every character, every space). This must fit on one line of a mobile card. If you exceed 50 characters, you have failed. Short hooks go viral; long hooks get scrolled past.
+- Write like a music fan, not a marketer. Specific > general. Short > long.
+  "for when you stop pretending you're fine" beats "for when you're driving home and finally stop pretending you're fine."
+  The shorter version is sharper, more shareable, and fits one line.
 - Use lowercase. Hooks are captions, not headlines.
 - Each hook uses a different formula:
   1. "this is the song for when…" (scene — paint the moment)

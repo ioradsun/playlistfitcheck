@@ -90,9 +90,9 @@ export function EmpowermentMode({ ctx }: { ctx: ModeContext }) {
   };
 
   return (
-    <ModePanel scroll="y">
+    <ModePanel>
       <div
-        className="w-full min-h-full flex flex-col items-center justify-center px-6 py-8"
+        className="w-full h-full flex flex-col items-center justify-center px-5 py-6"
         style={{ fontFamily: "monospace", color: "rgba(255,255,255,0.88)" }}
       >
       {!empowermentPromise ? (
@@ -113,32 +113,33 @@ export function EmpowermentMode({ ctx }: { ctx: ModeContext }) {
                   type="button"
                   onClick={() => handleVote(i)}
                   disabled={hasVoted}
-                  className="w-full rounded-lg border px-4 py-3 text-left transition-colors"
+                  className="w-full rounded-lg border px-3 py-2.5 text-left transition-colors"
                   style={{
                     borderColor: "rgba(255,255,255,0.14)",
                     background: hasVoted ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.02)",
                     color: "rgba(255,255,255,0.9)",
                     cursor: hasVoted ? "default" : "pointer",
                   }}
+                  title={hook}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm leading-snug">{hook}</span>
-                    {hasVoted && <span className="text-xs text-white/55">{percent}%</span>}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] leading-snug truncate min-w-0 flex-1 block">
+                      {hook}
+                    </span>
+                    {hasVoted && <span className="text-[11px] text-white/55 flex-shrink-0">{percent}%</span>}
                   </div>
                 </button>
               );
             })}
           </div>
 
-          {selectedIndex !== null && (
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="mt-5 text-xs text-white/60 hover:text-white/85"
-            >
-              → see moments
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="mt-4 text-xs text-white/60 hover:text-white/85"
+          >
+            dig into the lyrics →
+          </button>
         </div>
       )}
       </div>
