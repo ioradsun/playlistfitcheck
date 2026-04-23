@@ -41,6 +41,18 @@ const VALID_FONTS = [
   "Bitter", "JetBrains Mono", "Space Mono", "Caveat", "Lexend",
 ] as const;
 
+// Server-side block on stop-words reaching the client.
+// Without this, a bad heroWord like "THE" would score +50 in the
+// client-side selectHeroWord via section-hero match, overriding the
+// stop-word penalty and getting picked as the rendered hero.
+const BANNED_HERO_WORDS = new Set([
+  "THE","A","AN","OF","TO","FOR","AT","BY","ON","IN","FROM","WITH",
+  "I","ME","MY","WE","US","OUR","YOU","HE","SHE","HIS","HER","IT","ITS","THEY","THEM","THEIR",
+  "IS","ARE","WAS","WERE","BE","BEEN","AM",
+  "AND","OR","BUT","SO","THAT","THIS","THESE","THOSE",
+  "IM","THATS","DONT","WONT","AINT","LETS","IVE","YOURE","THEYRE",
+]);
+
 const MOOD_COLOR: Record<string, string> = {
   intimate: "#C9A96E", anthemic: "#E8632B", dreamy: "#B088F9",
   aggressive: "#4FA4D4", melancholy: "#2255AA", euphoric: "#FFD700",
@@ -220,24 +232,21 @@ function extractJson(raw: string): Record<string, any> | null {
 
 // ── Validate + transform to client contract ──────────────────
 
-// Acceptable HSL bounds per mood. hMin/hMax can wrap (e.g. red at 0° crossing 360°).
-// sMin = minimum saturation; sMax = maximum saturation (for muted moods).
-// lMin/lMax constrain lightness to keep colors usable behind text.
+// Acceptable HSL bounds per mood. hRanges can have multiple arcs (red wraps 360°→0°).
+// sMin/sMax = saturation range; lMin/lMax = lightness range.
 type MoodHslBounds = {
-  hRanges: Array<[number, number]>; // hue (0-360), can have multiple accepted arcs
-  sMin: number;
-  sMax: number; // saturation (0-1)
-  lMin: number;
-  lMax: number; // lightness (0-1)
+  hRanges: Array<[number, number]>;
+  sMin: number; sMax: number;
+  lMin: number; lMax: number;
 };
 
 const MOOD_HSL: Record<string, MoodHslBounds> = {
   aggressive: { hRanges: [[345, 360], [0, 15]], sMin: 0.5, sMax: 1.0, lMin: 0.2, lMax: 0.55 },
-  anthemic: { hRanges: [[15, 45]], sMin: 0.55, sMax: 1.0, lMin: 0.4, lMax: 0.65 },
-  intimate: { hRanges: [[15, 45]], sMin: 0.3, sMax: 0.8, lMin: 0.3, lMax: 0.65 },
-  dreamy: { hRanges: [[260, 320], [320, 360]], sMin: 0.25, sMax: 0.75, lMin: 0.55, lMax: 0.85 },
-  melancholy: { hRanges: [[200, 240]], sMin: 0.1, sMax: 0.45, lMin: 0.3, lMax: 0.55 },
-  euphoric: { hRanges: [[35, 55]], sMin: 0.6, sMax: 1.0, lMin: 0.45, lMax: 0.75 },
+  anthemic:   { hRanges: [[15, 45]],            sMin: 0.55, sMax: 1.0, lMin: 0.4, lMax: 0.65 },
+  intimate:   { hRanges: [[15, 45]],            sMin: 0.3, sMax: 0.8,  lMin: 0.3, lMax: 0.65 },
+  dreamy:     { hRanges: [[260, 360]],          sMin: 0.25, sMax: 0.75, lMin: 0.55, lMax: 0.85 },
+  melancholy: { hRanges: [[200, 240]],          sMin: 0.1, sMax: 0.45, lMin: 0.3, lMax: 0.55 },
+  euphoric:   { hRanges: [[35, 55]],            sMin: 0.6, sMax: 1.0,  lMin: 0.45, lMax: 0.75 },
   eerie: { hRanges: [[60, 180], [250, 300]], sMin: 0.05, sMax: 0.45, lMin: 0.15, lMax: 0.5 },
   vulnerable: { hRanges: [[320, 360], [0, 20]], sMin: 0.2, sMax: 0.6, lMin: 0.4, lMax: 0.7 },
   triumphant: { hRanges: [[30, 55]], sMin: 0.55, sMax: 1.0, lMin: 0.45, lMax: 0.75 },
@@ -294,16 +303,16 @@ function validateColor(hex: string, fallbackMood: string): string {
   if (!bounds) return hex; // unknown mood — accept
 
   const [h, s, l] = rgbToHsl(r, g, b);
-  const hueOk = hueInRanges(h, bounds.hRanges);
-  const satOk = s >= bounds.sMin && s <= bounds.sMax;
-  const lightOk = l >= bounds.lMin && l <= bounds.lMax;
+  const inFamily =
+    hueInRanges(h, bounds.hRanges) &&
+    s >= bounds.sMin && s <= bounds.sMax &&
+    l >= bounds.lMin && l <= bounds.lMax;
 
-  if (hueOk && satOk && lightOk) return hex;
+  if (inFamily) return hex;
 
-  // Out of family — snap to mood baseline
   console.warn(
     `[cinematic-direction] color ${hex} out of family for mood "${fallbackMood}" ` +
-    `(h=${h.toFixed(0)} s=${s.toFixed(2)} l=${l.toFixed(2)}); snapping to ${MOOD_COLOR[fallbackMood]}`,
+    `(h=${h.toFixed(0)} s=${s.toFixed(2)} l=${l.toFixed(2)}); snapping to ${MOOD_COLOR[fallbackMood]}`
   );
   return MOOD_COLOR[fallbackMood] || "#C9A96E";
 }
@@ -359,7 +368,7 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
       ? m.heroWords
           .filter((w: any) => typeof w === "string" && w.trim())
           .map((w: any) => w.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""))
-          .filter((w: string) => w.length > 1)
+          .filter((w: string) => w.length > 1 && !BANNED_HERO_WORDS.has(w))
           .slice(0, 5)
       : [];
 
@@ -414,35 +423,20 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
   }
 
   // ── Texture variety enforcement ──
-  // No single texture should dominate. If sectionCount > 3, cap per-texture usage at ceil(n/3).
+  // No single texture should dominate. Cap per-texture usage at ceil(n/3).
+  // Check cap BEFORE counting; replace when over.
   if (sections.length > 3) {
     const maxPerTexture = Math.ceil(sections.length / 3);
     const textureCounts: Record<string, number> = {};
-    const allTextures = VALID_TEXTURES as readonly string[];
 
-    // Prefer a round-robin based on mood → texture but skip overused textures
-    for (let i = 0; i < sections.length; i++) {
-      const sec = sections[i];
-      const current = sec.texture;
-      textureCounts[current] = (textureCounts[current] ?? 0) + 1;
-
-      if (textureCounts[current] > maxPerTexture) {
-        // Find a replacement: prefer mood-adjacent textures, then any unused, then any non-maxed
-        const candidates = [
-          MOOD_TEXTURE[sec.visualMood],
-          ...allTextures,
-        ].filter((t): t is string => typeof t === "string" && t !== current);
-
-        const replacement = candidates.find(
-          (t) => (textureCounts[t] ?? 0) < maxPerTexture,
+    for (const sec of sections) {
+      if ((textureCounts[sec.texture] ?? 0) >= maxPerTexture) {
+        const replacement = (VALID_TEXTURES as readonly string[]).find(
+          (t) => t !== sec.texture && (textureCounts[t] ?? 0) < maxPerTexture,
         );
-
-        if (replacement) {
-          textureCounts[current] -= 1;
-          textureCounts[replacement] = (textureCounts[replacement] ?? 0) + 1;
-          sec.texture = replacement;
-        }
+        if (replacement) sec.texture = replacement;
       }
+      textureCounts[sec.texture] = (textureCounts[sec.texture] ?? 0) + 1;
     }
   }
 
