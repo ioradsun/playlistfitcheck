@@ -7,6 +7,11 @@ import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { useBeatGrid, type BeatGridData } from "@/hooks/useBeatGrid";
 import { derivePaletteFromDirection } from "@/lib/lyricPalette";
 import { extractPeaks } from "@/lib/audioUtils";
+import {
+  getWaveformCacheKey,
+  getCachedWaveform,
+  setCachedWaveform,
+} from "@/lib/waveformCache";
 import { getCachedAudioBuffer } from "@/lib/audioDecodeCache";
 import { buildPhrases } from "@/lib/phraseEngine";
 import type { LyricData, LyricLine } from "@/components/lyric/LyricDisplay";
@@ -865,7 +870,15 @@ export function useLyricPipeline({
   
 
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  const [waveformData, setWaveformData] = useState<WaveformData | null>(null);
+  const [waveformData, setWaveformData] = useState<WaveformData | null>(() => {
+    // Synchronous cache hydrate — no "Loading waveform…" flash on remount
+    // when we've seen this song before.
+    const key = getWaveformCacheKey({
+      savedId: (initialLyric as any)?.id ?? null,
+      audioUrl: (initialLyric as any)?.audio_url ?? null,
+    });
+    return getCachedWaveform(key);
+  });
   const [transcriptionDone, setTranscriptionDone] = useState(
     () =>
       !!(
@@ -996,6 +1009,11 @@ export function useLyricPipeline({
             setAudioBuffer(buf);
             setWaveformData(waveform);
             const id = savedIdRef.current;
+            // Cache by savedId if available; otherwise by audioUrl (when non-blob).
+            setCachedWaveform(
+              getWaveformCacheKey({ savedId: id, audioUrl }),
+              waveform,
+            );
             if (id) {
               persistQueue.enqueue({
                 table: "lyric_projects",
@@ -1031,6 +1049,10 @@ export function useLyricPipeline({
           setAudioBuffer(buf);
           setWaveformData(waveform);
           const id = savedIdRef.current;
+          setCachedWaveform(
+            getWaveformCacheKey({ savedId: id, audioUrl }),
+            waveform,
+          );
           if (id) {
             persistQueue.enqueue({
               table: "lyric_projects",
@@ -1096,14 +1118,24 @@ export function useLyricPipeline({
     if (!initialLyric || hydratedRef.current) return;
     hydratedRef.current = true;
 
-    // Waveform peaks — UI optimisation, read once from render_data
+    // Waveform peaks — UI optimisation, read once from render_data.
+    // Populate the local cache too so subsequent mounts in this session
+    // (and localStorage-persisted future sessions) skip the DB round-trip.
     const loadedRenderData = (initialLyric as any).render_data ?? null;
     if (loadedRenderData) {
       renderDataLoadedFromDbRef.current = true;
       const savedPeaks = (loadedRenderData as any)?.waveformPeaks;
       const savedDuration = (loadedRenderData as any)?.waveformDuration;
       if (Array.isArray(savedPeaks) && savedPeaks.length > 0 && savedDuration > 0) {
-        setWaveformData({ peaks: savedPeaks, duration: savedDuration });
+        const hydrated = { peaks: savedPeaks, duration: savedDuration };
+        setWaveformData(hydrated);
+        setCachedWaveform(
+          getWaveformCacheKey({
+            savedId: (initialLyric as any)?.id ?? null,
+            audioUrl: (initialLyric as any)?.audio_url ?? null,
+          }),
+          hydrated,
+        );
       }
     }
 

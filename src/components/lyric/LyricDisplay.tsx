@@ -41,6 +41,7 @@ import {
   type ProfanityReport,
 } from "@/lib/profanityFilter";
 import { ensureFontReady } from "@/lib/fontReadinessCache";
+import { getWaveformCacheKey, getCachedWaveform } from "@/lib/waveformCache";
 import type { WaveformData } from "@/hooks/useAudioEngine";
 import type {
   ArtistDNA,
@@ -311,7 +312,13 @@ export function LyricDisplay({
   const audioUrlRef = useRef<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [waveform, setWaveform] = useState<WaveformData | null>(initialWaveform ?? null);
+  const [waveform, setWaveform] = useState<WaveformData | null>(() => {
+    if (initialWaveform) return initialWaveform;
+    // Fall back to cache — same file may be open in another tab/view that
+    // already decoded. savedId is preferred; there is no audioUrl here at
+    // init, so blob uploads won't hit the cache (expected — they're ephemeral).
+    return getCachedWaveform(getWaveformCacheKey({ savedId: savedId ?? null }));
+  });
   // Beat grid from props only (no useBeatGrid hook — that's in FitTab now)
   const beatGrid = initialBeatGrid ?? null;
   const beatGridLoading = false;
