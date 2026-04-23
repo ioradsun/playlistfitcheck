@@ -1007,7 +1007,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       }, durationMs);
     },
     onCommentAdded: (comment) => setComments((prev) =>
-      (prev.some((c) => c.id === comment.id) ? prev : [...prev, normalizeComment(comment))),
+      prev.some((c) => c.id === comment.id) ? prev : [...prev, normalizeComment(comment)]
     ),
     onCommentReply: (parentCommentId, text, momentIndex) => {
       void insertMomentComment(momentIndex, text, parentCommentId);
