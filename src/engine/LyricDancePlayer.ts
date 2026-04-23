@@ -187,14 +187,6 @@ export const DEFAULT_DEBUG_STATE: LiveDebugState = {
 // Internal types
 // ──────────────────────────────────────────────────────────────
 
-type ChunkState = {
-  id: string;
-  text: string;
-  font: string;
-  color: string;
-  width: number;
-};
-
 type ResolvedPlayerState = {
   chapters: any[];
   particleConfig: { texture: string; system: string; density: number; speed: number };
@@ -311,12 +303,11 @@ function buildScenePayloadFromData(
 // skip compileScene() entirely — near-zero reinit cost.
 //
 // Key: `${danceId}:${bakerVersion}:${width}x${height}`
-// Value: { scene: CompiledScene; chunks: Map<string, ChunkState> }
+// Value: { scene: CompiledScene; hasCinematicDirection: boolean }
 // Capacity: LRU, max 25 entries (~5MB total for typical scenes)
 
 interface SceneCacheEntry {
   scene: CompiledScene;
-  chunks: Map<string, ChunkState>;
   hasCinematicDirection: boolean;
 }
 
@@ -385,7 +376,6 @@ export function precompileSceneForData(
     });
     sceneCacheSet(key, {
       scene: compiled,
-      chunks: new Map(),
       hasCinematicDirection: !!data.cinematic_direction,
     });
     return 'compiled';
@@ -1426,7 +1416,6 @@ export class LyricDancePlayer {
   private payload: ScenePayload | null = null;
 
   // Runtime chunks
-  private chunks: Map<string, ChunkState> = new Map();
   private _lastFont = '';
   private _lastLetterSpacing = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
@@ -1447,7 +1436,6 @@ export class LyricDancePlayer {
   private _bakeLock = false;
   private _bakePromise: Promise<void> | null = null;
   private _bakedScene: CompiledScene | null = null;
-  private _bakedChunkCache: Map<string, ChunkState> | null = null;
   private _bakedVersion = 0;
   private _bakedHasCinematicDirection = false;
   /** Incremented by updateTranscript() to cancel any in-flight bake closure */
@@ -1584,8 +1572,6 @@ export class LyricDancePlayer {
   ]);
 
   // Reusable 1×1 canvas for text measurement (avoids per-recompile DOM allocation)
-  private readonly _measureCanvas = (() => { const c = document.createElement('canvas'); c.width = 1; c.height = 1; return c; })();
-  private readonly _measureCtx = this._measureCanvas.getContext('2d')!;
 
   // ═══ PERF: pre-allocated transform matrix buffer — eliminates per-chunk array allocation
   // computeTransformMatrix() writes into this buffer instead of returning a new array.
@@ -1933,7 +1919,6 @@ export class LyricDancePlayer {
     if (this._bakedScene && !this._bakedHasCinematicDirection && this.data.cinematic_direction) {
       this._bakePromise = null;
       this._bakedScene = null;
-      this._bakedChunkCache = null;
       this._bakeLock = false;
     }
 
@@ -1950,11 +1935,9 @@ export class LyricDancePlayer {
         ) {
           // Restore from module cache — no compileScene() needed
           this._bakedScene = cached.scene;
-          this._bakedChunkCache = new Map(cached.chunks);
           this._bakedHasCinematicDirection = cached.hasCinematicDirection;
           this._bakedVersion = BAKER_VERSION;
           this.compiledScene = cached.scene;
-          this.chunks = new Map(cached.chunks);
           this._markCompiledViewport(this.width || 960, this.height || 540);
           // Still need payload + conductor for audio sync
           const payload = this.buildScenePayload();
@@ -2027,9 +2010,6 @@ export class LyricDancePlayer {
             this.cameraRig.setSectionMods(compiled.sectionMods);
           }
 
-          // Build chunk cache from compiled scene
-          this._buildChunkCacheFromScene(compiled);
-
           // Compute viewport scale
           this._updateViewportScale();
           this._textMetricsCache.clear();
@@ -2040,7 +2020,6 @@ export class LyricDancePlayer {
             return; // stale bake — discard, updateTranscript already set compiledScene fresh
           }
           this._bakedScene = compiled;
-          this._bakedChunkCache = new Map(this.chunks);
           this._bakedHasCinematicDirection = !!this.data.cinematic_direction;
           this._bakedVersion = BAKER_VERSION;
           this._bakeLock = false;
@@ -2051,7 +2030,6 @@ export class LyricDancePlayer {
             const cacheKey = sceneCacheKey(danceId, this.width || 960, this.height || 540);
             sceneCacheSet(cacheKey, {
               scene: compiled,
-              chunks: new Map(this.chunks),
               hasCinematicDirection: !!this.data.cinematic_direction,
             });
           }
@@ -2073,7 +2051,6 @@ export class LyricDancePlayer {
     // (if it was, _bakedScene is null and compiledScene is already fresh)
     if (this._bakedScene) {
       this.compiledScene = this._bakedScene;
-      this.chunks = new Map(this._bakedChunkCache!);
     }
     this._updateViewportScale();
     this._textMetricsCache.clear();
@@ -2324,7 +2301,6 @@ export class LyricDancePlayer {
     // Force recompile with fresh context — metrics may differ.
     if (this.payload) {
       this.compiledScene = compileScene(this.payload, { viewportWidth: width, viewportHeight: height });
-      this._buildChunkCacheFromScene(this.compiledScene);
       this._markCompiledViewport(width, height);
       this._textMetricsCache.clear();
     }
@@ -2340,7 +2316,6 @@ export class LyricDancePlayer {
     // Force-compile scene if resize didn't trigger it.
     if (!this.compiledScene && this.payload) {
       this.compiledScene = compileScene(this.payload, { viewportWidth: width, viewportHeight: height });
-      this._buildChunkCacheFromScene(this.compiledScene);
       this._markCompiledViewport(width, height);
     }
     // Last resort: if payload doesn't exist but raw data does, rebuild from source data.
@@ -2349,7 +2324,6 @@ export class LyricDancePlayer {
       this.payload = this.buildScenePayload();
       if (this.payload && !this.compiledScene) {
         this.compiledScene = compileScene(this.payload, { viewportWidth: width, viewportHeight: height });
-        this._buildChunkCacheFromScene(this.compiledScene);
         this._markCompiledViewport(width, height);
       }
       if (this.payload) {
@@ -2573,7 +2547,6 @@ export class LyricDancePlayer {
           // Dimensions close enough — skip recompile but continue resize setup
         } else {
           this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
-          this._buildChunkCacheFromScene(this.compiledScene);
           this._markCompiledViewport(w, h);
           this._textMetricsCache.clear();
         }
@@ -2733,7 +2706,6 @@ export class LyricDancePlayer {
     this.songEndSec = payload.songEnd;
     const compiled = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this.compiledScene = compiled;
-    this._buildChunkCacheFromScene(compiled);
     this._markCompiledViewport(this.width || 960, this.height || 540);
 
     // Reset all per-frame tracking
@@ -2811,7 +2783,6 @@ export class LyricDancePlayer {
     this.resolvePlayerState(this.payload);
     this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._markCompiledViewport(this.width || 960, this.height || 540);
-    this._buildChunkCacheFromScene(this.compiledScene);
     this._updateViewportScale();
     this._textMetricsCache.clear();
     // ═══ V2: timing budgets (placeholder — method removed) ═══
@@ -2880,7 +2851,6 @@ export class LyricDancePlayer {
     // ── Invalidate any in-flight bake ────────────────────────────────────
     this._bakeGeneration++;
     this._bakedScene = null;
-    this._bakedChunkCache = null;
 
     const t = this.audio.currentTime;
     const payload = this.buildScenePayload();
@@ -2889,7 +2859,6 @@ export class LyricDancePlayer {
     this.songEndSec = payload.songEnd;
     this.compiledScene = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._markCompiledViewport(this.width || 960, this.height || 540);
-    this._buildChunkCacheFromScene(this.compiledScene);
     this._textMetricsCache.clear();
     // timing budgets (placeholder — method removed)
     this._updateViewportScale();
@@ -2921,7 +2890,6 @@ export class LyricDancePlayer {
       const compiled = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
       this._markCompiledViewport(this.width || 960, this.height || 540);
-      this._buildChunkCacheFromScene(compiled);
       this._textMetricsCache.clear();
     }
   }
@@ -2950,7 +2918,6 @@ export class LyricDancePlayer {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     // Only clear local reference, not the global cache
-    this.chunks = new Map();
     this._zeroCanvasList(this.bgCaches);
     this.bgCaches = [];
     this.bgCacheCount = 0;
@@ -2993,7 +2960,6 @@ export class LyricDancePlayer {
     this._emojiSpawnQueue = [];
     this._textMetricsCache.clear();
     this._watermarkCache = null;
-    this._zeroCanvas(this._measureCanvas);
     this._zeroCanvas(this.canvas);
     this._zeroCanvas(this.bgCanvas);
     revokeAnalyzerWorker();          // free blob URL (safe to call multiple times)
@@ -3142,7 +3108,6 @@ export class LyricDancePlayer {
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
         if (this.payload && this.compiledScene) {
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
-          this._buildChunkCacheFromScene(this.compiledScene);
           this._markCompiledViewport(this.width || 960, this.height || 540);
         }
       }
@@ -4485,26 +4450,6 @@ export class LyricDancePlayer {
 
     // ═══ Build pre-computed hero schedule for camera lookahead ═══
     this._buildHeroSchedule();
-  }
-
-  private _buildChunkCacheFromScene(scene: CompiledScene): void {
-    this.chunks.clear();
-    const measureCtx = this._measureCtx;
-
-    for (const group of scene.phraseGroups) {
-      for (const word of group.words) {
-        const fontStr = `${word.fontWeight} 42px ${word.fontFamily}`;
-        if (measureCtx.font !== fontStr) measureCtx.font = fontStr;
-        const displayText = stripDisplayPunctuation(word.text);
-        this.chunks.set(word.id, {
-          id: word.id,
-          text: displayText,
-          color: word.color,
-          font: fontStr,
-          width: measureCtx.measureText(displayText).width,
-        });
-      }
-    }
   }
 
   private _markCompiledViewport(width: number, height: number): void {
