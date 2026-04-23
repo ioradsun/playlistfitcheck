@@ -58,6 +58,13 @@ import {
   type PhraseAnimState,
   type WordAnimState,
 } from '@/engine/PhraseAnimator';
+import {
+  getSharedTextMetrics,
+  getSharedVignette,
+  getSharedGrainPool,
+  GRAIN_FRAMES_PER_POOL,
+  type TextMetrics,
+} from "@/engine/renderCaches";
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -1419,7 +1426,6 @@ export class LyricDancePlayer {
   private _lastFont = '';
   private _lastLetterSpacing = '';
   private _sortBuffer: ScaledKeyframe['chunks'] = [];
-  private _textMetricsCache = new Map<string, { width: number; ascent: number; descent: number }>();
 
   // ═══ Compiled Scene (replaces timeline) ═══
   private compiledScene: CompiledScene | null = null;
@@ -1519,10 +1525,6 @@ export class LyricDancePlayer {
     panEndX: number;
     panEndY: number;
   }> = [];
-  private _grainCanvas: HTMLCanvasElement | null = null;
-  private _grainPool: ImageData[] = [];      // pre-generated noise frames
-  private _grainPoolW = 0;
-  private _grainPoolH = 0;
   private _grainFrameIdx = 0;               // rotates through pool
   private _lightingOverlayCanvas: HTMLCanvasElement | null = null;
   private _lightingOverlayKey = '';
@@ -1549,8 +1551,6 @@ export class LyricDancePlayer {
   /** Index of the group we last triggered an exit for — prevents re-triggering */
   private _exitTriggeredForGroup = -1;
   // ═══ Breathing vignette — Fincher/Cronenweth eye funnel ═══
-  private _vignetteCanvas: HTMLCanvasElement | null = null;
-  private _vignetteKey = '';        // tracks canvas size for invalidation
   private _vignetteEnergy = 0.5;    // smoothed energy for vignette breathing
   private _bgBeatBrightnessBoost = 0;
   private _vignetteBeatPulse = 0;
@@ -1955,7 +1955,6 @@ export class LyricDancePlayer {
           if (cached.scene.songMotion) this.cameraRig.setSongIdentity(cached.scene.songMotion);
           if (cached.scene.sectionMods) this.cameraRig.setSectionMods(cached.scene.sectionMods);
           this._updateViewportScale();
-          this._textMetricsCache.clear();
           return; // skip the full bake
         }
       }
@@ -1971,7 +1970,7 @@ export class LyricDancePlayer {
             const cw = this.container.offsetWidth || this.canvas.offsetWidth || 960;
             const ch = this.container.offsetHeight || this.canvas.offsetHeight || 540;
             if (cw > 0 && ch > 0) this.resize(cw, ch);
-    this.paintIdentityFrame();
+            this.paintIdentityFrame();
           }
 
           const payload = this.buildScenePayload();
@@ -2012,7 +2011,6 @@ export class LyricDancePlayer {
 
           // Compute viewport scale
           this._updateViewportScale();
-          this._textMetricsCache.clear();
 
           // Only commit to cache if updateTranscript() hasn't fired since we started
           if (this._bakeGeneration !== bakeGen) {
@@ -2053,7 +2051,6 @@ export class LyricDancePlayer {
       this.compiledScene = this._bakedScene;
     }
     this._updateViewportScale();
-    this._textMetricsCache.clear();
     // Fallback: derive songEndSec from lines data if audio duration isn't available yet
     if (this.songEndSec <= 0) {
       const lines = (this.data as any).lyrics ?? (this.data as any).lines ?? [];
@@ -2302,7 +2299,6 @@ export class LyricDancePlayer {
     if (this.payload) {
       this.compiledScene = compileScene(this.payload, { viewportWidth: width, viewportHeight: height });
       this._markCompiledViewport(width, height);
-      this._textMetricsCache.clear();
     }
 
     // Force quality tier 0 for export — maximum visual quality, CPU doesn't matter
@@ -2520,8 +2516,7 @@ export class LyricDancePlayer {
     }
     this._lightingOverlayCanvas = null;
     this._lightingOverlayKey = '';
-    this._vignetteCanvas = null;
-    this._vignetteKey = '';
+    // vignette cache is module-level and viewport-keyed; no per-instance invalidation needed
     this._watermarkCache = null; // invalidate — dimensions depend on this.width
     this.ambientParticleEngine?.setBounds({ x: 0, y: 0, w: this.width, h: this.height });
     // If bounds changed significantly, clear stale out-of-bounds particles.
@@ -2532,7 +2527,6 @@ export class LyricDancePlayer {
     }
     this.lastSimFrame = -1;
     this._updateViewportScale();
-    this._textMetricsCache.clear();
     this.cameraRig.setViewport(w, h);
 
     // ═══ RESPONSIVE: always recompile on resize ═══
@@ -2548,7 +2542,6 @@ export class LyricDancePlayer {
         } else {
           this.compiledScene = compileScene(this.payload, { viewportWidth: w, viewportHeight: h });
           this._markCompiledViewport(w, h);
-          this._textMetricsCache.clear();
         }
       }
     }
@@ -2714,7 +2707,6 @@ export class LyricDancePlayer {
     this._intensityRouter.reset();
     this._lastBeatIndex = -1;
     this._timeInitialized = false;
-    this._textMetricsCache.clear();
     this._lastSortHash = 0;
     this.cameraRig.reset();
     this._activeGroupCursor = 0;
@@ -2784,7 +2776,6 @@ export class LyricDancePlayer {
     this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._markCompiledViewport(this.width || 960, this.height || 540);
     this._updateViewportScale();
-    this._textMetricsCache.clear();
     // ═══ V2: timing budgets (placeholder — method removed) ═══
     this.buildBgCache();
     this.buildChapterSims();
@@ -2859,7 +2850,6 @@ export class LyricDancePlayer {
     this.songEndSec = payload.songEnd;
     this.compiledScene = compileScene(payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
     this._markCompiledViewport(this.width || 960, this.height || 540);
-    this._textMetricsCache.clear();
     // timing budgets (placeholder — method removed)
     this._updateViewportScale();
     this.audio.currentTime = t;
@@ -2890,7 +2880,6 @@ export class LyricDancePlayer {
       const compiled = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
       this.compiledScene = compiled;
       this._markCompiledViewport(this.width || 960, this.height || 540);
-      this._textMetricsCache.clear();
     }
   }
 
@@ -2947,18 +2936,13 @@ export class LyricDancePlayer {
     this._sectionScrimOpacity = [];
     this._zeroCanvas(this._lightingOverlayCanvas);
     this._lightingOverlayCanvas = null;
-    this._zeroCanvas(this._vignetteCanvas);
-    this._vignetteCanvas = null;
-    this._zeroCanvas(this._grainCanvas);
-    this._grainCanvas = null;
-    this._grainPool = [];
+    // vignette, grain: module-level caches, not owned by this instance
     this._zeroCanvas(this._bgSnapshot);
     this._bgSnapshot = null;
     this._globalBeatVis = null;
     this._unmountWickSeekOverlay();
     this._globalWickBar = null;
     this._emojiSpawnQueue = [];
-    this._textMetricsCache.clear();
     this._watermarkCache = null;
     this._zeroCanvas(this.canvas);
     this._zeroCanvas(this.bgCanvas);
@@ -3104,7 +3088,6 @@ export class LyricDancePlayer {
       this.updateFrameBudget(deltaMs);
       if (this._fontLayoutReflowPending) {
         this._fontLayoutReflowPending = false;
-        this._textMetricsCache.clear();
         // ═══ RECOMPILE SCENE: font loaded → layoutX positions were baked with wrong metrics ═══
         if (this.payload && this.compiledScene) {
           this.compiledScene = compileScene(this.payload, { viewportWidth: this.width || 960, viewportHeight: this.height || 540 });
@@ -4350,30 +4333,18 @@ export class LyricDancePlayer {
     this._lightingOverlayKey = '';
     this.lastSimFrame = -1;
     this._updateViewportScale();
-    this._textMetricsCache.clear();
   }
 
-  private getCachedMetrics(text: string, font: string): { width: number; ascent: number; descent: number } {
-    const key = font + '|' + text;
-    const cached = this._textMetricsCache.get(key);
-    if (cached) return cached;
-
-    if (font !== this._lastFont) {
-      this.ctx.font = font;
-      this._lastFont = font;
-    }
-    const m = this.ctx.measureText(text);
-    const metrics = {
-      width: m.width,
-      ascent: m.actualBoundingBoxAscent ?? (parseFloat(font) * 0.45),
-      descent: m.actualBoundingBoxDescent ?? (parseFloat(font) * 0.15),
-    };
-    this._textMetricsCache.set(key, metrics);
-    if (this._textMetricsCache.size > 2500) {
-      const first = this._textMetricsCache.keys().next().value;
-      if (first) this._textMetricsCache.delete(first);
-    }
-    return metrics;
+  /**
+   * Measure text using the module-level shared cache. Kept as a thin
+   * instance method so call sites stay readable.
+   *
+   * Note: unlike the previous per-instance version, this does NOT touch
+   * this.ctx.font. Callers that draw after measuring must set the font
+   * themselves (the draw loop already does this via _lastFont tracking).
+   */
+  private getCachedMetrics(text: string, font: string): TextMetrics {
+    return getSharedTextMetrics(text, font);
   }
 
   // ────────────────────────────────────────────────────────────
@@ -4714,50 +4685,29 @@ export class LyricDancePlayer {
   }
 
   /**
-   * Render film grain overlay. Uses pre-generated noise buffers rotated per frame
-   * to eliminate per-frame Math.random() cost (~57K calls/frame → 0).
+   * Render film grain overlay. Uses a shared module-level pool of pre-generated
+   * noise frames rotated per frame (~57K random calls/frame → 0). Instance
+   * tracks its own _grainFrameIdx so cards' animation phases can differ.
    */
-  /** Relative luminance of a hex color (0 = black, 1 = white) */
   private renderFilmGrain(intensity: number, size: number): void {
     const grainW = Math.ceil(this.width / Math.max(1, size * 2));
     const grainH = Math.ceil(this.height / Math.max(1, size * 2));
 
-    // Re-generate pool on resize or first call
-    if (grainW !== this._grainPoolW || grainH !== this._grainPoolH || this._grainPool.length === 0) {
-      this._grainPoolW = grainW;
-      this._grainPoolH = grainH;
-      this._grainPool = [];
-      const POOL_SIZE = 4;
-      for (let p = 0; p < POOL_SIZE; p++) {
-        const img = new ImageData(grainW, grainH);
-        const d = img.data;
-        for (let i = 0; i < d.length; i += 4) {
-          const v = Math.random() * 255;
-          d[i] = v; d[i + 1] = v; d[i + 2] = v;
-          d[i + 3] = 255; // alpha set at draw time via globalAlpha
-        }
-        this._grainPool.push(img);
-      }
-    }
-
-    if (!this._grainCanvas || this._grainCanvas.width !== grainW || this._grainCanvas.height !== grainH) {
-      this._grainCanvas = document.createElement('canvas');
-      this._grainCanvas.width = grainW;
-      this._grainCanvas.height = grainH;
-    }
-
-    const gctx = this._grainCanvas.getContext('2d');
+    const pool = getSharedGrainPool(grainW, grainH);
+    if (!pool) return;
+    const gctx = pool.canvas.getContext('2d');
     if (!gctx) return;
 
-    // Rotate through pre-generated noise frames (zero random calls per frame)
-    this._grainFrameIdx = (this._grainFrameIdx + 1) % this._grainPool.length;
-    gctx.putImageData(this._grainPool[this._grainFrameIdx], 0, 0);
+    // Rotate through pre-generated noise frames (zero random calls per frame).
+    // _grainFrameIdx is per-instance so cards have independent animation phases.
+    this._grainFrameIdx = (this._grainFrameIdx + 1) % GRAIN_FRAMES_PER_POOL;
+    gctx.putImageData(pool.frames[this._grainFrameIdx], 0, 0);
 
     this.ctx.save();
     this.ctx.globalCompositeOperation = 'overlay';
-    this.ctx.globalAlpha = Math.min(1, intensity * 0.24); // ~same as old alpha/255 with 60 max
+    this.ctx.globalAlpha = Math.min(1, intensity * 0.24);
     this.ctx.imageSmoothingEnabled = false;
-    this.ctx.drawImage(this._grainCanvas, 0, 0, this.width, this.height);
+    this.ctx.drawImage(pool.canvas, 0, 0, this.width, this.height);
     this.ctx.restore();
   }
 
@@ -5437,44 +5387,18 @@ export class LyricDancePlayer {
    * Dark oval that breathes with song energy.
    * Quiet = heavy vignette (world closes in, intimacy).
    * Loud = light vignette (world opens up, power).
-   * The audience never sees the vignette. They feel claustrophobia and release.
+   * Uses module-level shared vignette canvas keyed by (w, h).
    */
   private drawVignette(): void {
     const strength = this._activeEffects.vignetteStrength;
     if (strength < 0.01) return;
-    // Smoothed energy for gentle breathing (not beat-by-beat, section-level)
-    // Use IntensityRouter's smoothed energy for coherent breathing
     this._vignetteEnergy = this._intensityRouter.smoothedEnergy;
 
     const w = this.width;
     const h = this.height;
-    const key = `${w}-${h}`;
+    const canvas = getSharedVignette(w, h);
+    if (!canvas) return;
 
-    // Rebuild gradient only on resize
-    if (key !== this._vignetteKey || !this._vignetteCanvas) {
-      const off = document.createElement('canvas');
-      off.width = w;
-      off.height = h;
-      const octx = off.getContext('2d')!;
-
-      // Oval gradient: fully transparent center, dark edges
-      // Aspect-corrected: use the diagonal as the outer radius, center radius at 40%
-      const diag = Math.sqrt(w * w + h * h);
-      const grad = octx.createRadialGradient(w / 2, h / 2, diag * 0.28, w / 2, h / 2, diag * 0.58);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(0.6, 'rgba(0,0,0,0.15)');
-      grad.addColorStop(1, 'rgba(0,0,0,0.55)');
-      octx.fillStyle = grad;
-      octx.fillRect(0, 0, w, h);
-
-      this._vignetteCanvas = off;
-      this._vignetteKey = key;
-    }
-
-    // Alpha driven by inverse energy:
-    // Low energy (quiet verse) → higher alpha → heavier vignette → intimate
-    // High energy (loud chorus) → lower alpha → lighter vignette → expansive
-    // Range: 0.35 (loud) to 0.75 (quiet)
     const vignetteRange = 0.40 + 0.40 * (this._intensityScale - 1.0);
     const vignetteBase = 0.75 + 0.20 * (this._intensityScale - 1.0);
     const baseAlpha = (vignetteBase - this._vignetteEnergy * vignetteRange) * strength;
@@ -5482,7 +5406,7 @@ export class LyricDancePlayer {
     if (alpha < 0.02) return;
 
     this.ctx.globalAlpha = alpha;
-    this.ctx.drawImage(this._vignetteCanvas, 0, 0, w, h);
+    this.ctx.drawImage(canvas, 0, 0, w, h);
     this.ctx.globalAlpha = 1;
   }
 
