@@ -393,16 +393,9 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     if (!live || !player) return;
 
     return player.onFirstFrame(() => {
-      const metrics = player.getBootMetrics();
       const isColdFeedBoot = !hasRecordedColdFeedBoot;
       if (!hasRecordedColdFeedBoot) hasRecordedColdFeedBoot = true;
-      console.info("[LyricDanceEmbed] bootMetrics", {
-        danceId,
-        postId,
-        isPrimary: live,
-        isColdFeedBoot,
-        ...metrics,
-      });
+      void isColdFeedBoot;
     });
   }, [live, player, danceId, postId]);
 

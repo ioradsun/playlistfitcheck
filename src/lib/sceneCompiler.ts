@@ -13,7 +13,6 @@ import {
 import { getEffectTier } from "@/engine/timeTiers";
 import {
   resolveTypographyFromDirection,
-  getFontNamesForPreload,
   deriveSectionTypography,
   WEIGHT_MAP,
   TRACKING_MAP,
@@ -661,17 +660,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       if (timeSec >= start - 0.3) return i;
     }
     return 0;
-  }
-
-  if (import.meta.env.DEV) {
-    console.info('[sceneCompiler] typography:', {
-      source: resolvedTypo._meta.source,
-      primary: resolvedTypo._meta.primaryFont,
-      heroStyle: resolvedTypo.heroStyle,
-      system: resolvedTypo.system,
-      repaired: resolvedTypo._meta.repaired,
-      preloadFonts: getFontNamesForPreload(resolvedTypo),
-    });
   }
 
   // Create measurement context
