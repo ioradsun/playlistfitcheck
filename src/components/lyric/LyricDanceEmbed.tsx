@@ -9,11 +9,13 @@ import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { enrichSections } from "@/engine/directionResolvers";
 import { fireWeight } from "@/lib/fireHold";
 import { LyricInteractionLayer } from "@/components/lyric/LyricInteractionLayer";
+import { MomentsComposer } from "@/components/lyric/MomentsComposer";
 import { PlayerHeader } from "@/components/lyric/PlayerHeader";
 import { ModeDispatcher } from "@/components/lyric/modes/ModeDispatcher";
 import { CARD_MODES } from "@/components/lyric/modes/registry";
 import type { CardMode, Comment, ModeContext } from "@/components/lyric/modes/types";
 import { emitFire, fetchFireData, upsertPlay } from "@/lib/fire";
+import { getSessionId } from "@/lib/sessionId";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
 import { getSharedAudio } from "@/lib/sharedAudio";
 
@@ -33,6 +35,18 @@ function hydrateRow(raw: LyricDanceData): LyricDanceData {
       : (cinematicDirection
         ? normalizeCinematicDirection(cinematicDirection)
         : cinematicDirection),
+  };
+}
+
+function normalizeComment(comment: Partial<Comment> & Pick<Comment, "id" | "text" | "created_at">): Comment {
+  return {
+    id: comment.id,
+    text: comment.text,
+    line_index: comment.line_index ?? null,
+    created_at: comment.created_at,
+    user_id: comment.user_id ?? null,
+    parent_comment_id: comment.parent_comment_id ?? null,
+    reactions: comment.reactions ?? { emojiCounts: {}, userReactions: [] },
   };
 }
 
@@ -165,6 +179,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [profileMap, setProfileMap] = useState<Record<string, { avatarUrl: string | null; displayName: string | null }>>({});
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
+  const [expandedMomentIdx, setExpandedMomentIdx] = useState<number | null>(null);
+  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  const momentsModeState = useMemo(() => ({
+    expandedMomentIdx,
+    setExpandedMomentIdx,
+    replyTargetId,
+    setReplyTargetId,
+  }), [expandedMomentIdx, replyTargetId]);
 
   const effectiveData = fetchedData ?? prefetchedData ?? null;
   const danceId: string | null = effectiveData?.id ?? null;
@@ -629,11 +651,14 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
     supabase
       .from("project_comments" as any)
-      .select("id, text, line_index, created_at, user_id")
+      .select("id, text, line_index, created_at, user_id, parent_comment_id")
       .eq("project_id", danceId)
       .order("created_at", { ascending: true })
       .limit(300)
-      .then(({ data: rows }) => { if (mounted && rows) setComments(rows as unknown as Comment[]); });
+      .then(({ data: rows }) => {
+        if (!mounted || !rows) return;
+        setComments((rows as Array<Partial<Comment> & Pick<Comment, "id" | "text" | "created_at">>).map((row) => normalizeComment(row)));
+      });
 
     const channel = supabase
       .channel(`comments:${danceId}`)
@@ -643,7 +668,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         table: "project_comments",
         filter: `project_id=eq.${danceId}`,
       }, (payload: any) => {
-        const c = payload.new as Comment;
+        const c = normalizeComment(payload.new as Partial<Comment> & Pick<Comment, "id" | "text" | "created_at">);
         setComments((prev) => {
           const withoutTemp = prev.filter((x) =>
             !(x.id.startsWith("temp-") && x.text === c.text && x.line_index === c.line_index)
@@ -715,6 +740,33 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     player.setMuted(false);
     player.play();
   }, [player]);
+
+  const insertMomentComment = useCallback(async (momentIndex: number, text: string, parentCommentId: string | null) => {
+    const moment = moments[momentIndex];
+    if (!moment || !danceId) return;
+    const lineIndex = moment.lines[0]?.lineIndex ?? moment.sectionIndex;
+    const optimistic = normalizeComment({
+      id: `temp-${Date.now()}`,
+      text,
+      line_index: lineIndex,
+      created_at: new Date().toISOString(),
+      user_id: userId ?? null,
+      parent_comment_id: parentCommentId,
+      reactions: { emojiCounts: {}, userReactions: [] },
+    });
+    setComments((prev) => [...prev, optimistic]);
+
+    await supabase
+      .from("project_comments" as any)
+      .insert({
+        project_id: danceId,
+        line_index: lineIndex,
+        text,
+        parent_comment_id: parentCommentId,
+        session_id: getSessionId(),
+        user_id: userId ?? null,
+      });
+  }, [danceId, moments, userId]);
 
   const getCurrentFireIndex = useCallback(() => {
     const t = player?.audio?.currentTime ?? 0;
@@ -935,6 +987,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     currentTimeSec,
     muted,
     showMuteIndicator,
+    momentsModeState,
     setCardMode,
     setComments,
     handleCanvasTap,
@@ -954,15 +1007,22 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       }, durationMs);
     },
     onCommentAdded: (comment) => setComments((prev) =>
-      (prev.some((c) => c.id === comment.id) ? prev : [...prev, comment])),
+      (prev.some((c) => c.id === comment.id) ? prev : [...prev, normalizeComment(comment))),
+    ),
+    onCommentReply: (parentCommentId, text, momentIndex) => {
+      void insertMomentComment(momentIndex, text, parentCommentId);
+    },
+    onCommentReact: (commentId, emoji, toggle) => {
+      console.log("[Moments] onCommentReact pending backend", { commentId, emoji, toggle });
+    },
     isFullscreen: fullscreenMode !== "off",
     onToggleFullscreen,
   }), [
     cardMode, live, playerReady, player, fetchedData, danceId, postId, lyricDanceUrl,
     spotifyTrackId, userId, moments, fireHeat, fireUserMap, fireAnonCount,
-    profileMap, comments, currentTimeSec, muted, showMuteIndicator,
+    profileMap, comments, currentTimeSec, muted, showMuteIndicator, momentsModeState,
     setCardMode, setComments, handleCanvasTap, seekOnly, playRegion,
-    fullscreenMode, onToggleFullscreen,
+    fullscreenMode, onToggleFullscreen, insertMomentComment,
   ]);
 
   const disabledModes = useMemo(() => {
@@ -1043,6 +1103,48 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
               if (m) playRegion(m.startSec, m.endSec);
               setCardMode("moments");
             }}
+          />
+        ) : live && cardMode === "moments" ? (
+          <MomentsComposer
+            activeMomentIdx={momentsModeState.expandedMomentIdx}
+            activeMomentLabel={
+              momentsModeState.expandedMomentIdx !== null
+                ? (() => {
+                  const m = moments[momentsModeState.expandedMomentIdx];
+                  if (!m) return null;
+                  const startMin = Math.floor(m.startSec / 60);
+                  const startSec = String(Math.floor(m.startSec % 60)).padStart(2, "0");
+                  const endMin = Math.floor(m.endSec / 60);
+                  const endSec = String(Math.floor(m.endSec % 60)).padStart(2, "0");
+                  return `${startMin}:${startSec} → ${endMin}:${endSec}`;
+                })()
+                : null
+            }
+            replyTargetId={momentsModeState.replyTargetId}
+            replyTargetAuthor={
+              momentsModeState.replyTargetId
+                ? (profileMap[
+                  comments.find((c) => c.id === momentsModeState.replyTargetId)?.user_id ?? ""
+                ]?.displayName ?? "anon")
+                : null
+            }
+            onSubmit={(text) => {
+              if (momentsModeState.expandedMomentIdx === null) return;
+              if (momentsModeState.replyTargetId) {
+                modeCtx.onCommentReply(
+                  momentsModeState.replyTargetId,
+                  text,
+                  momentsModeState.expandedMomentIdx,
+                );
+                momentsModeState.setReplyTargetId(null);
+              } else {
+                void insertMomentComment(momentsModeState.expandedMomentIdx, text, null);
+              }
+            }}
+            onClearReply={() => momentsModeState.setReplyTargetId(null)}
+            totalDuration={player?.audio?.duration ?? 0}
+            currentTimeSec={currentTimeSec}
+            onSeekTo={seekOnly}
           />
         ) : (
           <div

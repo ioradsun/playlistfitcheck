@@ -1,15 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { getSessionId } from "@/lib/sessionId";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { deriveMomentFireCounts } from "@/lib/momentUtils";
-import { useAuth } from "@/hooks/useAuth";
 import { MomentCard } from "@/components/lyric/MomentCard";
-import { createFireHold, fireWeight } from "@/lib/fireHold";
+import { MomentThread } from "@/components/lyric/MomentThread";
 import { ModePanel } from "@/components/lyric/modes/ModePanel";
 import type { Moment } from "@/lib/buildMoments";
 import type { ModeContext } from "./types";
-
-type Comment = ModeContext["comments"][number];
 
 export function MomentsMode({ ctx }: { ctx: ModeContext }) {
   const {
@@ -22,48 +17,39 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
     profileMap,
     fireUserMap,
     fireAnonCount,
-    onFireMoment,
+    userId,
+    momentsModeState,
     onPlayLine,
-    onCommentAdded,
+    onCommentReact,
   } = ctx;
 
+  const { expandedMomentIdx, setExpandedMomentIdx, replyTargetId, setReplyTargetId } = momentsModeState;
   const hasLines = Array.isArray(data?.lines) && data.lines.length > 0;
   const words = hasLines ? (data?.words ?? []) : [];
   const isInstrumental = !hasLines;
-  const { user } = useAuth();
-  const [firedMoments, setFiredMoments] = useState<Set<number>>(new Set());
-  const [expandedMoment, setExpandedMoment] = useState<number | null>(null);
-  const [pressing, setPressing] = useState<number | null>(null);
-  const [localFires, setLocalFires] = useState<Record<number, number>>({});
-  const [playingMoment, setPlayingMoment] = useState<number | null>(null);
-  const fireHoldControllersRef = useRef<Record<number, ReturnType<typeof createFireHold>>>({});
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
-  const momentFireCounts = useMemo(() => deriveMomentFireCounts(fireHeat, moments), [fireHeat, moments]);
+  const momentFireCounts = useMemo(
+    () => deriveMomentFireCounts(fireHeat, moments),
+    [fireHeat, moments],
+  );
 
   const hottestIdx = useMemo(() => {
     if (!moments.length) return -1;
     let best = 0;
     for (let i = 1; i < moments.length; i += 1) {
-      const bestTotal = (momentFireCounts[best] ?? 0) + (localFires[best] ?? 0);
-      const currentTotal = (momentFireCounts[i] ?? 0) + (localFires[i] ?? 0);
-      if (currentTotal > bestTotal) best = i;
+      if ((momentFireCounts[i] ?? 0) > (momentFireCounts[best] ?? 0)) best = i;
     }
     return best;
-  }, [moments, momentFireCounts, localFires]);
+  }, [moments, momentFireCounts]);
 
-  const commentsForMoment = useMemo(() => {
+  const commentsByMoment = useMemo(() => {
     const lineToMoment: Record<number, number> = {};
     moments.forEach((moment) => {
-      if (moment.lines.length === 0) {
-        lineToMoment[moment.sectionIndex] = moment.index;
-      }
-      moment.lines.forEach((line) => {
-        lineToMoment[line.lineIndex] = moment.index;
-      });
+      if (moment.lines.length === 0) lineToMoment[moment.sectionIndex] = moment.index;
+      moment.lines.forEach((line) => { lineToMoment[line.lineIndex] = moment.index; });
     });
-
-    const grouped: Record<number, Comment[]> = {};
+    const grouped: Record<number, typeof comments> = {};
     comments.forEach((comment) => {
       if (comment.line_index == null) return;
       const idx = lineToMoment[comment.line_index];
@@ -81,106 +67,133 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
 
   const momentFireAvatars = useMemo(() => {
     const result: Record<number, { avatars: Array<{ url: string | null; name: string | null }>; anonCount: number }> = {};
-
     moments.forEach((moment) => {
       const lineIndices = moment.lines.length > 0
         ? moment.lines.map((line) => line.lineIndex)
         : [moment.sectionIndex];
-
       const userIds = new Set<string>();
       let anon = 0;
-
       for (const idx of lineIndices) {
         for (const uid of (fireUserMap[idx] ?? [])) userIds.add(uid);
         anon += fireAnonCount[idx] ?? 0;
       }
-
       const avatars = [...userIds].slice(0, 3).map((uid) => ({
         url: profileMap[uid]?.avatarUrl ?? null,
         name: profileMap[uid]?.displayName ?? null,
       }));
-
       result[moment.index] = { avatars, anonCount: anon + Math.max(0, userIds.size - 3) };
     });
-
     return result;
   }, [moments, fireUserMap, fireAnonCount, profileMap]);
 
-  useEffect(() => {
-    if (playingMoment == null) return;
-    const m = moments[playingMoment];
+  const topReactionsByMoment = useMemo(() => {
+    const result: Record<number, Array<{ emoji: string; count: number }>> = {};
+    Object.entries(commentsByMoment).forEach(([idx, ms]) => {
+      const counts: Record<string, number> = {};
+      ms.forEach((c) => {
+        Object.entries(c.reactions.emojiCounts).forEach(([emoji, n]) => {
+          counts[emoji] = (counts[emoji] ?? 0) + n;
+        });
+      });
+      result[+idx] = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([emoji, count]) => ({ emoji, count }));
+    });
+    return result;
+  }, [commentsByMoment]);
+
+  const handleCardTap = useCallback((momentIdx: number) => {
+    const m = moments[momentIdx];
     if (!m) return;
-    if (currentTimeSec > m.endSec + 0.2) setPlayingMoment(null);
-  }, [currentTimeSec, moments, playingMoment]);
+    onPlayLine(m.startSec, m.endSec);
+    setExpandedMomentIdx(momentIdx);
+    setReplyTargetId(null);
+  }, [moments, onPlayLine, setExpandedMomentIdx, setReplyTargetId]);
+
+  const handleBack = useCallback(() => {
+    setExpandedMomentIdx(null);
+    setReplyTargetId(null);
+  }, [setExpandedMomentIdx, setReplyTargetId]);
+
+  const handleReact = useCallback((commentId: string, emoji: string, toggle: boolean) => {
+    onCommentReact(commentId, emoji, toggle);
+  }, [onCommentReact]);
 
   useEffect(() => {
-    if (currentMomentIndex == null) return;
+    if (expandedMomentIdx !== null || currentMomentIndex == null) return;
     const el = cardRefs.current[currentMomentIndex];
     el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [currentMomentIndex]);
-
-  const handleFireDown = useCallback((idx: number) => {
-    setPressing(idx);
-    if (!fireHoldControllersRef.current[idx]) {
-      fireHoldControllersRef.current[idx] = createFireHold({});
-    }
-    fireHoldControllersRef.current[idx].start();
-  }, []);
-
-  const handleFireUp = useCallback((idx: number) => {
-    setPressing(null);
-    const holdData = fireHoldControllersRef.current[idx]?.stop();
-    if (!holdData) return;
-    const holdMs = holdData.holdMs;
-    const scoreMs = holdMs < 180 ? 150 : holdMs;
-    const weight = fireWeight(scoreMs);
-    setLocalFires((prev) => ({ ...prev, [idx]: (prev[idx] ?? 0) + weight }));
-    setFiredMoments((prev) => new Set([...prev, idx]));
-    const moment = moments[idx];
-    if (!moment) return;
-    onFireMoment(moment.lines[0]?.lineIndex ?? moment.sectionIndex, moment.startSec, scoreMs);
-  }, [moments, onFireMoment]);
-
-  const handleSubmit = useCallback(async (momentIndex: number, text: string) => {
-    const moment = moments[momentIndex];
-    if (!moment || !danceId) return;
-    const lineIndex = moment.lines[0]?.lineIndex ?? (isInstrumental ? moment.sectionIndex : null);
-    const optimistic: Comment = {
-      id: `temp-${Date.now()}`,
-      text,
-      line_index: lineIndex,
-      created_at: new Date().toISOString(),
-      user_id: user?.id ?? null,
-    };
-    onCommentAdded(optimistic);
-
-    await supabase
-      .from("project_comments" as any)
-      .insert({
-        project_id: danceId,
-        line_index: lineIndex,
-        text,
-        session_id: getSessionId(),
-        user_id: user?.id ?? null,
-      })
-      .select("id, text, line_index, created_at, user_id" as any)
-      .single();
-  }, [danceId, isInstrumental, moments, onCommentAdded, user?.id]);
-
-  useEffect(() => () => {
-    Object.values(fireHoldControllersRef.current).forEach((controller) => controller.destroy());
-  }, []);
+  }, [currentMomentIndex, expandedMomentIdx]);
 
   if (!danceId) return null;
+
+  if (expandedMomentIdx !== null) {
+    const m = moments[expandedMomentIdx];
+    if (!m) return null;
+    const threadComments = commentsByMoment[expandedMomentIdx] ?? [];
+    const fireAvatarData = momentFireAvatars[expandedMomentIdx];
+
+    const header = (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.4)" }}>
+            {Math.floor(m.startSec / 60)}:{String(Math.floor(m.startSec % 60)).padStart(2, "0")}
+            {" → "}
+            {Math.floor(m.endSec / 60)}:{String(Math.floor(m.endSec % 60)).padStart(2, "0")}
+          </span>
+          {fireAvatarData && (fireAvatarData.avatars.length > 0 || fireAvatarData.anonCount > 0) && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              {fireAvatarData.avatars.map((avatar, i) => (
+                <div key={i} style={{
+                  width: 16, height: 16, borderRadius: "50%",
+                  border: "1.5px solid #0a0a0a",
+                  marginLeft: i > 0 ? -5 : 0,
+                  overflow: "hidden", background: "rgba(255,255,255,0.08)",
+                }}>
+                  {avatar.url ? <img src={avatar.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                </div>
+              ))}
+              {fireAvatarData.anonCount > 0 && (
+                <span style={{ fontSize: 9, fontFamily: "monospace", color: "rgba(255,255,255,0.25)", marginLeft: 4 }}>
+                  +{fireAvatarData.anonCount}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        {isInstrumental ? (
+          <p style={{ margin: 0, fontSize: 13, fontFamily: "monospace", color: "rgba(255,255,255,0.55)" }}>{m.label}</p>
+        ) : (
+          <LyricContent moment={m} words={words} currentTimeSec={currentTimeSec} />
+        )}
+      </div>
+    );
+
+    return (
+      <ModePanel scroll="none">
+        <MomentThread
+          header={header}
+          comments={threadComments}
+          profileMap={profileMap}
+          currentUserId={userId}
+          replyTargetId={replyTargetId}
+          onBack={handleBack}
+          onReplyTarget={setReplyTargetId}
+          onReact={handleReact}
+        />
+      </ModePanel>
+    );
+  }
 
   return (
     <ModePanel scroll="y">
       <div style={{ maxWidth: 440, margin: "0 auto", padding: "8px 12px 32px", display: "flex", flexDirection: "column", gap: 8 }}>
         {moments.map((moment) => {
-          const fireTotal = (momentFireCounts[moment.index] ?? 0) + (localFires[moment.index] ?? 0);
-          const mComments = commentsForMoment[moment.index] ?? [];
+          const fireTotal = momentFireCounts[moment.index] ?? 0;
+          const mComments = commentsByMoment[moment.index] ?? [];
           const latestComment = mComments.length > 0 ? mComments[mComments.length - 1].text : null;
-          const isExpanded = expandedMoment === moment.index;
+          const topReactions = topReactionsByMoment[moment.index] ?? [];
 
           return (
             <div key={moment.index} ref={(el) => { cardRefs.current[moment.index] = el; }}>
@@ -188,20 +201,14 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
                 moment={moment}
                 fireTotal={fireTotal}
                 isConsensus={moment.index === hottestIdx && fireTotal > 0}
-                isLive={currentMomentIndex === moment.index || playingMoment === moment.index}
+                isLive={currentMomentIndex === moment.index}
+                isSelected={false}
+                commentCount={mComments.length}
                 latestComment={latestComment}
-                onPlay={() => {
-                  setPlayingMoment(moment.index);
-                  onPlayLine(moment.startSec, moment.endSec);
-                }}
-                onFireDown={() => handleFireDown(moment.index)}
-                onFireUp={() => handleFireUp(moment.index)}
-                onExpandComments={() => setExpandedMoment(isExpanded ? null : moment.index)}
-                onSubmitComment={(text) => handleSubmit(moment.index, text)}
-                firedByUser={firedMoments.has(moment.index)}
-                pressing={pressing === moment.index}
+                topReactions={topReactions}
                 fireAvatars={momentFireAvatars[moment.index]?.avatars ?? []}
                 fireAnonCount={momentFireAvatars[moment.index]?.anonCount ?? 0}
+                onTap={() => handleCardTap(moment.index)}
               >
                 {isInstrumental ? (
                   <EnergyBar energy={moment.energy ?? 0} />
@@ -209,34 +216,6 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
                   <LyricContent moment={moment} words={words} currentTimeSec={currentTimeSec} />
                 )}
               </MomentCard>
-
-              {isExpanded && mComments.length > 0 && (
-                <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6, padding: "0 6px" }}>
-                  {mComments.map((comment) => {
-                    const profile = comment.user_id ? profileMap[comment.user_id] : null;
-                    return (
-                      <div key={comment.id} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
-                        {profile?.avatarUrl ? (
-                          <img src={profile.avatarUrl} style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0 }} />
-                        ) : (
-                          <div style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
-                        )}
-                        <span
-                          style={{
-                            borderLeft: "1px solid rgba(255,255,255,0.15)",
-                            paddingLeft: 8,
-                            fontSize: 11,
-                            fontFamily: "monospace",
-                            color: "rgba(255,255,255,0.4)",
-                          }}
-                        >
-                          {comment.text}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           );
         })}
