@@ -166,273 +166,21 @@ export interface LyricDanceData {
 }
 
 export interface LiveDebugState {
-  beatIntensity: number;
-  physGlow: number;
-
-  physicsActive: boolean;
-  wordCount: number;
-  heat: number;
-  velocity: number;
-  rotation: number;
-  lastBeatForce: number;
-
-  effectKey: string;
-  entryProgress: number;
-  exitProgress: number;
-  activeMod: string | null;
-
-  fontScale: number;
-  scale: number;
-  lineColor: string;
-  isHookLine: boolean;
-  repIndex: number;
-  repTotal: number;
-
-  particleSystem: string;
-  particleDensity: number;
-  particleSpeed: number;
-  particleCount: number;
-  songSection: string;
-
-  xOffset: number;
-  yBase: number;
-  xNudge: number;
-  shake: number;
-
-  backgroundSystem: string;
-  imageLoaded: boolean;
-  zoom: number;
-  vignetteIntensity: number;
-  songProgress: number;
-
-  dirThesis: string;
-  dirIntensity: number;
-  dirBgDirective: string;
-  dirLightBehavior: string;
-
-  symbolPrimary: string;
-  symbolSecondary: string;
-  symbolState: string;
-
-  cameraDistance: string;
-  cameraMovement: string;
-
-  wordDirectiveWord: string;
-  wordDirectiveBehavior: string;
-  wordDirectiveEntry: string;
-  wordDirectiveEmphasis: number;
-  wordDirectiveExit: string;
-  wordDirectiveGhostTrail: boolean;
-  wordDirectiveGhostDir: string;
-
-  lineHeroWord: string;
-  lineEntry: string;
-  lineExit: string;
-  lineIntent: string;
-  shotType: string;
-  shotDescription: string;
-
-  evolutionWord: string;
-  evolutionCount: number;
-  evolutionScale: number;
-  evolutionGlow: number;
-  evolutionBubbles: number;
-  evolutionSinkPx: number;
-
-  // Image diagnostics
-  imgCount: number;
-  imgActiveIdx: number;
-  imgNextIdx: number;
-  imgCrossfade: number;
-  imgChapterSpan: number;
-  imgLocalProgress: number;
-  imgOpacity: number;
-  imgOverlap: boolean;
-
-  // Section boundaries
-  secIndex: number;
-  lineIndex: number;
-  secTotal: number;
-  secStartSec: number;
-  secEndSec: number;
-  secElapsed: number;
-  secDuration: number;
-  secProgress: number;
-  secMood: string;
-  secTexture: string;
-  secHasImage: boolean;
-
-  // Cinematic direction defaults
-  cdSceneTone: string;
-  cdAtmosphere: string;
-  cdMotion: string;
-  cdTypography: string;
-  cdTexture: string;
-  cdEmotionalArc: string;
-
-  // Beat grid phase
-  bgBpm: number;
-  bgBeatsTotal: number;
-  bgConfidence: number;
-  bgNextBeat: number;
-  bgBeatPhase: number;
-  bgBeatPulse: number;
-
-  // Active word
-  activeWord: string;
-  activeWordEntry: string;
-  activeWordExit: string;
-  activeWordEmphasis: number;
-  resolvedLineStyle: string;
-  resolvedWordStyle: string;
-  layoutStable: boolean;
-
+  time: number;
   fps: number;
   qualityTier: number;
+  songProgress: number;
+  beatIntensity: number;
   drawCalls: number;
-  cacheHits: number;
-
-  perfBg: number;
-  perfSymbol: number;
-  perfParticlesFar: number;
-  perfText: number;
-  perfOverlays: number;
-  perfNear: number;
-  perfTotal: number;
-
-  time: number;
 }
 
 export const DEFAULT_DEBUG_STATE: LiveDebugState = {
   time: 0,
-  beatIntensity: 0,
-  physGlow: 0,
-
-  physicsActive: false,
-  wordCount: 0,
-  heat: 0,
-  velocity: 0,
-  rotation: 0,
-  lastBeatForce: 0,
-
-  effectKey: "—",
-  entryProgress: 0,
-  exitProgress: 0,
-  activeMod: null,
-
-  fontScale: 1,
-  scale: 1,
-  lineColor: "#ffffff",
-  isHookLine: false,
-  repIndex: 0,
-  repTotal: 0,
-
-  particleSystem: "none",
-  particleDensity: 0,
-  particleSpeed: 0,
-  particleCount: 0,
-  songSection: "intro",
-
-  xOffset: 0,
-  yBase: 0.5,
-  xNudge: 0,
-  shake: 0,
-
-  backgroundSystem: "—",
-  imageLoaded: false,
-  zoom: 1,
-  vignetteIntensity: 0,
-  songProgress: 0,
-
-  dirThesis: "—",
-  dirIntensity: 0,
-  dirBgDirective: "—",
-  dirLightBehavior: "—",
-
-  symbolPrimary: "—",
-  symbolSecondary: "—",
-  symbolState: "—",
-
-  cameraDistance: "Wide",
-  cameraMovement: "—",
-
-  wordDirectiveWord: "",
-  wordDirectiveBehavior: "—",
-  wordDirectiveEntry: "—",
-  wordDirectiveEmphasis: 0,
-  wordDirectiveExit: "—",
-  wordDirectiveGhostTrail: false,
-  wordDirectiveGhostDir: "—",
-
-  lineHeroWord: "",
-  lineEntry: "fades",
-  lineExit: "fades",
-  lineIntent: "—",
-  shotType: "FloatingInWorld",
-  shotDescription: "—",
-
-  evolutionWord: "—",
-  evolutionCount: 0,
-  evolutionScale: 1,
-  evolutionGlow: 0,
-  evolutionBubbles: 0,
-  evolutionSinkPx: 0,
-
-  imgCount: 0,
-  imgActiveIdx: -1,
-  imgNextIdx: -1,
-  imgCrossfade: 0,
-  imgChapterSpan: 0,
-  imgLocalProgress: 0,
-  imgOpacity: 0,
-  imgOverlap: false,
-
-  secIndex: -1,
-  lineIndex: -1,
-  secTotal: 0,
-  secStartSec: 0,
-  secEndSec: 0,
-  secElapsed: 0,
-  secDuration: 0,
-  secProgress: 0,
-  secMood: "—",
-  secTexture: "—",
-  secHasImage: false,
-
-  cdSceneTone: "—",
-  cdAtmosphere: "—",
-  cdMotion: "—",
-  cdTypography: "—",
-  cdTexture: "—",
-  cdEmotionalArc: "—",
-
-  bgBpm: 0,
-  bgBeatsTotal: 0,
-  bgConfidence: 0,
-  bgNextBeat: 0,
-  bgBeatPhase: 0,
-  bgBeatPulse: 0,
-
-  activeWord: "—",
-  activeWordEntry: "—",
-  activeWordExit: "—",
-  activeWordEmphasis: 0,
-  resolvedLineStyle: "—",
-  resolvedWordStyle: "—",
-  layoutStable: true,
-
   fps: 60,
   qualityTier: 0,
+  songProgress: 0,
+  beatIntensity: 0,
   drawCalls: 0,
-  cacheHits: 0,
-
-  perfBg: 0,
-  perfSymbol: 0,
-  perfParticlesFar: 0,
-  perfText: 0,
-  perfOverlays: 0,
-  perfNear: 0,
-  perfTotal: 0,
 };
 
 // ──────────────────────────────────────────────────────────────
@@ -660,7 +408,6 @@ function hexToRgb(hex: string): [number, number, number] {
 //   smoke  — soft feathered edges, wispy tops
 //   light  — clean bright minimal pillars
 // AI cinematic direction picks style per section based on mood/atmosphere.
-type BarVisStyle = 'flame' | 'neon' | 'smoke' | 'light';
 const VIS_W = 320;
 const VIS_H = 64;
 
@@ -1613,24 +1360,6 @@ class DynamiteWickBar {
   get canvas(): HTMLCanvasElement { return this.dwbCanvas; }
 }
 
-interface CommentChunk {
-  id: string;
-  text: string;
-  color: string;
-  startTime: number;
-  duration: number;
-  startX: number;
-  y: number;
-  endX: number;
-  direction: 1 | -1;  // 1 = left-to-right, -1 = right-to-left
-  trailLength: number;
-  fontSize: number;
-  isHistorical: boolean;
-  // Cached gradient — re-used while comet position hasn't changed > 2px
-  _cachedTrailGrad?: { grad: CanvasGradient; x1: number; x2: number; alphaHex: string };
-}
-
-
 // ──────────────────────────────────────────────────────────────
 // Player
 // ──────────────────────────────────────────────────────────────
@@ -1728,7 +1457,6 @@ export class LyricDancePlayer {
   private _firstFrameCallbacks: Array<() => void> = [];
 
   // Runtime evaluator state
-  private _evalChunkPool: Array<ScaledKeyframe['chunks'][number]> = [];
   private _activeGroupIndices: number[] = [];
   /** Reusable buffer for per-word animation states — avoids per-frame allocation */
   private _wordAnimBuffer: WordAnimState[] = [];
@@ -1768,10 +1496,7 @@ export class LyricDancePlayer {
   private bgCacheCount = 0;
   public chapterParticleSystems: (string | null)[] = [];
 
-  private backgroundSystem = 'default';
-  private chapterSims: Array<{ beatVis?: BeatVisSim }> = [];
   private _globalBeatVis: BeatVisSim | null = null; // always-on beat visualizer
-  private _barVisStyles: BarVisStyle[] = []; // per-chapter bar style from AI mood
   private lastSimFrame = -1;
   // ═══ Dynamite Wick Bar (always enabled) ═══
   private _globalWickBar: DynamiteWickBar | null = null;
@@ -1864,14 +1589,11 @@ export class LyricDancePlayer {
   private _textVerticalBias = 0;
 
   // Comment comets
-  private activeComments: CommentChunk[] = [];
   private _historicalFires: Array<{
     time_sec: number;
     hold_ms: number;
     spawned: boolean;
   }> = [];
-  private commentColors = ['#FFD700', '#00FF87', '#FF6B6B', '#88CCFF', '#FF88FF'];
-  private commentColorIdx = 0;
   private _echoState: {
     text: string;
     startTime: number;
@@ -1898,8 +1620,6 @@ export class LyricDancePlayer {
   private songEndSec = 0;
   playing = false;
   private destroyed = false;
-  private audioContext: AudioContext | null = null;
-  private phraseGroups: Array<{ words: Array<{ word: string; start: number; end: number }>; start: number; end: number; lineIndex: number; groupIndex: number }> = [];
   private ambientParticleEngine: ParticleEngine | null = null;
   private activeSectionIndex = -999;
   private _activeEffects: SectionEffectsConfig = DEFAULT_EFFECTS;
@@ -1910,8 +1630,6 @@ export class LyricDancePlayer {
   private _heroLookaheadMs = 400; // anticipate hero words 400ms before they appear
   private activeSectionTexture = 'dust';
   // Health monitor + adaptive quality
-  private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
-  private frameCount = 0;
   private currentTSec = 0;
 
   // ═══ Adaptive Quality Tier ═══
@@ -1926,7 +1644,6 @@ export class LyricDancePlayer {
   // Stall detection removed — was no-op (counters with no output)
 
   // Perf
-  private fpsAccum = { t: 0, frames: 0, fps: 60 };
   private perfMarks: {
     tInitStart: number;
     tFirstFrameDrawn: number | null;
@@ -2169,7 +1886,6 @@ export class LyricDancePlayer {
 
     await this.ensureTimelineReady();
     this.buildBgCache();
-    this.deriveVisualSystems();
     this.buildChapterSims();
     this.loadSectionImages().catch(() => {});
     this.startPlaybackClock();
@@ -2190,7 +1906,6 @@ export class LyricDancePlayer {
     this.primeAudio();
     this._safePlay();
     this.playing = true;
-    this.startHealthMonitor();
     if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
     this.rafHandle = requestAnimationFrame(this.tick);
   }
@@ -2453,7 +2168,6 @@ export class LyricDancePlayer {
     this.primeAudio();
 
     this._startAudioPlayback();
-    this.startHealthMonitor();
 
     if (this.rafHandle) cancelAnimationFrame(this.rafHandle);
     this.rafHandle = requestAnimationFrame(this.tick);
@@ -2466,7 +2180,6 @@ export class LyricDancePlayer {
       cancelAnimationFrame(this.rafHandle);
       this.rafHandle = 0;
     }
-    this.stopHealthMonitor();
     this.audio.pause();
     this._playPromise = null;
   }
@@ -2479,7 +2192,6 @@ export class LyricDancePlayer {
       cancelAnimationFrame(this.rafHandle);
       this.rafHandle = 0;
     }
-    this.stopHealthMonitor();
     // Note: audio is NOT paused — it continues loading/buffering silently
   }
 
@@ -2633,8 +2345,7 @@ export class LyricDancePlayer {
       }
       if (this.payload) {
         this.buildBgCache();
-        this.deriveVisualSystems();
-        this.buildChapterSims();
+            this.buildChapterSims();
       }
     }
     this.emojiStreamEnabled = true;
@@ -3046,16 +2757,6 @@ export class LyricDancePlayer {
    * Capture the current canvas content to an offscreen canvas.
    * Returns the offscreen canvas (can be drawn onto another canvas via drawImage).
    */
-  captureSnapshot(): HTMLCanvasElement | null {
-    if (this.destroyed || !this.canvas) return null;
-    const off = document.createElement('canvas');
-    off.width = this.canvas.width;
-    off.height = this.canvas.height;
-    const ctx = off.getContext('2d');
-    if (!ctx) return null;
-    ctx.drawImage(this.canvas, 0, 0);
-    return off;
-  }
 
   setMuted(muted: boolean): void {
     this.audio.muted = muted;
@@ -3113,7 +2814,6 @@ export class LyricDancePlayer {
     this._textMetricsCache.clear();
     // ═══ V2: timing budgets (placeholder — method removed) ═══
     this.buildBgCache();
-    this.deriveVisualSystems();
     this.buildChapterSims();
   }
 
@@ -3239,7 +2939,6 @@ export class LyricDancePlayer {
     this.destroyed = true;
     this.playing = false;
     this._firstFrameCallbacks = [];
-    this.stopHealthMonitor();
     if (this.rafHandle) {
       cancelAnimationFrame(this.rafHandle);
       this.rafHandle = 0;
@@ -3275,17 +2974,9 @@ export class LyricDancePlayer {
     }
     this._timeInitialized = false;
 
-    if (this.audioContext) {
-      void this.audioContext.close().catch(() => {});
-      this.audioContext = null;
-    }
 
     this.ambientParticleEngine?.clear();
-    this.chapterSims.forEach((sim) => {
-      this._zeroCanvas(sim.beatVis?.canvas);
-    });
     this._zeroCanvas(this._globalBeatVis?.canvas ?? null);
-    this.chapterSims = [];
     this.chapterImages = [];
     this._sectionScrimOpacity = [];
     this._zeroCanvas(this._lightingOverlayCanvas);
@@ -3319,12 +3010,6 @@ export class LyricDancePlayer {
   // RAF loop
   // ────────────────────────────────────────────────────────────
 
-  private startHealthMonitor(): void {
-    if (this.healthCheckInterval) return;
-    this.healthCheckInterval = setInterval(() => {
-      this.frameCount = 0;
-    }, 5000);
-  }
 
   /** Adaptive quality — call once per frame to update tier based on rolling FPS. */
   private _updateQualityTier(nowMs: number): void {
@@ -3372,12 +3057,6 @@ export class LyricDancePlayer {
   }
 
 
-  private stopHealthMonitor(): void {
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-      this.healthCheckInterval = null;
-    }
-  }
 
   private _resetBgParallax(): void {
     this._bgPulseZoom = 1.0;
@@ -3398,8 +3077,7 @@ export class LyricDancePlayer {
         cancelAnimationFrame(this.rafHandle);
         this.rafHandle = 0;
       }
-      this.stopHealthMonitor();
-      if (!this.audio.paused) {
+        if (!this.audio.paused) {
         this.audio.pause();
       }
       return;
@@ -3440,8 +3118,7 @@ export class LyricDancePlayer {
 
     // Resume if was playing before hide
     if (this.playing) {
-      this.startHealthMonitor();
-      this.rafHandle = requestAnimationFrame(this.tick);
+        this.rafHandle = requestAnimationFrame(this.tick);
     }
   }
 
@@ -3876,13 +3553,6 @@ export class LyricDancePlayer {
     const clamped = Math.max(this.songStartSec, Math.min(this.songEndSec, timeSec));
     this.currentTimeMs = Math.max(0, (clamped - this.songStartSec) * 1000);
 
-    this.fpsAccum.t += deltaMs;
-    this.fpsAccum.frames += 1;
-    if (this.fpsAccum.t >= 500) {
-      this.fpsAccum.fps = (this.fpsAccum.frames * 1000) / this.fpsAccum.t;
-      this.fpsAccum.t = 0;
-      this.fpsAccum.frames = 0;
-    }
 
     const duration = this.songEndSec - this.songStartSec;
     const songProgress = duration > 0 ? Math.max(0, Math.min(1, (clamped - this.songStartSec) / duration)) : 0;
@@ -3943,7 +3613,7 @@ export class LyricDancePlayer {
     // ── Minimal debug state (always cheap) ──
     const ds = this.debugState;
     ds.time = clamped;
-    ds.fps = Math.round(this.fpsAccum.fps);
+    ds.fps = Math.round(this.frameBudget.fpsAvg);
     ds.qualityTier = this._qualityTier;
     ds.songProgress = songProgress;
     ds.beatIntensity = beatState?.pulse ?? 0;
@@ -3964,7 +3634,6 @@ export class LyricDancePlayer {
 
   private _draw(tSec: number, precomputedFrame: ScaledKeyframe | null): void {
     this.currentTSec = tSec;
-    this.frameCount++;
     this._updateQualityTier(performance.now());
     const qTier = this._qualityTier;
 
@@ -4100,9 +3769,6 @@ export class LyricDancePlayer {
       }
       if (scrimOpacity > 0.01) {
         this._drawContrastScrim(snapCtx, scrimOpacity);
-      }
-      if (qTier < 2) {
-        this._drawSimLayerToCtx(snapCtx, frame);
       }
 
       // Lighting overlay — bake into snapshot too
@@ -4432,7 +4098,6 @@ export class LyricDancePlayer {
     }
 
     // Comment comets — after text, before watermark
-    this.drawComments(frameNowSec);
     this.drawEcho();
 
     // ═══ Near-plane particles — Lubezki's envelope ═══
@@ -4671,53 +4336,6 @@ export class LyricDancePlayer {
   // Comment comets
   // ────────────────────────────────────────────────────────────
 
-  private _legacyFireComment(text: string): void {
-    const color = this.commentColors[this.commentColorIdx % this.commentColors.length];
-    this.commentColorIdx++;
-
-    // Left OR right entry only — rockets across horizontally
-    const fromLeft = Math.random() > 0.5;
-    const direction: 1 | -1 = fromLeft ? 1 : -1;
-    const margin = 400;
-    const startX = fromLeft ? -margin : this.width + margin;
-    const endX = fromLeft ? this.width + margin : -margin;
-    const y = this.height * (0.15 + Math.random() * 0.7);
-
-    const comment: CommentChunk = {
-      id: `comment-${Date.now()}`,
-      text,
-      color,
-      startTime: performance.now() / 1000,
-      duration: 3.5,
-      startX, y, endX, direction,
-      trailLength: 120,
-      fontSize: Math.max(18, Math.min(26, Math.floor(280 / text.length))),
-      isHistorical: false,
-    };
-
-    this.activeComments.push(comment);
-
-    if (this.activeComments.length > 8) {
-      this.activeComments = this.activeComments.slice(-8);
-    }
-
-    const now = performance.now() / 1000;
-    this.activeComments = this.activeComments.filter(
-      c => now - c.startTime < c.duration + 0.5
-    );
-  }
-
-  public showEcho(text: string): void {
-    this._echoState = {
-      text,
-      startTime: performance.now() / 1000,
-      duration: 0.8,
-    };
-  }
-
-  public fireComment(text: string): void {
-    this._legacyFireComment(text);
-  }
 
   public spawnFireRiser(): void {
     const now = performance.now() / 1000;
@@ -4751,127 +4369,6 @@ export class LyricDancePlayer {
     this._globalWickBar.stopContinuousFire();
   }
 
-  private drawComments(nowSec: number): void {
-    if (this.activeComments.length === 0) return;
-
-    for (const comment of this.activeComments) {
-      const elapsed = nowSec - comment.startTime;
-      const t = Math.min(1, elapsed / comment.duration);
-      if (t >= 1) continue;
-
-      // Piecewise speed curve: rocket-cruise-rocket
-      let ep: number;
-      if (t < 0.15) {
-        ep = (t / 0.15) * 0.2;
-      } else if (t > 0.82) {
-        ep = 0.2 + ((t - 0.15) / 0.67) * 0.6 + ((t - 0.82) / 0.18) * 0.2;
-      } else {
-        ep = 0.2 + ((t - 0.15) / 0.67) * 0.6;
-      }
-
-      const x = comment.startX + (comment.endX - comment.startX) * ep;
-
-      // Alpha: fade in 10%, full middle, fade out last 25% — capped at 65%
-      const alpha = (t < 0.10
-        ? t / 0.10
-        : t > 0.75
-          ? 1 - (t - 0.75) / 0.25
-          : 1) * 0.65;
-      const holdTier = 0 as 0 | 1 | 2 | 3;
-      const tierAlphaBoost = [1.0, 1.15, 1.3, 1.5][holdTier];
-      let effectiveAlpha = Math.min(0.85, alpha * tierAlphaBoost);
-      if (comment.isHistorical) {
-        effectiveAlpha *= 0.55;
-      }
-      const yOffset = holdTier >= 2
-        ? Math.sin(nowSec * 3 + comment.startX) * (holdTier * 4)
-        : 0;
-      const drawY = comment.y + yOffset;
-
-      this.ctx.save();
-
-      // Glow — softer
-      this.ctx.shadowColor = comment.color;
-      this.ctx.shadowBlur = [4, 8, 14, 22][holdTier];
-
-      if (holdTier === 3) {
-        this.ctx.save();
-        this.ctx.shadowColor = comment.color;
-        this.ctx.shadowBlur = 40;
-        this.ctx.globalAlpha = effectiveAlpha * 0.25;
-        this.ctx.beginPath();
-        this.ctx.arc(x, drawY, comment.fontSize * 0.4, 0, Math.PI * 2);
-        this.ctx.fillStyle = comment.color;
-        this.ctx.fill();
-        this.ctx.restore();
-      }
-
-      // Trail — thinner, more transparent
-      const trailX = x - comment.direction * comment.trailLength;
-      // Cache the gradient — re-create only when comet has moved > 2px or alpha changed.
-      // createLinearGradient allocates a GPU gradient object every call — avoid it.
-      const alphaHex = Math.floor(effectiveAlpha * 120).toString(16).padStart(2, '0');
-      // Expand 3-digit hex shorthand before appending alphaHex to prevent same crash.
-      const trailColor = /^#[0-9a-fA-F]{3}$/.test(comment.color)
-        ? `#${comment.color[1]}${comment.color[1]}${comment.color[2]}${comment.color[2]}${comment.color[3]}${comment.color[3]}`
-        : comment.color;
-      let trail: CanvasGradient;
-      const gc = comment._cachedTrailGrad;
-      if (!gc || Math.abs(gc.x1 - trailX) > 2 || Math.abs(gc.x2 - x) > 2 || gc.alphaHex !== alphaHex) {
-        const g = this.ctx.createLinearGradient(trailX, drawY, x, drawY);
-        g.addColorStop(0, 'transparent');
-        g.addColorStop(1, `${trailColor}${alphaHex}`);
-        comment._cachedTrailGrad = { grad: g, x1: trailX, x2: x, alphaHex };
-        trail = g;
-      } else {
-        trail = gc.grad;
-      }
-      this.ctx.strokeStyle = trail;
-      this.ctx.lineWidth = comment.fontSize * 0.15;
-      this.ctx.lineCap = 'round';
-      this.ctx.beginPath();
-      this.ctx.moveTo(trailX, drawY);
-      this.ctx.lineTo(x, drawY);
-      this.ctx.stroke();
-
-      // 3 spark particles — smaller
-      for (let i = 0; i < 3; i++) {
-        const seed = (i * 0.618033) % 1;
-        const sparkX = x - comment.direction * seed * comment.trailLength * 0.8;
-        const sparkY = drawY + Math.sin(nowSec * 8 + i * 2.1) * 6;
-        const sparkAlpha = (1 - seed) * effectiveAlpha * 0.7;
-        this.ctx.globalAlpha = sparkAlpha;
-        this.ctx.fillStyle = comment.color;
-        this.ctx.shadowBlur = 0;
-        this.ctx.beginPath();
-        this.ctx.arc(sparkX, sparkY, 0.8 + seed * 0.7, 0, Math.PI * 2);
-        this.ctx.fill();
-      }
-
-      // Color bullet dot — smaller
-      this.ctx.globalAlpha = effectiveAlpha;
-      this.ctx.shadowBlur = 6;
-      this.ctx.shadowColor = comment.color;
-      const commentFont = `400 ${comment.fontSize * 0.85}px "Space Mono", monospace`;
-      const textWidth = this.getCachedMetrics(comment.text, commentFont).width || 60;
-      const dotX = x - comment.direction * (textWidth / 2 + 12);
-      this.ctx.fillStyle = comment.color;
-      this.ctx.beginPath();
-      this.ctx.arc(dotX, drawY, 2.5, 0, Math.PI * 2);
-      this.ctx.fill();
-
-      // Text — lighter weight, smaller, muted white
-      this.ctx.globalAlpha = effectiveAlpha;
-      this.ctx.font = `400 ${comment.fontSize * 0.85}px "Space Mono", monospace`;
-      this.ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      this.ctx.textAlign = 'center';
-      this.setCanvasBaseline('middle');
-      this.ctx.fillText(comment.text, x, drawY);
-
-      this.ctx.shadowBlur = 0;
-      this.ctx.restore();
-    }
-  }
 
   // ────────────────────────────────────────────────────────────
   // Hero Decomposition — shatter hero words into particles on exit
@@ -5035,41 +4532,7 @@ export class LyricDancePlayer {
     this._viewportFontScale = 1.0;
   }
 
-  private _getArcFunction(arcName: string): (p: number) => number {
-    const curves: Record<string, (p: number) => number> = {
-      'slow-burn': (p) => p * p,
-      'explosive-peak': (p) => Math.sin(p * Math.PI),
-      'steady-rise': (p) => p,
-      'wave': (p) => (Math.sin(p * Math.PI * 2 - Math.PI / 2) + 1) / 2,
-      'double-peak': (p) => Math.sin(p * Math.PI * 2) * 0.5 + 0.5,
-    };
-    return curves[arcName] ?? curves['slow-burn'];
-      }
 
-  private getActiveWord(timeSec: number): { word?: string; start: number; end: number } | null {
-    const words = this.data.words ?? [];
-    for (let i = words.length - 1; i >= 0; i--) {
-      const word = words[i];
-      if (word.start <= timeSec && word.end >= timeSec) {
-        return word;
-      }
-      if (word.start <= timeSec) {
-        return word;
-      }
-    }
-    return null;
-  }
-
-  private mapBackgroundSystem(desc: string): string {
-    const lower = (desc || '').toLowerCase();
-    if (lower.includes('fire') || lower.includes('ember') || lower.includes('flame') || lower.includes('burn')) return 'fire';
-    if (lower.includes('smoke') || lower.includes('haze') || lower.includes('churn') || lower.includes('fog') || lower.includes('storm') || lower.includes('cloud')) return 'storm';
-    if (lower.includes('aurora') || lower.includes('northern') || lower.includes('teal curtain')) return 'aurora';
-    if (lower.includes('rain') || lower.includes('urban') || lower.includes('city') || lower.includes('neon')) return 'urban';
-    if (lower.includes('ebb') || lower.includes('flow') || lower.includes('drift') || lower.includes('wave') || lower.includes('ocean') || lower.includes('water')) return 'ocean';
-    if (lower.includes('warm') || lower.includes('soft') || lower.includes('beam') || lower.includes('glow') || lower.includes('light') || lower.includes('clarity') || lower.includes('intimate') || lower.includes('reveal')) return 'intimate';
-    return 'default';
-  }
 
   private async loadSectionImages(): Promise<void> {
     const urls = this.data.section_images ?? [];
@@ -5318,16 +4781,6 @@ export class LyricDancePlayer {
    * to eliminate per-frame Math.random() cost (~57K calls/frame → 0).
    */
   /** Relative luminance of a hex color (0 = black, 1 = white) */
-  private _hexLuminance(hex: string): number {
-    const c = hex.replace('#', '');
-    const r = parseInt(c.substring(0, 2), 16) / 255;
-    const g = parseInt(c.substring(2, 4), 16) / 255;
-    const b = parseInt(c.substring(4, 6), 16) / 255;
-    const lr = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
-    const lg = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
-    const lb = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
-    return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
-  }
   private renderFilmGrain(intensity: number, size: number): void {
     const grainW = Math.ceil(this.width / Math.max(1, size * 2));
     const grainH = Math.ceil(this.height / Math.max(1, size * 2));
@@ -5405,11 +4858,6 @@ export class LyricDancePlayer {
     }
   }
 
-  private deriveVisualSystems(): void {
-    const chapter0 = this.resolvedState.chapters?.[0] as any;
-    const bgDesc = chapter0?.backgroundDirective ?? chapter0?.background ?? '';
-    this.backgroundSystem = this.mapBackgroundSystem(bgDesc);
-  }
 
   private buildChapterSims(): void {
     
@@ -5453,15 +4901,8 @@ export class LyricDancePlayer {
         duration,
       );
 
-      this.chapterSims = chapters.map(() => ({}));
 
-      // Bar visualizer style: round-robin by section for variety
-      const styleRotation: BarVisStyle[] = ['flame', 'neon', 'smoke', 'light'];
-      this._barVisStyles = chapters.map((_: any, ci: number) => {
-        return styleRotation[ci % styleRotation.length];
-      });
 
-      
     } catch (err) {
       console.error('[LyricEngine] buildChapterSims crash:', err);
     }
@@ -5595,7 +5036,6 @@ export class LyricDancePlayer {
     }
   }
 
-  private drawSimLayer(_frame: ScaledKeyframe): void {}
 
   private evaluateFrame(tSec: number): ScaledKeyframe | null {
     const scene = this.compiledScene;
@@ -5905,12 +5345,6 @@ export class LyricDancePlayer {
   }
 
   /** Draw sim layer to an arbitrary ctx (used for snapshot baking) */
-  private _drawSimLayerToCtx(ctx: CanvasRenderingContext2D, frame: ScaledKeyframe): void {
-    const saved = this.ctx;
-    (this as any).ctx = ctx;
-    this.drawSimLayer(frame);
-    (this as any).ctx = saved;
-  }
 
   private drawBackground(frame: ScaledKeyframe): void {
     const chapters = this.resolvedState.chapters ?? [];
