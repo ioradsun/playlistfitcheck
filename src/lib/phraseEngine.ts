@@ -198,42 +198,99 @@ export function applySoloSplits(blocks: PhraseDraft[]): PhraseDraft[] {
   return output;
 }
 
+// Common words that almost never earn hero status. Scored with a penalty,
+// not a hard block — a stop-word can still win if nothing else qualifies.
 const STOP_WORDS = new Set([
-  'i','me','my','we','our','the','a','an','it','its','is','are','was',
-  'that','this','how','some','they','you','your','he','she','to','of',
-  'in','on','for','so','do','no','and','but','or','just','with','can',
-  'im','aint','thats','dont','wont','lets',
+  // pronouns
+  'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'ours', 'you', 'your', 'yours',
+  'he', 'him', 'his', 'she', 'her', 'hers', 'it', 'its', 'they', 'them', 'their', 'theirs',
+  // articles + determiners
+  'the', 'a', 'an', 'this', 'that', 'these', 'those', 'some', 'any', 'every',
+  // auxiliaries + common verbs-of-being
+  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am',
+  'do', 'does', 'did', 'doing', 'done',
+  'have', 'has', 'had', 'having',
+  'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must', 'shall',
+  // prepositions (small)
+  'to', 'of', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'into', 'onto', 'over', 'under',
+  'up', 'down', 'out', 'off', 'through', 'about', 'around',
+  // conjunctions
+  'and', 'or', 'but', 'so', 'if', 'then', 'as', 'than', 'when', 'while', 'because',
+  // fillers / intensifiers
+  'just', 'very', 'really', 'much', 'more', 'less', 'most', 'all', 'some', 'no', 'not',
+  // contractions (cleaned form)
+  'im', 'aint', 'thats', 'dont', 'wont', 'lets', 'didnt', 'isnt', 'wasnt', 'weve', 'youre', 'theyre',
+  // common low-value modals
+  'how', 'why', 'what', 'where', 'who',
+]);
+
+// Absolute block — these never become hero words under any circumstances.
+// If every word in a phrase is HARD_BAN, fall through to longest-duration pick.
+const HARD_BAN = new Set([
+  'the', 'a', 'an', 'of',
 ]);
 
 export function selectHeroWord(
   block: PhraseDraft,
   sectionHeroWords?: string[],
 ): { heroWord: string; heroMs: number } {
-  const candidates = block.words.filter(w => w.clean.length > 1);
+  // Candidates must be at least 2 chars and NOT in HARD_BAN.
+  // HARD_BAN ('the', 'a', 'an', 'of') can never be a hero even if they're the only word.
+  const allNonTrivial = block.words.filter((w) => w.clean.length > 1);
+  const candidates = allNonTrivial.filter((w) => !HARD_BAN.has(w.clean));
+
+  // If every word is HARD_BAN (phrase is "the" or "of the", etc.) — pick the longest-duration word,
+  // still skipping HARD_BAN. Last-resort: just use the longest word regardless.
   if (candidates.length === 0) {
-    const w = block.words[0];
-    return { heroWord: w.clean.toUpperCase().replace(/[^A-Z0-9]/g, ""), heroMs: w.d };
+    const fallback = allNonTrivial.length > 0
+      ? allNonTrivial.reduce((a, b) => (a.d >= b.d ? a : b))
+      : block.words[0];
+    return {
+      heroWord: fallback.clean.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+      heroMs: fallback.d,
+    };
   }
 
-  const scored = candidates.map(w => {
+  // Separate content words from stop-words. Prefer content words outright.
+  // Only fall back to stop-words if there are NO content words in candidates.
+  const contentWords = candidates.filter((w) => !STOP_WORDS.has(w.clean));
+  const pool = contentWords.length > 0 ? contentWords : candidates;
+
+  const phraseLast = block.words[block.words.length - 1];
+
+  const scored = pool.map((w) => {
     let score = 0;
+
     // Section hero match — strongest signal
-    if (sectionHeroWords?.some(h => h.toLowerCase().replace(/[^a-z0-9]/g, '') === w.clean)) {
+    if (sectionHeroWords?.some((h) => h.toLowerCase().replace(/[^a-z0-9]/g, '') === w.clean)) {
       score += 50;
     }
+
     // Duration bonus, capped
     score += Math.min(w.d / 100, 8);
+
     // Phrase-final position
-    if (w === block.words[block.words.length - 1]) score += 5;
+    if (w === phraseLast) score += 5;
+
     // Word length proxy (longer words tend to be more meaningful)
     score += Math.min(w.clean.length / 2, 4);
-    // Stop-word penalty (not hard block)
+
+    // Punctuation-emphasis bonus — words followed by `!`, `?`, or sentence-end `.`
+    // often carry the emotional punch of the line.
+    const rawWithPunct = ((w as any).raw ?? "").trim();
+    if (/[!?]$/.test(rawWithPunct)) score += 6;
+    else if (/\.$/.test(rawWithPunct) && w === phraseLast) score += 3;
+
+    // Stop-word penalty — only applies within the stop-word fallback pool
+    // (since contentWords pool already excludes them)
     if (STOP_WORDS.has(w.clean)) score -= 15;
+
     return { word: w, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
   const best = scored[0].word;
+
   return {
     heroWord: best.clean.toUpperCase().replace(/[^A-Z0-9]/g, ""),
     heroMs: best.d,
