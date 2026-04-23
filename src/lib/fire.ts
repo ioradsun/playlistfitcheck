@@ -31,38 +31,6 @@ export async function emitFire(
   if (isMissingTableError(error)) fireTableAvailable = false;
 }
 
-export async function emitExposure(
-  danceId: string,
-  lineIndex: number,
-  source?: "feed" | "shareable" | "embed",
-): Promise<void> {
-  supabase.from('project_exposures' as any)
-    .upsert({
-      project_id: danceId,
-      session_id: getSessionId(),
-      line_index: lineIndex,
-      ...(source ? { source } : {}),
-    }, { onConflict: 'project_id,session_id,line_index', ignoreDuplicates: true })
-    .then();
-}
-
-export async function emitClosingPick(
-  danceId: string,
-  hookIndex: number | null,
-  freeText: string | null,
-  source?: "feed" | "shareable" | "embed",
-): Promise<void> {
-  supabase.from('project_closing_picks' as any)
-    .upsert({
-      project_id: danceId,
-      session_id: getSessionId(),
-      hook_index: hookIndex,
-      free_text: freeText?.trim() || null,
-      ...(source ? { source } : {}),
-    }, { onConflict: 'project_id,session_id' })
-    .then();
-}
-
 export async function upsertPlay(
   danceId: string,
   opts: {

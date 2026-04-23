@@ -17,7 +17,6 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
     profileMap,
     fireUserMap,
     fireAnonCount,
-    userId,
     momentsModeState,
     onPlayLine,
     onCommentReact,
@@ -146,7 +145,6 @@ export function MomentsMode({ ctx }: { ctx: ModeContext }) {
           header={header}
           comments={threadComments}
           profileMap={profileMap}
-          currentUserId={userId}
           replyTargetId={replyTargetId}
           onBack={handleBack}
           onReplyTarget={setReplyTargetId}

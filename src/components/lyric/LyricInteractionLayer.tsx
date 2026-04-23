@@ -7,6 +7,7 @@ import { fetchSessionFires } from "@/lib/fire";
 import { createFireHold } from "@/lib/fireHold";
 
 const BAR_HEIGHT = 44;
+const GLOW_DURATION = 1500;
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -62,7 +63,7 @@ export function FmlyBar({
   // fire data, width, or hold state changes. Without this, the curve would
   // rebuild 60 times per second from identical inputs.
   const cachedCurveRef = useRef<{
-    curvePoints: Array<{ x: number; y: number; momentIdx: number }>;
+    curvePoints: Array<{ x: number; y: number; momentIdx: number; xLeft: number; xRight: number }>;
     curvePath: Path2D;
     fillPath: Path2D;
     maxCombinedFire: number;
@@ -197,8 +198,6 @@ export function FmlyBar({
     };
     resize();
 
-    const GLOW_DURATION = 1500;
-
     // ── Crowd weight: pure crowd data, excludes any user fires ──
     const getCrowdWeight = (idx: number) => momentFireCounts[idx] ?? 0;
 
@@ -249,7 +248,7 @@ export function FmlyBar({
       }
       prevMaxFireRef.current = maxCombinedFire;
 
-      const curvePoints: Array<{ x: number; y: number; momentIdx: number }> = [];
+      const curvePoints: Array<{ x: number; y: number; momentIdx: number; xLeft: number; xRight: number }> = [];
       for (let i = 0; i < moments.length; i += 1) {
         const moment = moments[i];
         // Peaks at moment END — users react AFTER a lyric line lands.
@@ -260,7 +259,13 @@ export function FmlyBar({
           ? Math.log1p(fireWeight) / Math.log1p(maxCombinedFire)
           : 0;
         const y = baseline - normalized * maxLineHeight;
-        curvePoints.push({ x, y, momentIdx: i });
+        curvePoints.push({ x, y, momentIdx: i, xLeft: 0, xRight: 0 });
+      }
+      for (let i = 0; i < curvePoints.length; i += 1) {
+        const prev = curvePoints[i - 1];
+        const next = curvePoints[i + 1];
+        curvePoints[i].xLeft = prev ? (prev.x + curvePoints[i].x) / 2 : 0;
+        curvePoints[i].xRight = next ? (curvePoints[i].x + next.x) / 2 : rect.width;
       }
 
       // Build curve path (stroke) and matching fill path (closed to baseline).
@@ -377,19 +382,19 @@ export function FmlyBar({
       if (curve.hottestCrowdIdx >= 0 && getCrowdWeight(curve.hottestCrowdIdx) > 1) {
         const idx = curve.hottestCrowdIdx;
         const p = curve.curvePoints[idx];
-        const prev = curve.curvePoints[idx - 1];
-        const next = curve.curvePoints[idx + 1];
-        const xLeft = prev ? (prev.x + p.x) / 2 : 0;
-        const xRight = next ? (p.x + next.x) / 2 : rect.width;
+        if (!p) {
+          // no-op
+        } else {
 
-        // Clipped fill under the crowd curve, bounded to this moment's segment.
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(xLeft, 0, xRight - xLeft, rect.height);
-        ctx.clip();
-        ctx.fillStyle = "rgba(74, 222, 128, 0.30)";
-        ctx.fill(curve.fillPath);
-        ctx.restore();
+          // Clipped fill under the crowd curve, bounded to this moment's segment.
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(p.xLeft, 0, p.xRight - p.xLeft, rect.height);
+          ctx.clip();
+          ctx.fillStyle = "rgba(74, 222, 128, 0.30)";
+          ctx.fill(curve.fillPath);
+          ctx.restore();
+        }
       }
 
       // ── 3. Warm glow under recently-fired segments ──
@@ -397,15 +402,11 @@ export function FmlyBar({
         const idx = glow.momentIdx;
         const p = curve.curvePoints[idx];
         if (!p) continue;
-        const prev = curve.curvePoints[idx - 1];
-        const next = curve.curvePoints[idx + 1];
-        const xLeft = prev ? (prev.x + p.x) / 2 : 0;
-        const xRight = next ? (p.x + next.x) / 2 : rect.width;
-        if (xRight <= xLeft) continue;
+        if (p.xRight <= p.xLeft) continue;
 
         ctx.save();
         ctx.beginPath();
-        ctx.rect(xLeft, 0, xRight - xLeft, rect.height);
+        ctx.rect(p.xLeft, 0, p.xRight - p.xLeft, rect.height);
         ctx.clip();
         ctx.fillStyle = `rgba(255, 140, 40, ${glow.alpha * 0.45})`;
         ctx.fill(curve.fillPath);
@@ -422,14 +423,10 @@ export function FmlyBar({
         const idx = glow.momentIdx;
         const p = curve.curvePoints[idx];
         if (!p) continue;
-        const prev = curve.curvePoints[idx - 1];
-        const next = curve.curvePoints[idx + 1];
-        const xLeft = prev ? (prev.x + p.x) / 2 : 0;
-        const xRight = next ? (p.x + next.x) / 2 : rect.width;
-        if (xRight <= xLeft) continue;
+        if (p.xRight <= p.xLeft) continue;
         ctx.save();
         ctx.beginPath();
-        ctx.rect(xLeft, 0, xRight - xLeft, rect.height);
+        ctx.rect(p.xLeft, 0, p.xRight - p.xLeft, rect.height);
         ctx.clip();
         ctx.strokeStyle = `rgba(255, 160, 60, ${glow.alpha * 0.7})`;
         ctx.lineWidth = 2;
@@ -472,27 +469,7 @@ export function FmlyBar({
     userFireTimesRef.current[idx] = performance.now();
   };
 
-  const handleFireTap = useCallback(() => {
-    const fireMomentIdx = activeHoldMomentRef.current >= 0
-      ? activeHoldMomentRef.current
-      : currentMomentIdx;
-    addUserFire(fireMomentIdx, 150);
-    if (activeHoldMomentRef.current >= 0 && holdStartTimeRef.current > 0) {
-      const elapsed = performance.now() - holdStartTimeRef.current;
-      const peakBoost = (elapsed / 2000) * Math.max(prevMaxFireRef.current, 5);
-      releaseDecayRef.current = {
-        momentIdx: activeHoldMomentRef.current,
-        peakBoost,
-        releaseTime: performance.now(),
-      };
-    }
-    activeHoldMomentRef.current = -1;
-    holdStartTimeRef.current = 0;
-    if (!danceId) return;
-    onFire(pressAttributedIndexRef.current, 0);
-  }, [currentMomentIdx, danceId, onFire]);
-
-  const handleFireHoldEnd = useCallback((holdMs: number) => {
+  const commitFire = useCallback((holdMs: number) => {
     const fireMomentIdx = activeHoldMomentRef.current >= 0
       ? activeHoldMomentRef.current
       : currentMomentIdx;
@@ -536,8 +513,7 @@ export function FmlyBar({
   const handleUp = () => {
     const holdData = fireHoldControllerRef.current?.stop();
     if (!holdData) return;
-    const holdMs = holdData.holdMs;
-    if (holdMs < 180) handleFireTap(); else handleFireHoldEnd(holdMs);
+    commitFire(holdData.holdMs < 180 ? 150 : holdData.holdMs);
   };
 
   return (
@@ -562,7 +538,7 @@ export function FmlyBar({
             touchAction: "none",
           }}
         >
-          {/* Moments container */}
+          {/* Bar content wrapper */}
           <div style={{ position: "absolute", inset: 0, display: "flex", minWidth: 0 }}>
           {/* Heat curve canvas — overlaid on moments, pointer-events: none */}
           <canvas
