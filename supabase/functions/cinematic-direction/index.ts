@@ -365,11 +365,12 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
 
     // heroWords
     const heroWords = Array.isArray(m?.heroWords)
-      ? m.heroWords
-          .filter((w: any) => typeof w === "string" && w.trim())
-          .map((w: any) => w.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""))
-          .filter((w: string) => w.length > 1 && !BANNED_HERO_WORDS.has(w))
-          .slice(0, 5)
+      ? Array.from(new Set(
+          m.heroWords
+            .filter((w: any) => typeof w === "string" && w.trim())
+            .map((w: any) => w.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""))
+            .filter((w: string) => w.length > 1 && !BANNED_HERO_WORDS.has(w))
+        )).slice(0, 5)
       : [];
 
     // description
