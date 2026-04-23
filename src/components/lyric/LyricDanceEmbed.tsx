@@ -728,7 +728,21 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   }, [live, setMuted, onRequestPrimary]);
 
   const seekOnly = useCallback((timeSec: number) => {
-    player?.seek(timeSec);
+    if (!player) return;
+    // Cancel any pending auto-mute from region preview
+    if (panelPlayTimerRef.current) {
+      clearTimeout(panelPlayTimerRef.current);
+      panelPlayTimerRef.current = null;
+    }
+    // Clear active region so the full timeline is scrubbable
+    // (guard prevents expensive scene recompile on every drag tick)
+    if (player.data.region_start != null || player.data.region_end != null) {
+      player.setRegion(undefined, undefined);
+    }
+    player.seek(timeSec);
+    // Ensure audio is audible and playing
+    if (player.audio.muted) player.setMuted(false);
+    if (player.audio.paused) player.play();
     if (timeSec <= 0.05) setCardMode("listen");
   }, [player]);
 
