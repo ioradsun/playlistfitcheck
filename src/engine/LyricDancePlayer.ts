@@ -5755,12 +5755,6 @@ export class LyricDancePlayer {
 
       if (!this._debugModeLogged && groupIdx === activeGroups[activeGroups.length - 1]) {
         this._debugModeLogged = true;
-        // Flag any zero-duration or negative-duration words
-        const rawWords = this.data?.words ?? [];
-        const badWords = rawWords.filter((w: any) => w.start >= w.end || w.end - w.start < 0.01);
-        if (badWords.length > 0 && import.meta.env.DEV) {
-          console.warn(`[LyricDance] ${badWords.length} zero/tiny-duration words:`, badWords.map((w: any) => `"${w.word}" ${w.start.toFixed(3)}-${w.end.toFixed(3)}`));
-        }
       }
 
       const groupHasActiveSoloHero = detectSoloHero(group, tSec);

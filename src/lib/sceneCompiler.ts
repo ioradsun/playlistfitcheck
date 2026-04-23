@@ -663,17 +663,6 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     return 0;
   }
 
-  if (import.meta.env.DEV) {
-    console.info('[sceneCompiler] typography:', {
-      source: resolvedTypo._meta.source,
-      primary: resolvedTypo._meta.primaryFont,
-      heroStyle: resolvedTypo.heroStyle,
-      system: resolvedTypo.system,
-      repaired: resolvedTypo._meta.repaired,
-      preloadFonts: getFontNamesForPreload(resolvedTypo),
-    });
-  }
-
   // Create measurement context
   let measureCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
   if (typeof document !== 'undefined') {
