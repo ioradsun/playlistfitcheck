@@ -736,11 +736,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
     // Clear active region so the full timeline is scrubbable
     // (guard prevents expensive scene recompile on every drag tick)
-    if (player.data.region_start != null || player.data.region_end != null) {
+    const hasActiveRegion = player.data.region_start != null || player.data.region_end != null;
+    if (hasActiveRegion) {
       player.setRegion(undefined, undefined);
     }
     player.seek(timeSec);
-    // Ensure audio is audible and playing
+    // Ensure audio is audible and playing after scrub
     if (player.audio.muted) player.setMuted(false);
     if (player.audio.paused) player.play();
     if (timeSec <= 0.05) setCardMode("listen");
