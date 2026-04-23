@@ -198,61 +198,61 @@ export function applySoloSplits(blocks: PhraseDraft[]): PhraseDraft[] {
   return output;
 }
 
-// Common words that almost never earn hero status. Scored with a penalty,
-// not a hard block — a stop-word can still win if nothing else qualifies.
+// Common words that rarely earn hero status. Scored with a penalty in the
+// fallback pool only — a stop-word can still win if the phrase has nothing else.
+// NOTE: prepositional particles (up, down, out, off, over, under, through)
+// and wh-words (when, why, where) are DELIBERATELY EXCLUDED — they can be
+// emphatic song heroes ("turn it UP!", "get OUT", "WHEN you were mine").
 const STOP_WORDS = new Set([
-  // pronouns
-  'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'ours', 'you', 'your', 'yours',
-  'he', 'him', 'his', 'she', 'her', 'hers', 'it', 'its', 'they', 'them', 'their', 'theirs',
+  // pronouns — subject + object + possessive
+  'i','me','my','we','us','our','you','your',
+  'he','him','his','she','her','it','its','they','them','their',
   // articles + determiners
-  'the', 'a', 'an', 'this', 'that', 'these', 'those', 'some', 'any', 'every',
-  // auxiliaries + common verbs-of-being
-  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am',
-  'do', 'does', 'did', 'doing', 'done',
-  'have', 'has', 'had', 'having',
-  'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must', 'shall',
-  // prepositions (small)
-  'to', 'of', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'into', 'onto', 'over', 'under',
-  'up', 'down', 'out', 'off', 'through', 'about', 'around',
-  // conjunctions
-  'and', 'or', 'but', 'so', 'if', 'then', 'as', 'than', 'when', 'while', 'because',
-  // fillers / intensifiers
-  'just', 'very', 'really', 'much', 'more', 'less', 'most', 'all', 'some', 'no', 'not',
-  // contractions (cleaned form)
-  'im', 'aint', 'thats', 'dont', 'wont', 'lets', 'didnt', 'isnt', 'wasnt', 'weve', 'youre', 'theyre',
-  // common low-value modals
-  'how', 'why', 'what', 'where', 'who',
+  'the','a','an','this','that',
+  // auxiliaries + verbs-of-being
+  'is','are','was','were','be','been','am','being',
+  'do','does','did','doing',
+  'have','has','had','having',
+  'can','could','will','would','should','may','might',
+  // small prepositions (excluding particle forms)
+  'to','of','in','on','at','by','for','from','with',
+  // conjunctions + fillers
+  'and','or','but','so','as','than','just','very','really',
+  'some','no','not',
+  // cleaned contractions
+  'im','aint','thats','dont','wont','lets','didnt','isnt','wasnt',
+  'weve','youre','theyre','ive','shes','hes',
+  // kept from original
+  'how',
 ]);
 
-// Absolute block — these never become hero words under any circumstances.
-// If every word in a phrase is HARD_BAN, fall through to longest-duration pick.
+// Absolute block — never hero words under any circumstances.
+// Stripped from the candidate pool entirely, before scoring.
 const HARD_BAN = new Set([
-  'the', 'a', 'an', 'of',
+  'the','a','an','of',
 ]);
 
 export function selectHeroWord(
   block: PhraseDraft,
   sectionHeroWords?: string[],
 ): { heroWord: string; heroMs: number } {
-  // Candidates must be at least 2 chars and NOT in HARD_BAN.
-  // HARD_BAN ('the', 'a', 'an', 'of') can never be a hero even if they're the only word.
+  // Filter to candidates: at least 2 chars AND not HARD_BAN.
   const allNonTrivial = block.words.filter((w) => w.clean.length > 1);
   const candidates = allNonTrivial.filter((w) => !HARD_BAN.has(w.clean));
 
-  // If every word is HARD_BAN (phrase is "the" or "of the", etc.) — pick the longest-duration word,
-  // still skipping HARD_BAN. Last-resort: just use the longest word regardless.
+  // Pathological: every non-trivial word is HARD_BAN (phrase is just "the of").
+  // Scan the full words list for any non-banned word before giving up entirely.
   if (candidates.length === 0) {
-    const fallback = allNonTrivial.length > 0
-      ? allNonTrivial.reduce((a, b) => (a.d >= b.d ? a : b))
-      : block.words[0];
+    const fallback = block.words.find((w) => !HARD_BAN.has(w.clean)) ?? block.words[0];
     return {
       heroWord: fallback.clean.toUpperCase().replace(/[^A-Z0-9]/g, ""),
       heroMs: fallback.d,
     };
   }
 
-  // Separate content words from stop-words. Prefer content words outright.
-  // Only fall back to stop-words if there are NO content words in candidates.
+  // Prefer content words outright. Only fall back to stop-words if the phrase
+  // has NO content words — in which case all candidates in the pool are stop-words
+  // and a uniform penalty would cancel, so we omit it.
   const contentWords = candidates.filter((w) => !STOP_WORDS.has(w.clean));
   const pool = contentWords.length > 0 ? contentWords : candidates;
 
@@ -260,31 +260,16 @@ export function selectHeroWord(
 
   const scored = pool.map((w) => {
     let score = 0;
-
     // Section hero match — strongest signal
     if (sectionHeroWords?.some((h) => h.toLowerCase().replace(/[^a-z0-9]/g, '') === w.clean)) {
       score += 50;
     }
-
     // Duration bonus, capped
     score += Math.min(w.d / 100, 8);
-
     // Phrase-final position
     if (w === phraseLast) score += 5;
-
-    // Word length proxy (longer words tend to be more meaningful)
+    // Word-length proxy
     score += Math.min(w.clean.length / 2, 4);
-
-    // Punctuation-emphasis bonus — words followed by `!`, `?`, or sentence-end `.`
-    // often carry the emotional punch of the line.
-    const rawWithPunct = ((w as any).raw ?? "").trim();
-    if (/[!?]$/.test(rawWithPunct)) score += 6;
-    else if (/\.$/.test(rawWithPunct) && w === phraseLast) score += 3;
-
-    // Stop-word penalty — only applies within the stop-word fallback pool
-    // (since contentWords pool already excludes them)
-    if (STOP_WORDS.has(w.clean)) score -= 15;
-
     return { word: w, score };
   });
 
