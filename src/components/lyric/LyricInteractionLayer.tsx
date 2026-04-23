@@ -43,17 +43,18 @@ export function FmlyBar({
 
   const fireHoldControllerRef = useRef<ReturnType<typeof createFireHold> | null>(null);
   const userFiresRef = useRef<Record<number, number>>({});
+  const userFireTimesRef = useRef<Record<number, number>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Memoization for the curve geometry — rebuilt only when crowd data, user
   // fire data, width, or hold state changes. Without this, the curve would
   // rebuild 60 times per second from identical inputs.
   const cachedCurveRef = useRef<{
-    crowdPoints: Array<{ x: number; y: number; momentIdx: number }>;
-    crowdPath: Path2D;
+    curvePoints: Array<{ x: number; y: number; momentIdx: number }>;
+    curvePath: Path2D;
     fillPath: Path2D;
-    maxCrowdFire: number;
+    maxCombinedFire: number;
     hottestCrowdIdx: number;
-    userContributions: Array<{ momentIdx: number; extraHeight: number; cappedTop: number }>;
+    glows: Array<{ momentIdx: number; alpha: number }>;
     width: number;
     counts: Record<number, number>;
     userFires: Record<number, number>;
@@ -61,6 +62,7 @@ export function FmlyBar({
     holdBucket: number;
     releaseIdx: number;
     releaseBucket: number;
+    glowBucket: number;
   } | null>(null);
   const prevMaxFireRef = useRef(1);
   const releaseDecayRef = useRef<{ momentIdx: number; peakBoost: number; releaseTime: number } | null>(null);
@@ -156,7 +158,7 @@ export function FmlyBar({
     };
   }, [player]);
 
-  // ── Canvas render loop: curve + green winner + orange user-fires + playhead ─
+  // ── Canvas render loop: unified curve + green winner + user glow + playhead ─
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !moments.length) return;
@@ -176,17 +178,15 @@ export function FmlyBar({
     };
     resize();
 
+    const GLOW_DURATION = 1500;
+
     // ── Crowd weight: pure crowd data, excludes any user fires ──
-    // This is load-bearing: the crowd curve MUST stay stable when the user
-    // fires, otherwise every tap rewrites the crowd's reality. The user's
-    // contribution is visualized separately (orange overlay) in a way that
-    // never moves the crowd curve.
     const getCrowdWeight = (idx: number) => momentFireCounts[idx] ?? 0;
 
     // ── User weight: personal contribution only ──
     // Includes committed user fires, the in-progress hold boost, and the
-    // post-release decay tail. This is what drives the ORANGE extension
-    // drawn above the crowd curve.
+    // post-release decay tail. This now contributes directly to unified
+    // curve height.
     const getUserWeight = (idx: number, now: number) => {
       const committedUser = (userFiresRef.current[idx] ?? 0) / 150;
       let holdBoost = 0;
@@ -211,96 +211,75 @@ export function FmlyBar({
       const baseline = rect.height - 2;
       const maxLineHeight = rect.height * 0.7;
 
-      // Compute crowd heights, normalized against crowd-only max.
-      // This is what keeps the crowd curve stable under user fires.
-      const crowdWeights: number[] = [];
-      let maxCrowdFire = 1;
+      // Compute combined heights and normalize against combined max so the
+      // user's fire raises the same unified curve.
+      const combinedWeights: number[] = [];
+      let maxCombinedFire = 1;
       let hottestCrowdIdx = -1;
       let hottestCrowdWeight = 0;
       for (let i = 0; i < moments.length; i += 1) {
-        const w = getCrowdWeight(i);
-        crowdWeights.push(w);
-        if (w > maxCrowdFire) maxCrowdFire = w;
-        if (w > hottestCrowdWeight) {
-          hottestCrowdWeight = w;
+        const crowdWeight = getCrowdWeight(i);
+        const userWeight = getUserWeight(i, now);
+        const combinedWeight = crowdWeight + userWeight;
+        combinedWeights.push(combinedWeight);
+        if (combinedWeight > maxCombinedFire) maxCombinedFire = combinedWeight;
+        if (crowdWeight > hottestCrowdWeight) {
+          hottestCrowdWeight = crowdWeight;
           hottestCrowdIdx = i;
         }
       }
-      // Also track the overall weight (crowd + user) for use in setMoments
-      // rebuild gating via prevMaxFireRef.
-      let overallMax = 1;
-      for (let i = 0; i < moments.length; i += 1) {
-        const overall = crowdWeights[i] + getUserWeight(i, now);
-        if (overall > overallMax) overallMax = overall;
-      }
-      prevMaxFireRef.current = overallMax;
+      prevMaxFireRef.current = maxCombinedFire;
 
-      const crowdPoints: Array<{ x: number; y: number; momentIdx: number }> = [];
+      const curvePoints: Array<{ x: number; y: number; momentIdx: number }> = [];
       for (let i = 0; i < moments.length; i += 1) {
         const moment = moments[i];
         // Peaks at moment END — users react AFTER a lyric line lands.
         const endPct = moment.endSec / Math.max(0.0001, totalDuration);
         const x = Math.max(0, Math.min(rect.width, endPct * rect.width));
-        const fireWeight = crowdWeights[i];
+        const fireWeight = combinedWeights[i];
         const normalized = fireWeight > 0
-          ? Math.log1p(fireWeight) / Math.log1p(maxCrowdFire)
+          ? Math.log1p(fireWeight) / Math.log1p(maxCombinedFire)
           : 0;
         const y = baseline - normalized * maxLineHeight;
-        crowdPoints.push({ x, y, momentIdx: i });
+        curvePoints.push({ x, y, momentIdx: i });
       }
 
-      // Build crowd curve path (stroke) and matching fill path (closed to baseline).
-      const crowdPath = new Path2D();
+      // Build curve path (stroke) and matching fill path (closed to baseline).
+      const curvePath = new Path2D();
       const fillPath = new Path2D();
-      if (crowdPoints.length > 0) {
-        crowdPath.moveTo(0, baseline);
-        crowdPath.lineTo(crowdPoints[0].x, crowdPoints[0].y);
+      if (curvePoints.length > 0) {
+        curvePath.moveTo(0, baseline);
+        curvePath.lineTo(curvePoints[0].x, curvePoints[0].y);
         fillPath.moveTo(0, baseline);
-        fillPath.lineTo(crowdPoints[0].x, crowdPoints[0].y);
-        for (let i = 0; i < crowdPoints.length - 1; i += 1) {
-          const curr = crowdPoints[i];
-          const next = crowdPoints[i + 1];
+        fillPath.lineTo(curvePoints[0].x, curvePoints[0].y);
+        for (let i = 0; i < curvePoints.length - 1; i += 1) {
+          const curr = curvePoints[i];
+          const next = curvePoints[i + 1];
           const cpx = (curr.x + next.x) / 2;
           const cpy = (curr.y + next.y) / 2;
-          crowdPath.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
+          curvePath.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
           fillPath.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
         }
-        const last = crowdPoints[crowdPoints.length - 1];
-        crowdPath.lineTo(last.x, last.y);
-        crowdPath.lineTo(rect.width, baseline);
+        const last = curvePoints[curvePoints.length - 1];
+        curvePath.lineTo(last.x, last.y);
+        curvePath.lineTo(rect.width, baseline);
         fillPath.lineTo(last.x, last.y);
         fillPath.lineTo(rect.width, baseline);
         fillPath.closePath();
       }
 
-      // ── User contributions: per-moment orange extensions ──
-      // For each moment where the user has fired (or is firing), compute how
-      // much ADDITIONAL height rises above the crowd curve's y at that moment.
-      // Capped at bar top (cappedTop = 2 with a little headroom).
-      const userContributions: Array<{ momentIdx: number; extraHeight: number; cappedTop: number }> = [];
+      const glows: Array<{ momentIdx: number; alpha: number }> = [];
       for (let i = 0; i < moments.length; i += 1) {
-        const userW = getUserWeight(i, now);
-        if (userW <= 0) continue;
-        const pt = crowdPoints[i];
-        if (!pt) continue;
-        // Same normalization scale as crowd — 1 unit of user weight = 1 unit
-        // of crowd weight visually. This means on a very hot crowd moment
-        // where the curve is already near bar-top, your fire has little room.
-        // That's honest: you can't move the needle much where the crowd has
-        // already filled the space.
-        const addHeightNormalized = Math.log1p(userW) / Math.log1p(maxCrowdFire);
-        const requestedHeight = addHeightNormalized * maxLineHeight;
-        const availableAboveCrowd = pt.y - 2; // leave 2px at bar top
-        const actualHeight = Math.max(0, Math.min(requestedHeight, availableAboveCrowd));
-        const cappedTop = pt.y - actualHeight;
-        userContributions.push({
-          momentIdx: i,
-          extraHeight: actualHeight,
-          cappedTop,
-        });
+        const lastFireTime = userFireTimesRef.current[i];
+        if (typeof lastFireTime !== "number") continue;
+        const elapsed = now - lastFireTime;
+        if (elapsed < 0 || elapsed > GLOW_DURATION) continue;
+        const activeHold = activeHoldMomentRef.current === i && holdStartTimeRef.current > 0;
+        const alpha = activeHold ? 0.85 : 0.7 * (1 - elapsed / GLOW_DURATION);
+        if (alpha > 0) glows.push({ momentIdx: i, alpha });
       }
 
-      return { crowdPoints, crowdPath, fillPath, maxCrowdFire, hottestCrowdIdx, userContributions };
+      return { curvePoints, curvePath, fillPath, maxCombinedFire, hottestCrowdIdx, glows };
     };
 
     const loop = () => {
@@ -320,6 +299,14 @@ export function FmlyBar({
       const releaseBucket = releaseDecay
         ? Math.floor((now - releaseDecay.releaseTime) / 50)
         : 0;
+      let hasActiveGlow = false;
+      for (const fireTime of Object.values(userFireTimesRef.current)) {
+        if (now - fireTime <= GLOW_DURATION) {
+          hasActiveGlow = true;
+          break;
+        }
+      }
+      const glowBucket = hasActiveGlow ? Math.floor(now / 50) : 0;
 
       // Cache invalidation: rebuild when any input that affects geometry changes.
       // During idle playback with no user interaction, NONE of these change and
@@ -334,18 +321,19 @@ export function FmlyBar({
         || cached.holdIdx !== holdIdx
         || cached.holdBucket !== holdBucket
         || cached.releaseIdx !== releaseIdx
-        || cached.releaseBucket !== releaseBucket;
+        || cached.releaseBucket !== releaseBucket
+        || (hasActiveGlow && cached.glowBucket !== glowBucket);
 
       let curve = cached;
       if (needsRebuild) {
         const built = buildCurve(rect, now);
         curve = {
-          crowdPoints: built.crowdPoints,
-          crowdPath: built.crowdPath,
+          curvePoints: built.curvePoints,
+          curvePath: built.curvePath,
           fillPath: built.fillPath,
-          maxCrowdFire: built.maxCrowdFire,
+          maxCombinedFire: built.maxCombinedFire,
           hottestCrowdIdx: built.hottestCrowdIdx,
-          userContributions: built.userContributions,
+          glows: built.glows,
           width: rect.width,
           counts: momentFireCounts,
           userFires: userFiresRef.current,
@@ -353,6 +341,7 @@ export function FmlyBar({
           holdBucket,
           releaseIdx,
           releaseBucket,
+          glowBucket,
         };
         cachedCurveRef.current = curve;
       }
@@ -366,11 +355,11 @@ export function FmlyBar({
 
       // ── 2. Green winner shade at the crowd's #1 moment's segment ──
       // Winner is crowd-only — user fires never flip the crown.
-      if (curve.hottestCrowdIdx >= 0 && curve.maxCrowdFire > 1) {
+      if (curve.hottestCrowdIdx >= 0 && getCrowdWeight(curve.hottestCrowdIdx) > 1) {
         const idx = curve.hottestCrowdIdx;
-        const p = curve.crowdPoints[idx];
-        const prev = curve.crowdPoints[idx - 1];
-        const next = curve.crowdPoints[idx + 1];
+        const p = curve.curvePoints[idx];
+        const prev = curve.curvePoints[idx - 1];
+        const next = curve.curvePoints[idx + 1];
         const xLeft = prev ? (prev.x + p.x) / 2 : 0;
         const xRight = next ? (p.x + next.x) / 2 : rect.width;
 
@@ -384,47 +373,51 @@ export function FmlyBar({
         ctx.restore();
       }
 
-      // ── 3. White crowd curve stroke — the map of FMLY heat ──
+      // ── 3. Warm glow under recently-fired segments ──
+      for (const glow of curve.glows) {
+        const idx = glow.momentIdx;
+        const p = curve.curvePoints[idx];
+        if (!p) continue;
+        const prev = curve.curvePoints[idx - 1];
+        const next = curve.curvePoints[idx + 1];
+        const xLeft = prev ? (prev.x + p.x) / 2 : 0;
+        const xRight = next ? (p.x + next.x) / 2 : rect.width;
+        if (xRight <= xLeft) continue;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(xLeft, 0, xRight - xLeft, rect.height);
+        ctx.clip();
+        ctx.fillStyle = `rgba(255, 140, 40, ${glow.alpha * 0.45})`;
+        ctx.fill(curve.fillPath);
+        ctx.restore();
+      }
+
+      // ── 4. Unified curve stroke + glow-highlighted segments ──
       ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
       ctx.lineWidth = 1.5;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
-      ctx.stroke(curve.crowdPath);
-
-      // ── 4. Orange user-fire extensions, rising above the crowd curve ──
-      // Drawn per-moment as a segment fill from the crowd's y up to cappedTop.
-      // Shape: the crowd's existing curve from xLeft to xRight, with the
-      // top pushed upward by extraHeight. Simplest correct approximation: a
-      // rounded-top rectangle at the moment's x, width spanning the segment.
-      for (const contrib of curve.userContributions) {
-        const idx = contrib.momentIdx;
-        const p = curve.crowdPoints[idx];
+      ctx.stroke(curve.curvePath);
+      for (const glow of curve.glows) {
+        const idx = glow.momentIdx;
+        const p = curve.curvePoints[idx];
         if (!p) continue;
-        const prev = curve.crowdPoints[idx - 1];
-        const next = curve.crowdPoints[idx + 1];
+        const prev = curve.curvePoints[idx - 1];
+        const next = curve.curvePoints[idx + 1];
         const xLeft = prev ? (prev.x + p.x) / 2 : 0;
         const xRight = next ? (p.x + next.x) / 2 : rect.width;
-        const width = xRight - xLeft;
-        if (width <= 0) continue;
-
-        ctx.fillStyle = "rgba(255, 140, 40, 0.50)";
-        // Rounded top-only rectangle: straight sides, flat bottom at crowd y,
-        // rounded top at cappedTop. If extraHeight is tiny (< 2px), just draw
-        // a flat fill to avoid degenerate arcs.
-        if (contrib.extraHeight < 2) {
-          ctx.fillRect(xLeft, contrib.cappedTop, width, p.y - contrib.cappedTop);
-        } else {
-          const r = Math.min(4, width / 2, contrib.extraHeight);
-          ctx.beginPath();
-          ctx.moveTo(xLeft, p.y);
-          ctx.lineTo(xLeft, contrib.cappedTop + r);
-          ctx.quadraticCurveTo(xLeft, contrib.cappedTop, xLeft + r, contrib.cappedTop);
-          ctx.lineTo(xRight - r, contrib.cappedTop);
-          ctx.quadraticCurveTo(xRight, contrib.cappedTop, xRight, contrib.cappedTop + r);
-          ctx.lineTo(xRight, p.y);
-          ctx.closePath();
-          ctx.fill();
-        }
+        if (xRight <= xLeft) continue;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(xLeft, 0, xRight - xLeft, rect.height);
+        ctx.clip();
+        ctx.strokeStyle = `rgba(255, 160, 60, ${glow.alpha * 0.7})`;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.stroke(curve.curvePath);
+        ctx.restore();
       }
 
       // ── 5. Playhead dot at top of bar ──
@@ -457,6 +450,7 @@ export function FmlyBar({
   const addUserFire = (idx: number, holdMs: number) => {
     if (idx < 0) return;
     userFiresRef.current[idx] = (userFiresRef.current[idx] ?? 0) + holdMs;
+    userFireTimesRef.current[idx] = performance.now();
   };
 
   const handleFireTap = useCallback(() => {
