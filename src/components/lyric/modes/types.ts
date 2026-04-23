@@ -20,6 +20,11 @@ export interface Comment {
   line_index: number | null;
   created_at: string;
   user_id: string | null;
+  parent_comment_id: string | null;
+  reactions: {
+    emojiCounts: Record<string, number>;
+    userReactions: string[];
+  };
 }
 
 /**
@@ -60,6 +65,13 @@ export interface ModeContext {
   muted: boolean;
   showMuteIndicator: boolean;
 
+  momentsModeState: {
+    expandedMomentIdx: number | null;
+    setExpandedMomentIdx: (idx: number | null) => void;
+    replyTargetId: string | null;
+    setReplyTargetId: (id: string | null) => void;
+  };
+
   // — State setters —
   setCardMode: (mode: CardMode) => void;
   setComments: Dispatch<SetStateAction<Comment[]>>;
@@ -70,6 +82,8 @@ export interface ModeContext {
   onFireMoment: (lineIndex: number, timeSec: number, holdMs: number) => void;
   onPlayLine: (startSec: number, endSec: number) => void;
   onCommentAdded: (comment: Comment) => void;
+  onCommentReply: (parentCommentId: string, text: string, momentIndex: number) => void;
+  onCommentReact: (commentId: string, emoji: string, toggle: boolean) => void;
   /** True when the embed container is in native or CSS-pseudo fullscreen. */
   isFullscreen: boolean;
   /** Toggles fullscreen on the embed container. Uses native Fullscreen API
