@@ -27,6 +27,9 @@ const MODEL_OPTIONS = [
   { value: "openai/gpt-5", label: "GPT-5" },
   { value: "openai/gpt-5-mini", label: "GPT-5 Mini" },
   { value: "openai/gpt-5.2", label: "GPT-5.2" },
+  { value: "xai/grok-4", label: "Grok 4 (xAI)" },
+  { value: "xai/grok-4-fast", label: "Grok 4 Fast (xAI)" },
+  { value: "xai/grok-2-image", label: "Grok 2 Image (xAI)" },
 ];
 
 const MODEL_PROMPT_CONFIGS: ModelPromptConfig[] = [
