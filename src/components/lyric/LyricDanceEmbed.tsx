@@ -1103,7 +1103,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         artistName={artistName}
         songTitle={songTitle}
         spotifyArtistId={spotifyArtistId}
-        lyricDanceUrl={lyricDanceUrl}
         menuSlot={live ? menuSlot : undefined}
         isVerified={isVerified}
         userId={userId}
