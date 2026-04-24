@@ -52,7 +52,6 @@ export const LyricDanceShell = memo(function LyricDanceShell({
         artistName={artistName}
         songTitle={songTitle}
         spotifyArtistId={spotifyArtistId}
-        lyricDanceUrl={lyricDanceUrl}
         menuSlot={undefined}
         isVerified={isVerified}
         userId={userId}

@@ -244,7 +244,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   useEffect(() => {
     // ── SUSPEND: live went false → keep player alive ──
     if (!live) {
-      if (playerRef.current && !playerRef.current.destroyed) {
+      if (playerRef.current && !playerRef.current.isDestroyed) {
         playerRef.current.suspend();
       }
       setPlayerReady(false);
@@ -264,7 +264,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
 
     // ── WARM RESUME: player exists and isn't destroyed ──
-    if (playerRef.current && !playerRef.current.destroyed) {
+    if (playerRef.current && !playerRef.current.isDestroyed) {
       playerRef.current.resume();
       setPlayer(playerRef.current);
       setPlayerReady(true);
@@ -337,7 +337,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   // Destroy player on unmount (regardless of live state)
   useEffect(() => {
     return () => {
-      if (playerRef.current && !playerRef.current.destroyed) {
+      if (playerRef.current && !playerRef.current.isDestroyed) {
         playerRef.current.destroy();
         playerRef.current = null;
       }
@@ -702,7 +702,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
     // Clear active region so the full timeline is scrubbable
     // (guard prevents expensive scene recompile on every drag tick)
-    const hasActiveRegion = player.data.region_start != null || player.data.region_end != null;
+    const hasActiveRegion = player.payload.region_start != null || player.payload.region_end != null;
     if (hasActiveRegion) {
       player.setRegion(undefined, undefined);
     }

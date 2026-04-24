@@ -1620,6 +1620,16 @@ export class LyricDancePlayer {
   private songEndSec = 0;
   playing = false;
   private destroyed = false;
+
+  /** Read-only accessor: whether the player has been destroyed. */
+  get isDestroyed(): boolean {
+    return this.destroyed;
+  }
+
+  /** Read-only accessor: underlying lyric dance data payload. */
+  get payload(): LyricDanceData {
+    return this.data;
+  }
   private ambientParticleEngine: ParticleEngine | null = null;
   private activeSectionIndex = -999;
   private _activeEffects: SectionEffectsConfig = DEFAULT_EFFECTS;
