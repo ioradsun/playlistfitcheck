@@ -4564,17 +4564,32 @@ export class LyricDancePlayer {
     const cd = this.payload?.cinematic_direction as unknown as Record<string, unknown> | null;
     const sections = (cd?.sections as any[]) ?? [];
     this._kenBurnsParams = this.chapterImages.map((_, i) => {
-      // Center-zoom only — no panning. Pulse enlarges, never shows edges.
-      // zoomStart > 1.0 ensures the image is always overscanned.
-      // zoomEnd slightly higher = gentle outward drift over the section.
-      return {
-        zoomStart: 1.08,
-        zoomEnd: 1.12,
-        panStartX: 0,
-        panStartY: 0,
-        panEndX: 0,
-        panEndY: 0,
-      };
+      const sectionMood = sections[i]?.visualMood as string | undefined;
+      const intent = getMoodGrade(sectionMood).motionIntent;
+      // Deterministic per-section lateral offset — alternates direction so
+      // adjacent sections don't drift the same way.
+      const lateralSign = i % 2 === 0 ? 1 : -1;
+      switch (intent) {
+        case 'push-in':
+          return { zoomStart: 1.05, zoomEnd: 1.16, panStartX: 0, panStartY: 0, panEndX: 0, panEndY: 0 };
+        case 'pull-out':
+          return { zoomStart: 1.16, zoomEnd: 1.05, panStartX: 0, panStartY: 0, panEndX: 0, panEndY: 0 };
+        case 'drift-up':
+          return { zoomStart: 1.08, zoomEnd: 1.12, panStartX: 0, panStartY: 0.02, panEndX: 0, panEndY: -0.02 };
+        case 'drift-down':
+          return { zoomStart: 1.08, zoomEnd: 1.12, panStartX: 0, panStartY: -0.02, panEndX: 0, panEndY: 0.02 };
+        case 'drift-lateral':
+          return { zoomStart: 1.08, zoomEnd: 1.10, panStartX: -0.03 * lateralSign, panStartY: 0, panEndX: 0.03 * lateralSign, panEndY: 0 };
+        case 'breathing':
+          return { zoomStart: 1.06, zoomEnd: 1.12, panStartX: 0, panStartY: 0, panEndX: 0, panEndY: 0 };
+        case 'handheld':
+          return { zoomStart: 1.10, zoomEnd: 1.12, panStartX: -0.01 * lateralSign, panStartY: 0.01, panEndX: 0.01 * lateralSign, panEndY: -0.01 };
+        case 'slow-zoom':
+          return { zoomStart: 1.04, zoomEnd: 1.10, panStartX: 0, panStartY: 0, panEndX: 0, panEndY: 0 };
+        case 'stable':
+        default:
+          return { zoomStart: 1.06, zoomEnd: 1.08, panStartX: 0, panStartY: 0, panEndX: 0, panEndY: 0 };
+      }
     });
   }
 
