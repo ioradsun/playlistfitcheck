@@ -1085,7 +1085,19 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
 
   // Render
   return (
-    <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: "#0a0a0a" }}>
+    <div
+      ref={containerRef}
+      className="flex flex-col w-full h-full overflow-hidden"
+      style={
+        fullscreenMode === "pseudo" ? {
+          position: "fixed",
+          inset: 0,
+          zIndex: 9999,
+          background: "#000",
+          flex: "none",
+        } : { background: "#0a0a0a" }
+      }
+    >
       <PlayerHeader
         avatarUrl={avatarUrl}
         artistName={artistName}
@@ -1102,15 +1114,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       />
 
       <div
-        ref={containerRef}
         className="relative flex-1 min-h-0 overflow-hidden"
-        style={fullscreenMode === "pseudo" ? {
-          position: "fixed",
-          inset: 0,
-          zIndex: 9999,
-          background: "#000",
-          flex: "none",
-        } : undefined}
         onClick={cardMode === "listen" ? handleCanvasTap : undefined}
       >
         <canvas
