@@ -7,7 +7,6 @@ import { fetchSessionFires } from "@/lib/fire";
 import { createFireHold } from "@/lib/fireHold";
 
 const BAR_HEIGHT = 44;
-const GLOW_DURATION = 1500;
 
 interface FmlyBarProps {
   moments: Moment[];
@@ -57,7 +56,6 @@ export function FmlyBar({
 
   const fireHoldControllerRef = useRef<ReturnType<typeof createFireHold> | null>(null);
   const userFiresRef = useRef<Record<number, number>>({});
-  const userFireTimesRef = useRef<Record<number, number>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Memoization for the curve geometry — rebuilt only when crowd data, user
   // fire data, width, or hold state changes. Without this, the curve would
@@ -65,10 +63,9 @@ export function FmlyBar({
   const cachedCurveRef = useRef<{
     curvePoints: Array<{ x: number; y: number; momentIdx: number; xLeft: number; xRight: number }>;
     curvePath: Path2D;
-    fillPath: Path2D;
     maxCombinedFire: number;
     hottestCrowdIdx: number;
-    glows: Array<{ momentIdx: number; alpha: number }>;
+    userFiredSegments: Set<number>;
     width: number;
     counts: Record<number, number>;
     userFires: Record<number, number>;
@@ -76,7 +73,6 @@ export function FmlyBar({
     holdBucket: number;
     releaseIdx: number;
     releaseBucket: number;
-    glowBucket: number;
   } | null>(null);
   const prevMaxFireRef = useRef(1);
   const releaseDecayRef = useRef<{ momentIdx: number; peakBoost: number; releaseTime: number } | null>(null);
@@ -178,7 +174,7 @@ export function FmlyBar({
     };
   }, [player]);
 
-  // ── Canvas render loop: unified curve + green winner + user glow + playhead ─
+  // ── Canvas render loop: unified curve + green winner + user segments + playhead ─
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !moments.length) return;
@@ -268,42 +264,32 @@ export function FmlyBar({
         curvePoints[i].xRight = next ? (curvePoints[i].x + next.x) / 2 : rect.width;
       }
 
-      // Build curve path (stroke) and matching fill path (closed to baseline).
+      // Build curve path (stroke).
       const curvePath = new Path2D();
-      const fillPath = new Path2D();
       if (curvePoints.length > 0) {
         curvePath.moveTo(0, baseline);
         curvePath.lineTo(curvePoints[0].x, curvePoints[0].y);
-        fillPath.moveTo(0, baseline);
-        fillPath.lineTo(curvePoints[0].x, curvePoints[0].y);
         for (let i = 0; i < curvePoints.length - 1; i += 1) {
           const curr = curvePoints[i];
           const next = curvePoints[i + 1];
           const cpx = (curr.x + next.x) / 2;
           const cpy = (curr.y + next.y) / 2;
           curvePath.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
-          fillPath.quadraticCurveTo(curr.x, curr.y, cpx, cpy);
         }
         const last = curvePoints[curvePoints.length - 1];
         curvePath.lineTo(last.x, last.y);
         curvePath.lineTo(rect.width, baseline);
-        fillPath.lineTo(last.x, last.y);
-        fillPath.lineTo(rect.width, baseline);
-        fillPath.closePath();
       }
 
-      const glows: Array<{ momentIdx: number; alpha: number }> = [];
-      for (let i = 0; i < moments.length; i += 1) {
-        const lastFireTime = userFireTimesRef.current[i];
-        if (typeof lastFireTime !== "number") continue;
-        const elapsed = now - lastFireTime;
-        if (elapsed < 0 || elapsed > GLOW_DURATION) continue;
-        const activeHold = activeHoldMomentRef.current === i && holdStartTimeRef.current > 0;
-        const alpha = activeHold ? 0.85 : 0.7 * (1 - elapsed / GLOW_DURATION);
-        if (alpha > 0) glows.push({ momentIdx: i, alpha });
+      // User-fired segments are persistent for the session — the stroke stays orange
+      // wherever the user has committed fires. Driven directly by userFiresRef.
+      const userFiredSegments = new Set<number>();
+      for (const key of Object.keys(userFiresRef.current)) {
+        const idx = Number(key);
+        if ((userFiresRef.current[idx] ?? 0) > 0) userFiredSegments.add(idx);
       }
 
-      return { curvePoints, curvePath, fillPath, maxCombinedFire, hottestCrowdIdx, glows };
+      return { curvePoints, curvePath, maxCombinedFire, hottestCrowdIdx, userFiredSegments };
     };
 
     const loop = () => {
@@ -323,15 +309,6 @@ export function FmlyBar({
       const releaseBucket = releaseDecay
         ? Math.floor((now - releaseDecay.releaseTime) / 50)
         : 0;
-      let hasActiveGlow = false;
-      for (const fireTime of Object.values(userFireTimesRef.current)) {
-        if (now - fireTime <= GLOW_DURATION) {
-          hasActiveGlow = true;
-          break;
-        }
-      }
-      const glowBucket = hasActiveGlow ? Math.floor(now / 50) : 0;
-
       // Cache invalidation: rebuild when any input that affects geometry changes.
       // During idle playback with no user interaction, NONE of these change and
       // the cached paths are reused frame after frame — the draw loop becomes
@@ -345,8 +322,7 @@ export function FmlyBar({
         || cached.holdIdx !== holdIdx
         || cached.holdBucket !== holdBucket
         || cached.releaseIdx !== releaseIdx
-        || cached.releaseBucket !== releaseBucket
-        || (hasActiveGlow && cached.glowBucket !== glowBucket);
+        || cached.releaseBucket !== releaseBucket;
 
       let curve = cached;
       if (needsRebuild) {
@@ -354,10 +330,9 @@ export function FmlyBar({
         curve = {
           curvePoints: built.curvePoints,
           curvePath: built.curvePath,
-          fillPath: built.fillPath,
           maxCombinedFire: built.maxCombinedFire,
           hottestCrowdIdx: built.hottestCrowdIdx,
-          glows: built.glows,
+          userFiredSegments: built.userFiredSegments,
           width: rect.width,
           counts: momentFireCounts,
           userFires: userFiresRef.current,
@@ -365,7 +340,6 @@ export function FmlyBar({
           holdBucket,
           releaseIdx,
           releaseBucket,
-          glowBucket,
         };
         cachedCurveRef.current = curve;
       }
@@ -373,67 +347,40 @@ export function FmlyBar({
 
       ctx.clearRect(0, 0, rect.width, rect.height);
 
-      // ── 1. Heat floor: subtle white wash under entire curve ──
-      ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
-      ctx.fill(curve.fillPath);
-
-      // ── 2. Green winner shade at the crowd's #1 moment's segment ──
-      // Winner is crowd-only — user fires never flip the crown.
-      if (curve.hottestCrowdIdx >= 0 && getCrowdWeight(curve.hottestCrowdIdx) > 1) {
-        const idx = curve.hottestCrowdIdx;
-        const p = curve.curvePoints[idx];
-        if (!p) {
-          // no-op
-        } else {
-
-          // Clipped fill under the crowd curve, bounded to this moment's segment.
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(p.xLeft, 0, p.xRight - p.xLeft, rect.height);
-          ctx.clip();
-          ctx.fillStyle = "rgba(74, 222, 128, 0.30)";
-          ctx.fill(curve.fillPath);
-          ctx.restore();
-        }
-      }
-
-      // ── 3. Warm glow under recently-fired segments ──
-      for (const glow of curve.glows) {
-        const idx = glow.momentIdx;
-        const p = curve.curvePoints[idx];
-        if (!p) continue;
-        if (p.xRight <= p.xLeft) continue;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(p.xLeft, 0, p.xRight - p.xLeft, rect.height);
-        ctx.clip();
-        ctx.fillStyle = `rgba(255, 140, 40, ${glow.alpha * 0.45})`;
-        ctx.fill(curve.fillPath);
-        ctx.restore();
-      }
-
-      // ── 4. Unified curve stroke + glow-highlighted segments ──
+      // ── White base stroke — crowd shape across all moments ──────────────
       ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
       ctx.lineWidth = 1.5;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       ctx.stroke(curve.curvePath);
-      for (const glow of curve.glows) {
-        const idx = glow.momentIdx;
+
+      // ── Helper to stroke only a specific moment's segment by clipping ────
+      const strokeSegment = (idx: number, strokeStyle: string) => {
         const p = curve.curvePoints[idx];
-        if (!p) continue;
-        if (p.xRight <= p.xLeft) continue;
+        if (!p) return;
+        if (p.xRight <= p.xLeft) return;
         ctx.save();
         ctx.beginPath();
         ctx.rect(p.xLeft, 0, p.xRight - p.xLeft, rect.height);
         ctx.clip();
-        ctx.strokeStyle = `rgba(255, 160, 60, ${glow.alpha * 0.7})`;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = 1.5;
         ctx.lineJoin = "round";
         ctx.lineCap = "round";
         ctx.stroke(curve.curvePath);
         ctx.restore();
+      };
+
+      // ── Green winner — the crowd's #1 moment, opaque and confident ──────
+      if (curve.hottestCrowdIdx >= 0 && getCrowdWeight(curve.hottestCrowdIdx) > 1) {
+        strokeSegment(curve.hottestCrowdIdx, "rgba(74, 222, 128, 0.9)");
+      }
+
+      // ── Orange user-fired segments — persistent record of user's fires ──
+      // Drawn AFTER green so that when the user's fire lands on the crowd
+      // winner, orange visually takes precedence (most recent, most personal).
+      for (const idx of curve.userFiredSegments) {
+        strokeSegment(idx, "rgba(255, 140, 40, 0.9)");
       }
 
       // ── 5. Playhead dot at top of bar ──
@@ -466,7 +413,6 @@ export function FmlyBar({
   const addUserFire = (idx: number, holdMs: number) => {
     if (idx < 0) return;
     userFiresRef.current[idx] = (userFiresRef.current[idx] ?? 0) + holdMs;
-    userFireTimesRef.current[idx] = performance.now();
   };
 
   const commitFire = useCallback((rawHoldMs: number) => {
