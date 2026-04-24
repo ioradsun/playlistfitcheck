@@ -175,8 +175,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
   const [fireUserMap, setFireUserMap] = useState<Record<number, string[]>>({});
   const [fireAnonCount, setFireAnonCount] = useState<Record<number, number>>({});
   const [comments, setComments] = useState<Comment[]>([]);
-  // Mutually exclusive fullscreen state — "off" | "native" (browser API) | "pseudo" (CSS fallback)
-  const [fullscreenMode, setFullscreenMode] = useState<"off" | "native" | "pseudo">("off");
   const [profileMap, setProfileMap] = useState<Record<string, { avatarUrl: string | null; displayName: string | null }>>({});
   const [showMuteIndicator, setShowMuteIndicator] = useState(false);
   const [cardMode, setCardMode] = useState<CardMode>("listen");
@@ -611,74 +609,6 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     player.setMoments(moments);
   }, [player, fireHeat, moments]);
 
-  // Track native Fullscreen API state changes (ESC key, OS-level exit).
-  // Both standard and webkit events covered — older Safari dispatches the webkit variant.
-  useEffect(() => {
-    const sync = () => {
-      const isNative = document.fullscreenElement === containerRef.current
-        || (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement === containerRef.current;
-      setFullscreenMode((curr) => {
-        if (isNative) return "native";
-        if (curr === "native") return "off"; // browser exited native
-        return curr; // preserve "pseudo" or "off"
-      });
-    };
-    document.addEventListener("fullscreenchange", sync);
-    document.addEventListener("webkitfullscreenchange", sync);
-    return () => {
-      document.removeEventListener("fullscreenchange", sync);
-      document.removeEventListener("webkitfullscreenchange", sync);
-    };
-  }, []);
-
-  // Pseudo-fullscreen side effects: ESC-to-exit + background scroll lock.
-  // Both share the same "while in pseudo mode" lifecycle, so they're one effect.
-  useEffect(() => {
-    if (fullscreenMode !== "pseudo") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFullscreenMode("off");
-    };
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [fullscreenMode]);
-
-  const onToggleFullscreen = useCallback(async () => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    if (fullscreenMode === "native") {
-      try {
-        await document.exitFullscreen();
-      } catch {
-        // Ignore — fullscreenchange listener will sync state.
-      }
-      return;
-    }
-    if (fullscreenMode === "pseudo") {
-      setFullscreenMode("off");
-      return;
-    }
-
-    // fullscreenMode === "off" — try native Fullscreen API first.
-    // HTMLElement.requestFullscreen is standard; webkitRequestFullscreen covers older Safari.
-    const req = el.requestFullscreen?.bind(el)
-      ?? (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen?.bind(el);
-    if (req) {
-      try {
-        await req();
-        return;
-      } catch {
-        // Native rejected (iOS Safari on non-video elements). Fall through.
-      }
-    }
-    setFullscreenMode("pseudo");
-  }, [fullscreenMode]);
-
   // Comments state + hydration + realtime
   useEffect(() => {
     if (!live || !danceId) return;
@@ -1065,14 +995,12 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     onCommentReact: (commentId, emoji, toggle) => {
       console.log("[Moments] onCommentReact pending backend", { commentId, emoji, toggle });
     },
-    isFullscreen: fullscreenMode !== "off",
-    onToggleFullscreen,
   }), [
     cardMode, live, playerReady, player, fetchedData, danceId, postId, lyricDanceUrl,
     spotifyTrackId, userId, moments, fireHeat, fireUserMap, fireAnonCount,
     profileMap, comments, currentTimeSec, muted, showMuteIndicator, momentsModeState,
     setCardMode, setComments, handleCanvasTap, seekOnly, playRegion,
-    fullscreenMode, onToggleFullscreen, insertMomentComment,
+    insertMomentComment,
   ]);
 
   const disabledModes = useMemo(() => {
@@ -1088,15 +1016,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     <div
       ref={containerRef}
       className="flex flex-col w-full h-full overflow-hidden"
-      style={
-        fullscreenMode === "pseudo" ? {
-          position: "fixed",
-          inset: 0,
-          zIndex: 9999,
-          background: "#000",
-          flex: "none",
-        } : { background: "#0a0a0a" }
-      }
+      style={{ background: "#0a0a0a" }}
     >
       <PlayerHeader
         avatarUrl={avatarUrl}

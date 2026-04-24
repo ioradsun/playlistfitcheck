@@ -84,11 +84,6 @@ export interface ModeContext {
   onCommentAdded: (comment: Comment) => void;
   onCommentReply: (parentCommentId: string, text: string, momentIndex: number) => void;
   onCommentReact: (commentId: string, emoji: string, toggle: boolean) => void;
-  /** True when the embed container is in native or CSS-pseudo fullscreen. */
-  isFullscreen: boolean;
-  /** Toggles fullscreen on the embed container. Uses native Fullscreen API
-   *  with CSS pseudo-fullscreen fallback for iOS Safari. */
-  onToggleFullscreen: () => void;
 }
 
 /**
