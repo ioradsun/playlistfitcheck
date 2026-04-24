@@ -94,6 +94,24 @@ async function parseInput(req: Request): Promise<ParsedInput> {
 interface Word { word: string; start: number; end: number }
 interface Line { start: number; end: number; text: string }
 
+/**
+ * Non-speech audio event tokens emitted by transcription models that must
+ * not enter the lyric word stream. Scribe emits `[singing]`, `[music]`,
+ * `[applause]`, etc. with type="audio_event" and sometimes emits
+ * parenthesized variants like `(music)` as type="word".
+ *
+ * Returns true when the token should be dropped.
+ */
+function isAudioEventToken(raw: unknown, text: string): boolean {
+  const r = raw as { type?: string } | null | undefined;
+  if (r?.type === "audio_event") return true;
+  const t = text.trim();
+  if (!t) return true;
+  // Bracketed or parenthesized non-lyric markers: (music), [singing], {crowd}
+  if (/^[\(\[\{].*[\)\]\}]$/.test(t)) return true;
+  return false;
+}
+
 function wordsToLines(words: Word[], maxGap = 0.7, maxWords = 12): Line[] {
   if (!words.length) return [];
   const lines: Line[] = [];
@@ -182,12 +200,13 @@ async function transcribeScribe(input: ParsedInput): Promise<any> {
   const rawWords = Array.isArray(data.words) ? data.words : [];
   const words: Word[] = rawWords
     .filter((w: any) => w.type !== "spacing")
+    .filter((w: any) => !isAudioEventToken(w, String(w.text ?? w.word ?? "")))
     .map((w: any) => ({
       word: String(w.text ?? w.word ?? "").trim(),
       start: Number(w.start ?? 0),
       end: Number(w.end ?? w.start ?? 0),
     }))
-    .filter((w: Word) => w.word.length > 0);
+    .filter((w: Word) => w.word.length > 0 && !isAudioEventToken(null, w.word));
 
   const lines = wordsToLines(words);
   return {
@@ -234,11 +253,13 @@ async function transcribeAssembly(input: ParsedInput): Promise<any> {
   }
   if (result?.status !== "completed") throw new Error("AssemblyAI timed out");
 
-  const words: Word[] = (result.words || []).map((w: any) => ({
-    word: String(w.text ?? "").trim(),
-    start: Number(w.start ?? 0) / 1000,
-    end: Number(w.end ?? 0) / 1000,
-  })).filter((w: Word) => w.word.length > 0);
+  const words: Word[] = (result.words || [])
+    .map((w: any) => ({
+      word: String(w.text ?? "").trim(),
+      start: Number(w.start ?? 0) / 1000,
+      end: Number(w.end ?? 0) / 1000,
+    }))
+    .filter((w: Word) => w.word.length > 0 && !isAudioEventToken(null, w.word));
 
   const lines = wordsToLines(words);
   return {
