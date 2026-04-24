@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, createContext, useContext, type ReactNode } from "react";
+import { useEffect, useState, useCallback, createContext, useContext, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { consumeAuthPrefetch } from "@/lib/prefetch";
 import { toast } from "sonner";
 import type { User, Session } from "@supabase/supabase-js";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface ProfileData {
   display_name: string | null;
@@ -29,12 +30,29 @@ const AuthContext = createContext<AuthContextType>({
   user: null, session: null, loading: true, roles: [], profile: null, refreshProfile: () => {},
 });
 
+function AuthUrlCleaner() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const hasAuthParam =
+      location.search.includes("code=") ||
+      location.hash.includes("access_token");
+    if (hasAuthParam) {
+      navigate("/fmly", { replace: true });
+    }
+  }, [location.search, location.hash, navigate]);
+
+  return null;
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<string[]>([]);
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const welcomeToastFiredRef = useRef<boolean>(false);
 
   const fetchRoles = async (userId: string) => {
     try {
@@ -64,16 +82,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setRoles([]);
         }
 
-        // If this is a SIGNED_IN event (e.g. from email verification), ensure loading is false
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
           setLoading(false);
-          // Clean up auth params from URL after verification and show welcome toast
-          if (window.location.search?.includes('code=') || window.location.hash?.includes('access_token')) {
-            window.history.replaceState({}, '', '/fmly');
-            if (event === 'SIGNED_IN') {
-              toast.success("Welcome to the FMly ♫");
-            }
-          }
+        }
+
+        if (event === "SIGNED_IN" && !welcomeToastFiredRef.current) {
+          welcomeToastFiredRef.current = true;
+          toast.success("Welcome to the FMly ♫");
         }
       }
     );
@@ -82,9 +97,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const initializeAuth = async () => {
       try {
         const prefetched = consumeAuthPrefetch();
-        const { data: { session } } = prefetched
-          ? await prefetched
-          : await supabase.auth.getSession();
+        const sessionPromise = prefetched ?? supabase.auth.getSession();
+        const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
+          setTimeout(() => resolve({ data: { session: null } }), 5000)
+        );
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
         if (!isMounted) return;
         setSession(session);
         setUser(session?.user ?? null);
@@ -125,6 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ user, session, loading, roles, profile, refreshProfile: fetchProfile }}>
+      <AuthUrlCleaner />
       {children}
     </AuthContext.Provider>
   );
