@@ -1627,7 +1627,7 @@ export class LyricDancePlayer {
   }
 
   /** Read-only accessor: underlying lyric dance data payload. */
-  get payload(): LyricDanceData {
+  get lyricData(): LyricDanceData {
     return this.data;
   }
   private ambientParticleEngine: ParticleEngine | null = null;

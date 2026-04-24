@@ -702,7 +702,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     }
     // Clear active region so the full timeline is scrubbable
     // (guard prevents expensive scene recompile on every drag tick)
-    const hasActiveRegion = player.payload.region_start != null || player.payload.region_end != null;
+    const hasActiveRegion = player.lyricData.region_start != null || player.lyricData.region_end != null;
     if (hasActiveRegion) {
       player.setRegion(undefined, undefined);
     }
