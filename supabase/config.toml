@@ -54,9 +54,6 @@ verify_jwt = false
 [functions.vibefit-generate]
 verify_jwt = false
 
-[functions.populate-artists]
-verify_jwt = false
-
 [functions.lyric-video-bg]
 verify_jwt = false
 

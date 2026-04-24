@@ -18,7 +18,6 @@ const CopyEditor = lazy(() => import("@/components/admin/CopyEditor").then((m) =
 const AiPromptsEditor = lazy(() => import("@/components/admin/AiPromptsEditor").then((m) => ({ default: m.AiPromptsEditor })));
 const PendingVerifications = lazy(() => import("@/components/admin/PendingVerifications").then((m) => ({ default: m.PendingVerifications })));
 const ToolsEditor = lazy(() => import("@/components/admin/ToolsEditor").then((m) => ({ default: m.ToolsEditor })));
-const FmlyArtists = lazy(() => import("@/components/admin/FmlyArtists").then((m) => ({ default: m.FmlyArtists })));
 const ReachDashboard = lazy(() =>
   import("@/components/admin/ReachDashboard").then((m) => ({
     default: m.ReachDashboard,
@@ -308,7 +307,6 @@ export default function Admin() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex flex-wrap gap-x-4 gap-y-1 max-w-3xl mb-2">
             <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="artists">Artists</TabsTrigger>
             <TabsTrigger value="reach">Reach</TabsTrigger>
             <TabsTrigger value="verify">Verify</TabsTrigger>
             <TabsTrigger value="tools">Tools</TabsTrigger>
@@ -438,15 +436,6 @@ export default function Admin() {
                 })}
               </div>
             </div>
-          </TabsContent>
-
-          {/* ── ARTISTS TAB ── */}
-          <TabsContent value="artists" className="mt-4">
-            {tab === "artists" && (
-              <Suspense fallback={<div className="py-10 flex justify-center"><Loader2 className="animate-spin text-primary" size={20} /></div>}>
-                <FmlyArtists />
-              </Suspense>
-            )}
           </TabsContent>
 
           {/* ── REACH TAB ── */}
