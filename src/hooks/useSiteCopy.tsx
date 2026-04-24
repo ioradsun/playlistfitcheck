@@ -5,6 +5,12 @@ import { consumeSiteCopyPrefetch, getCachedSiteCopy } from "@/lib/prefetch";
 // Default copy (fallback if DB not loaded yet)
 const DEFAULT_COPY: SiteCopy = {
   tools: {
+    fmly: {
+      label: "FMLY",
+      pill: "FMLY decides your song's 🔥 moments",
+      heading: "Your music. Their fire.",
+      cta: "Drop it",
+    },
     songfit: {
       label: "FMLY",
       pill: "See what your FMLY is making.",
