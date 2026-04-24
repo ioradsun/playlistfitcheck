@@ -19,7 +19,7 @@ const ALL_TOOLS = [
 const DEFAULT_ORDER = ALL_TOOLS.map(t => t.key);
 
 // ── LyricFit pipeline model types ─────────────────────────────────────────────
-type TranscriptionModel = "scribe";
+type TranscriptionModel = "scribe" | "grok";
 
 interface FeaturesState {
   crypto_tipping: boolean;
@@ -249,6 +249,7 @@ export function ToolsEditor() {
       await patchFeatures({ lyric_transcription_model: model });
       const labels: Record<TranscriptionModel, string> = {
         scribe: "Transcription → ElevenLabs Scribe",
+        grok: "Transcription → Grok STT (xAI)",
       };
       toast.success(labels[model]);
     } catch {
@@ -346,7 +347,15 @@ export function ToolsEditor() {
             onClick={() => setTranscriptionModel("scribe")}
             title="ElevenLabs Scribe v2"
             desc="Native word-level timestamps, diarization, audio event tagging. Requires ELEVENLABS_API_KEY."
-            badge="active"
+            badge={features.lyric_transcription_model === "scribe" ? "active" : undefined}
+          />
+          <RadioOption
+            active={features.lyric_transcription_model === "grok"}
+            disabled={savingKey === "lyric_transcription"}
+            onClick={() => setTranscriptionModel("grok")}
+            title="Grok STT (xAI)"
+            desc="Word-level timestamps via POST https://api.x.ai/v1/stt. Requires XAI_API_KEY."
+            badge={features.lyric_transcription_model === "grok" ? "active" : undefined}
           />
         </div>
       </div>
