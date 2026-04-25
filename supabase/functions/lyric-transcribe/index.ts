@@ -144,7 +144,7 @@ async function transcribeGrok(input: ParsedInput): Promise<any> {
   if (!key) throw new Error("XAI_API_KEY not configured");
 
   const fd = new FormData();
-  fd.append("file", new Blob([input.audio], { type: input.mime }), input.filename);
+  fd.append("file", new Blob([input.audio as BufferSource], { type: input.mime }), input.filename);
   fd.append("model", "grok-stt");
   fd.append("response_format", "verbose_json");
 
@@ -183,7 +183,7 @@ async function transcribeScribe(input: ParsedInput): Promise<any> {
   if (!key) throw new Error("ELEVENLABS_API_KEY not configured");
 
   const fd = new FormData();
-  fd.append("file", new Blob([input.audio], { type: input.mime }), input.filename);
+  fd.append("file", new Blob([input.audio as BufferSource], { type: input.mime }), input.filename);
   fd.append("model_id", "scribe_v1");
   fd.append("timestamps_granularity", "word");
 
@@ -226,7 +226,7 @@ async function transcribeAssembly(input: ParsedInput): Promise<any> {
   const upload = await fetch("https://api.assemblyai.com/v2/upload", {
     method: "POST",
     headers: { authorization: key, "content-type": "application/octet-stream" },
-    body: input.audio,
+    body: input.audio as BodyInit,
   });
   if (!upload.ok) throw new Error(`AssemblyAI upload ${upload.status}`);
   const { upload_url } = await upload.json();
