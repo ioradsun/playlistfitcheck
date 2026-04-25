@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { Navigate, useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy,
-  Camera, X, Check, Loader2, Bookmark, Heart, MessageCircle, BarChart2, Sparkles, Zap,
+  Camera, X, Check, Loader2, Flame, MessageCircle, BarChart2, Sparkles,
 } from "lucide-react";
 import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -19,15 +19,6 @@ import { ConnectWalletButton } from "@/components/crypto/ConnectWalletButton";
 import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import type { FmlyPost } from "@/components/fmly/types";
-import { PostCommentPanel } from "@/components/fmly/PostCommentPanel";
-
-interface ReviewSummary {
-  total: number;
-  topRatingPct: number;
-  topRatingLabel: string;
-  replayPct: number;
-}
-
 
 interface PublicProfileData {
   display_name: string | null;
@@ -38,128 +29,161 @@ interface PublicProfileData {
   is_verified: boolean;
 }
 
-interface SavedPost {
-  id: string;
-  post_id: string;
-  created_at: string;
-  feed_posts: {
-    id: string;
-    project_id: string | null;
-    caption: string;
-    lyric_projects: { title: string; album_art_url: string | null; spotify_track_id: string | null } | null;
-  } | null;
+interface ProfileViewState {
+  loading: boolean;
+  notFound: boolean;
+  profile: PublicProfileData | null;
+  roles: string[];
+  submissions: FmlyPost[];
+  playCountsByPostId: Record<string, number>;
 }
 
+const LOADING_SHELL = (
+  <div className="min-h-screen bg-background pt-20 flex items-center justify-center">
+    <p className="text-muted-foreground">Loading…</p>
+  </div>
+);
+
 const PublicProfile = () => {
-  const { userId } = useParams<{ userId: string }>();
-  const { user, profile: authProfile, refreshProfile } = useAuth();
+  const { userId: routeUserId } = useParams<{ userId: string }>();
+  const { user, loading: authLoading, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { features } = useSiteCopy();
   const fromMenu = !!(location.state as any)?.fromMenu;
-  
-  const [profile, setProfile] = useState<PublicProfileData | null>(null);
-  const [roles, setRoles] = useState<string[]>([]);
-  const [submissions, setSubmissions] = useState<FmlyPost[]>([]);
-  const [saveCounts, setSaveCounts] = useState<Record<string, number>>({});
-  const [reviewSummaries, setReviewSummaries] = useState<Record<string, ReviewSummary>>({});
-  const [notFound, setNotFound] = useState(false);
 
-  const isOwner = user?.id === userId;
+  const viewedUserId = routeUserId ?? user?.id ?? null;
+  const isOwner = !!(viewedUserId && user?.id === viewedUserId);
+
+  const [viewState, setViewState] = useState<ProfileViewState>({
+    loading: true,
+    notFound: false,
+    profile: null,
+    roles: [],
+    submissions: [],
+    playCountsByPostId: {},
+  });
 
   // Owner editing state
   const [editing, setEditing] = useState(false);
-  const [displayName, setDisplayName] = useState("");
-  const [bio, setBio] = useState("");
-  const [spotifyUrl, setSpotifyUrl] = useState("");
+  const [displayName, setDisplayName] = useState(() => "");
+  const [bio, setBio] = useState(() => "");
+  const [spotifyUrl, setSpotifyUrl] = useState(() => "");
   const [uploading, setUploading] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const [savedPosts, setSavedPosts] = useState<SavedPost[]>([]);
-  const [songTab, setSongTab] = useState<"mine" | "saved">("mine");
-  const [reviewSheetPostId, setReviewSheetPostId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
+    let isCancelled = false;
 
-    supabase.from("profiles").select("display_name, bio, avatar_url, spotify_embed_url, wallet_address, is_verified").eq("id", userId).single()
-      .then(({ data, error }) => {
-        if (error || !data) { setNotFound(true); return; }
-        setProfile(data as PublicProfileData);
-      });
-    supabase.from("user_roles").select("role").eq("user_id", userId)
-      .then(({ data }) => { setRoles(data?.map((r: any) => r.role) ?? []); });
-    supabase.from("feed_posts" as any)
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(50)
-      .then(async ({ data }) => {
-        if (!data) return;
-        const posts = data as unknown as FmlyPost[];
-        setSubmissions(posts);
-        const postIds = posts.map(p => p.id);
-        if (postIds.length === 0) return;
+    const loadProfile = async () => {
+      if (!viewedUserId) {
+        return;
+      }
 
-        // Fetch save counts
-        supabase.from("feed_saves" as any)
-          .select("post_id")
-          .in("post_id", postIds)
-          .then(({ data: saves }) => {
-            if (!saves) return;
-            const counts: Record<string, number> = {};
-            saves.forEach((s: any) => { counts[s.post_id] = (counts[s.post_id] ?? 0) + 1; });
-            setSaveCounts(counts);
+      setViewState(prev => ({ ...prev, loading: true, notFound: false }));
+
+      const [profileRes, rolesRes, postsRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("display_name, bio, avatar_url, spotify_embed_url, wallet_address, is_verified")
+          .eq("id", viewedUserId)
+          .single(),
+        supabase.from("user_roles").select("role").eq("user_id", viewedUserId),
+        supabase
+          .from("feed_posts" as any)
+          .select("*")
+          .eq("user_id", viewedUserId)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+
+      if (isCancelled) return;
+
+      if (profileRes.error || !profileRes.data) {
+        setViewState({
+          loading: false,
+          notFound: true,
+          profile: null,
+          roles: [],
+          submissions: [],
+          playCountsByPostId: {},
+        });
+        return;
+      }
+
+      const submissions = (postsRes.data as unknown as FmlyPost[]) ?? [];
+      const roles = rolesRes.data?.map((r: any) => r.role) ?? [];
+
+      // Optional bonus: aggregate lyric dance plays per post via project_id -> shareable_lyric_dances -> lyric_dance_plays
+      const playCountsByPostId: Record<string, number> = {};
+      const projectIds = Array.from(
+        new Set(submissions.map((s) => s.project_id).filter((id): id is string => !!id)),
+      );
+
+      if (projectIds.length > 0) {
+        const { data: dances } = await supabase
+          .from("shareable_lyric_dances" as any)
+          .select("id, project_id")
+          .in("project_id", projectIds);
+
+        const dancesByProjectId = new Map<string, string[]>();
+        (dances ?? []).forEach((dance: any) => {
+          if (!dance?.project_id || !dance?.id) return;
+          const existing = dancesByProjectId.get(dance.project_id) ?? [];
+          existing.push(dance.id);
+          dancesByProjectId.set(dance.project_id, existing);
+        });
+
+        const danceIds = (dances ?? [])
+          .map((dance: any) => dance?.id)
+          .filter((id: string | null | undefined): id is string => !!id);
+
+        const playsByDanceId = new Map<string, number>();
+        if (danceIds.length > 0) {
+          const { data: plays } = await supabase
+            .from("lyric_dance_plays" as any)
+            .select("shareable_lyric_dance_id")
+            .in("shareable_lyric_dance_id", danceIds);
+
+          (plays ?? []).forEach((play: any) => {
+            const danceId = play?.shareable_lyric_dance_id;
+            if (!danceId) return;
+            playsByDanceId.set(danceId, (playsByDanceId.get(danceId) ?? 0) + 1);
           });
-
-        // Fetch hook reviews per post
-        const { data: reviews } = await supabase
-          .from("feed_hook_reviews" as any)
-          .select("post_id, hook_rating, would_replay")
-          .in("post_id", postIds);
-        if (reviews) {
-          const HOOK_ORDER = ["missed", "almost", "solid", "hit"];
-          const byPost: Record<string, ReviewSummary> = {};
-          postIds.forEach(id => {
-            const pr = reviews.filter((r: any) => r.post_id === id);
-            if (pr.length === 0) return;
-            const total = pr.length;
-            const replayCount = pr.filter((r: any) => r.would_replay).length;
-            const replayPct = Math.round((replayCount / total) * 100);
-            const ratingCounts: Record<string, number> = {};
-            pr.forEach((r: any) => { ratingCounts[r.hook_rating] = (ratingCounts[r.hook_rating] ?? 0) + 1; });
-            let topRating = ""; let topCount = 0;
-            HOOK_ORDER.forEach(k => { if ((ratingCounts[k] ?? 0) > topCount) { topCount = ratingCounts[k]; topRating = k; } });
-            const LABELS: Record<string, string> = { missed: "missed", almost: "almost", solid: "solid", hit: "hit" };
-            byPost[id] = { total, topRatingPct: Math.round((topCount / total) * 100), topRatingLabel: LABELS[topRating] ?? topRating, replayPct };
-          });
-          setReviewSummaries(byPost);
         }
-      });
-  }, [userId]);
 
-  // Owner: load saved posts & init edit fields
-  useEffect(() => {
-    if (!isOwner || !user) return;
-    supabase
-      .from("feed_saves" as any)
-      .select("id, post_id, created_at, feed_posts(id, project_id, caption, lyric_projects(title, album_art_url, spotify_track_id))")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (data) setSavedPosts(data as unknown as SavedPost[]);
-      });
-  }, [isOwner, user]);
+        submissions.forEach((submission) => {
+          if (!submission.project_id) return;
+          const relatedDanceIds = dancesByProjectId.get(submission.project_id) ?? [];
+          const totalForPost = relatedDanceIds.reduce((sum, danceId) => sum + (playsByDanceId.get(danceId) ?? 0), 0);
+          if (totalForPost > 0) playCountsByPostId[submission.id] = totalForPost;
+        });
+      }
 
-  useEffect(() => {
-    if (isOwner && profile) {
-      setDisplayName(profile.display_name ?? "");
-      setBio(profile.bio ?? "");
-      setSpotifyUrl(profile.spotify_embed_url ?? "");
-    }
-  }, [isOwner, profile]);
+      setViewState({
+        loading: false,
+        notFound: false,
+        profile: profileRes.data as PublicProfileData,
+        roles,
+        submissions,
+        playCountsByPostId,
+      });
+
+      if (isOwner) {
+        setDisplayName(profileRes.data.display_name ?? "");
+        setBio(profileRes.data.bio ?? "");
+        setSpotifyUrl(profileRes.data.spotify_embed_url ?? "");
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [viewedUserId, isOwner]);
 
   // Auto-save for owner
   const autoSave = useCallback((fields: { display_name?: string; bio?: string; spotify_embed_url?: string }) => {
@@ -168,12 +192,16 @@ const PublicProfile = () => {
     setAutoSaveStatus("saving");
     saveTimerRef.current = setTimeout(async () => {
       const { error } = await supabase.from("profiles").update(fields).eq("id", user.id);
-      if (error) { toast.error(error.message); setAutoSaveStatus("idle"); }
-      else {
+      if (error) {
+        toast.error(error.message);
+        setAutoSaveStatus("idle");
+      } else {
         setAutoSaveStatus("saved");
         refreshProfile();
-        // Update local state too
-        setProfile(prev => prev ? { ...prev, ...fields } : prev);
+        setViewState(prev => ({
+          ...prev,
+          profile: prev.profile ? { ...prev.profile, ...fields } : prev.profile,
+        }));
         setTimeout(() => setAutoSaveStatus("idle"), 1500);
       }
     }, 800);
@@ -195,58 +223,52 @@ const PublicProfile = () => {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
-    if (file.size > 2 * 1024 * 1024) { toast.error("Image must be under 2MB"); return; }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be under 2MB");
+      return;
+    }
 
     setUploading(true);
     const ext = file.name.split(".").pop();
     const path = `${user.id}/avatar.${ext}`;
 
     const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
-    if (uploadErr) { toast.error(uploadErr.message); setUploading(false); return; }
+    if (uploadErr) {
+      toast.error(uploadErr.message);
+      setUploading(false);
+      return;
+    }
 
     const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
     const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
     const { error: updateErr } = await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", user.id);
     setUploading(false);
-    if (updateErr) toast.error(updateErr.message);
-    else {
+    if (updateErr) {
+      toast.error(updateErr.message);
+    } else {
       toast.success("Avatar updated!");
       refreshProfile();
-      setProfile(prev => prev ? { ...prev, avatar_url: avatarUrl } : prev);
+      setViewState(prev => ({
+        ...prev,
+        profile: prev.profile ? { ...prev.profile, avatar_url: avatarUrl } : prev.profile,
+      }));
     }
   };
 
-  const hasMusic = profile?.spotify_embed_url && isMusicUrl(profile.spotify_embed_url);
-  const initials = (profile?.display_name ?? "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  if (!routeUserId && authLoading) {
+    return LOADING_SHELL;
+  }
 
-  // Google avatar fallback for owner
-  const googleAvatar = user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture;
-  const avatarSrc = isOwner
-    ? (profile?.avatar_url || googleAvatar || undefined)
-    : (profile?.avatar_url ?? undefined);
+  if (!viewedUserId) {
+    return <Navigate to="/auth" replace />;
+  }
 
-  // Competitive stats
-  const bestPeakRank = submissions.reduce((best, s) => {
-    const rank = s.peak_rank;
-    if (rank && (best === null || rank < best)) return rank;
-    return best;
-  }, null as number | null);
-  const totalLikes = submissions.reduce((sum, s) => sum + (s.fires_count || 0), 0);
-  const totalComments = submissions.reduce((sum, s) => sum + (s.comments_count || 0), 0);
-  const totalSaves = Object.values(saveCounts).reduce((sum, c) => sum + c, 0);
-  // Hook mode aggregate stats
-  const reviewSummariesAll = Object.values(reviewSummaries);
-  const totalReviews = reviewSummariesAll.reduce((sum, r) => sum + r.total, 0);
-  const avgReplayPct = reviewSummariesAll.length > 0
-    ? Math.round(reviewSummariesAll.reduce((sum, r) => sum + r.replayPct, 0) / reviewSummariesAll.length)
-    : 0;
-  const avgHitPct = reviewSummariesAll.length > 0
-    ? Math.round(reviewSummariesAll.reduce((sum, r) => sum + r.topRatingPct, 0) / reviewSummariesAll.length)
-    : 0;
-
-  if (notFound) {
+  if (viewState.notFound) {
     return (
       <div className="min-h-screen bg-background pt-20 flex items-center justify-center">
         <p className="text-muted-foreground">Profile not found.</p>
@@ -254,13 +276,32 @@ const PublicProfile = () => {
     );
   }
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-background pt-20 flex items-center justify-center">
-        <p className="text-muted-foreground">Loading…</p>
-      </div>
-    );
+  if (viewState.loading || !viewState.profile) {
+    return LOADING_SHELL;
   }
+
+  const { profile, roles, submissions, playCountsByPostId } = viewState;
+  const hasMusic = profile.spotify_embed_url && isMusicUrl(profile.spotify_embed_url);
+  const initials = (profile.display_name ?? "?")
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  // Google avatar fallback for owner
+  const googleAvatar = user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture;
+  const avatarSrc = isOwner
+    ? (profile.avatar_url || googleAvatar || undefined)
+    : (profile.avatar_url ?? undefined);
+
+  const bestPeakRank = submissions.reduce((best, s) => {
+    const rank = s.peak_rank;
+    if (rank && (best === null || rank < best)) return rank;
+    return best;
+  }, null as number | null);
+  const totalFires = submissions.reduce((sum, s) => sum + (s.fires_count ?? 0), 0);
+  const totalComments = submissions.reduce((sum, s) => sum + (s.comments_count ?? 0), 0);
 
   return (
     <div className="px-4 py-6">
@@ -279,7 +320,7 @@ const PublicProfile = () => {
                   variant="outline"
                   size="sm"
                   className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
-                  onClick={() => navigate(`/artist/${profile.display_name?.toLowerCase().replace(/\s+/g, "-") || userId}`)}
+                  onClick={() => navigate(`/artist/${profile.display_name?.toLowerCase().replace(/\s+/g, "-") || viewedUserId}`)}
                 >
                   <Sparkles size={13} />
                   ME
@@ -322,7 +363,7 @@ const PublicProfile = () => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground capitalize">{roles[0] ?? "user"}</p>
-              <FmlyBadge userId={userId} />
+              <FmlyBadge userId={viewedUserId} />
             </div>
             {profile.bio && !editing && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
             {hasMusic && !editing && (
@@ -346,7 +387,6 @@ const PublicProfile = () => {
           </div>
         </div>
 
-        {/* Edit form (owner only) */}
         {isOwner && editing && (
           <Card className="glass-card border-border">
             <CardHeader>
@@ -374,7 +414,6 @@ const PublicProfile = () => {
           </Card>
         )}
 
-        {/* Wallet connection (owner only) */}
         {isOwner && features.crypto_tipping && (
           <Card className="glass-card border-border">
             <CardHeader>
@@ -387,7 +426,6 @@ const PublicProfile = () => {
           </Card>
         )}
 
-        {/* Competitive Summary */}
         {submissions.length > 0 && (
           <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bestPeakRank ? 4 : 3}, minmax(0, 1fr))` }}>
             {bestPeakRank && (
@@ -403,145 +441,79 @@ const PublicProfile = () => {
               <p className="text-[10px] text-muted-foreground">Songs</p>
             </div>
             <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <Zap size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-base font-bold">{totalReviews}</p>
-              <p className="text-[10px] text-muted-foreground">Reviews</p>
+              <Flame size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{totalFires}</p>
+              <p className="text-[10px] text-muted-foreground">Fires</p>
             </div>
             <div className="text-center p-3 rounded-xl bg-secondary/50 border border-border">
-              <BarChart2 size={14} className="mx-auto mb-1 text-primary" />
-              <p className="text-base font-bold">{avgReplayPct}%</p>
-              <p className="text-[10px] text-muted-foreground">Avg Replay</p>
+              <MessageCircle size={14} className="mx-auto mb-1 text-primary" />
+              <p className="text-base font-bold">{totalComments}</p>
+              <p className="text-[10px] text-muted-foreground">Comments</p>
             </div>
           </div>
         )}
 
-        {/* CrowdFit — tabbed songs card */}
-        {(submissions.length > 0 || (isOwner && savedPosts.length > 0)) && (
+        {submissions.length > 0 && (
           <Card className="glass-card border-border overflow-hidden">
-            {/* Card header with CrowdFit brand */}
             <div className="px-4 pt-4 pb-0 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <BarChart2 size={14} className="text-primary" />
-                <span className="text-xs font-bold tracking-widest uppercase text-primary">
-                  CrowdFit
-                </span>
+                <span className="text-xs font-bold tracking-widest uppercase text-primary">CrowdFit</span>
               </div>
             </div>
 
-            {/* Tab switcher */}
-            <div className="flex items-center gap-4 mt-3 px-4">
-              <button
-                onClick={() => setSongTab("mine")}
-                className={`font-mono text-[11px] tracking-widest uppercase transition-colors ${
-                  songTab === "mine"
-                    ? "text-foreground font-medium"
-                    : "text-muted-foreground font-normal hover:text-foreground"
-                }`}
-              >
-                My Songs
-              </button>
-              {isOwner && (
-                <button
-                  onClick={() => setSongTab("saved")}
-                  className={`font-mono text-[11px] tracking-widest uppercase transition-colors ${
-                    songTab === "saved"
-                      ? "text-foreground font-medium"
-                      : "text-muted-foreground font-normal hover:text-foreground"
-                  }`}
-                >
-                  FMLY Saves
-                </button>
-              )}
-            </div>
+            <CardHeader className="pt-3 pb-1">
+              <CardTitle className="text-base">Songs</CardTitle>
+            </CardHeader>
 
-            <CardContent className="pt-3 pb-4 space-y-2">
-              {songTab === "mine" && (
-                <>
-                  {submissions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">No songs submitted yet.</p>
-                  ) : submissions.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => navigate(`/song/${s.id}`)}
-                      className="w-full flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {s.lyric_projects?.album_art_url && (
-                          <img src={s.lyric_projects.album_art_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{s.lyric_projects?.title ?? s.caption}</p>
-                          <div className="flex items-center gap-2.5 mt-0.5">
-                            <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
-                            {reviewSummaries[s.id] ? (
-                              <>
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  <span className="text-foreground font-semibold">{reviewSummaries[s.id].topRatingPct}%</span> {reviewSummaries[s.id].topRatingLabel}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground/40">·</span>
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  <span className="text-foreground font-semibold">{reviewSummaries[s.id].replayPct}%</span> replay
-                                </span>
-                                <button
-                                  onClick={e => { e.stopPropagation(); setReviewSheetPostId(s.id); }}
-                                  className="text-[10px] text-primary/70 hover:text-primary underline underline-offset-2 transition-colors"
-                                >
-                                  {reviewSummaries[s.id].total} reviews
-                                </button>
-                              </>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground/50">no reviews yet</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      {s.peak_rank && (
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-mono font-bold text-primary">#{s.peak_rank}</p>
-                          <p className="text-[10px] text-muted-foreground">Peak</p>
-                        </div>
+            <CardContent className="pt-1 pb-4 space-y-2">
+              {submissions.map(s => {
+                const peakRank = s.peak_rank;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => navigate(`/song/${s.id}`)}
+                    className="w-full flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {s.lyric_projects?.album_art_url && (
+                        <img src={s.lyric_projects.album_art_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                       )}
-                    </button>
-                  ))}
-                </>
-              )}
-
-              {songTab === "saved" && isOwner && (
-                <>
-                  {savedPosts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">No saved songs yet.</p>
-                  ) : savedPosts.map(s => {
-                    const p = s.feed_posts;
-                    if (!p) return null;
-                    return (
-                      <div
-                        key={s.id}
-                        onClick={() => navigate(`/song/${p.id}`)}
-                        className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 cursor-pointer transition-colors"
-                      >
-                        {p.lyric_projects?.album_art_url && (
-                          <img src={p.lyric_projects.album_art_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{p.lyric_projects?.title ?? ""}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{s.lyric_projects?.title ?? s.caption}</p>
+                        <div className="flex items-center gap-2.5 mt-0.5">
+                          <span className="text-[10px] text-muted-foreground capitalize">{s.status}</span>
+                          <span className="text-[10px] text-muted-foreground/40">·</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            🔥 <span className="text-foreground font-semibold">{s.fires_count ?? 0}</span>
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            💬 <span className="text-foreground font-semibold">{s.comments_count ?? 0}</span>
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            ▶ <span className="text-foreground font-semibold">{playCountsByPostId[s.id] ?? 0}</span>
+                          </span>
+                          {peakRank && (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              #<span className="text-foreground font-semibold">{peakRank}</span>
+                            </span>
+                          )}
                         </div>
                       </div>
-                    );
-                  })}
-                </>
-              )}
+                    </div>
+                    {peakRank && (
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-mono font-bold text-primary">#{peakRank}</p>
+                        <p className="text-[10px] text-muted-foreground">Peak</p>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </CardContent>
           </Card>
         )}
       </div>
-
-      {reviewSheetPostId && (
-        <PostCommentPanel
-          postId={reviewSheetPostId}
-          isOpen={true}
-          onClose={() => setReviewSheetPostId(null)}
-        />
-      )}
     </div>
   );
 };
