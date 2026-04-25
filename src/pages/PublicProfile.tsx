@@ -142,20 +142,21 @@ const PublicProfile = () => {
           .limit(5);
       });
 
+      const sb = supabase as any;
       const [profileRes, rolesRes, postsRes, lockedCountRes, lockStateRes, recentFiresRes, recentCommentsRes] = await Promise.all([
-        supabase
+        sb
           .from("profiles")
           .select("display_name, bio, avatar_url, spotify_embed_url, instagram_url, tiktok_url, youtube_url, website_url, merch_url, wallet_address, is_verified")
           .eq("id", viewedUserId)
           .single(),
-        supabase.from("user_roles").select("role").eq("user_id", viewedUserId),
+        sb.from("user_roles").select("role").eq("user_id", viewedUserId),
         postsPromise,
-        supabase
+        sb
           .from("release_subscriptions")
           .select("subscriber_user_id", { count: "exact", head: true })
           .eq("artist_user_id", viewedUserId),
         user && user.id !== viewedUserId
-          ? supabase
+          ? sb
               .from("release_subscriptions")
               .select("id", { head: true, count: "exact" })
               .eq("artist_user_id", viewedUserId)
@@ -254,7 +255,7 @@ const PublicProfile = () => {
     if (isLocked) {
       setIsLocked(false);
       setLockedInCount((c) => Math.max(0, c - 1));
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("release_subscriptions")
         .delete()
         .eq("artist_user_id", viewedUserId)
@@ -269,7 +270,7 @@ const PublicProfile = () => {
 
     setIsLocked(true);
     setLockedInCount((c) => c + 1);
-    const { error } = await supabase.from("release_subscriptions").insert({
+    const { error } = await (supabase as any).from("release_subscriptions").insert({
       subscriber_user_id: user.id,
       artist_user_id: viewedUserId,
     });
