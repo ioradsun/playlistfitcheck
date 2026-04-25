@@ -77,7 +77,7 @@ const Auth = () => {
             });
           });
       } else if (intent === "drop_alert" && artistId) {
-        supabase
+        (supabase as any)
           .from("release_subscriptions")
           .upsert(
             {
@@ -156,7 +156,7 @@ const Auth = () => {
         } else if (intent === "drop_alert" && artistId) {
           const userId = (await supabase.auth.getUser()).data.user?.id;
           if (userId) {
-            await supabase
+            await (supabase as any)
               .from("release_subscriptions")
               .upsert(
                 {
