@@ -9,7 +9,7 @@ import React, {
   startTransition,
 } from "react";
 import { flushSync } from "react-dom";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useSiteCopy, useSiteCopyLoaded } from "@/hooks/useSiteCopy";
 import { PlaylistInputSection } from "@/components/PlaylistInput";
 import { ResultsDashboard } from "@/components/ResultsDashboard";
@@ -177,6 +177,9 @@ const Index = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const artistFilter = searchParams.get("artist");
+  const [artistDisplayName, setArtistDisplayName] = useState<string | null>(null);
   const transitionNavigate = useCallback(
     (to: string, options?: { replace?: boolean; state?: any }) => {
       startTransition(() => {
@@ -210,6 +213,28 @@ const Index = () => {
   }, [location.pathname, activeTab]);
 
   const [loadedLyric, setLoadedLyric] = useState<any>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!artistFilter) {
+      setArtistDisplayName(null);
+      return;
+    }
+
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", artistFilter)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setArtistDisplayName(data?.display_name || artistFilter.slice(0, 8));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [artistFilter]);
 
   useEffect(() => {
     if (reelsMode) {
@@ -1196,7 +1221,13 @@ const Index = () => {
             onTouchStart={reelsMode ? () => unlockAudio() : undefined}
           >
             <Suspense fallback={<PageSkeleton tool="fmly" mode="new" />}>
-              <FmlyFeed reelsMode={reelsMode} onScrolledChange={setReelsScrolled} />
+              <FmlyFeed
+                reelsMode={reelsMode}
+                onScrolledChange={setReelsScrolled}
+                artistFilter={artistFilter}
+                artistDisplayName={artistDisplayName}
+                onClearArtistFilter={() => setSearchParams({})}
+              />
             </Suspense>
           </div>
         );

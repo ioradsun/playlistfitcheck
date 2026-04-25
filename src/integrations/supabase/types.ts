@@ -1276,6 +1276,62 @@ export type Database = {
         }
         Relationships: []
       }
+      release_alerts: {
+        Row: {
+          artist_user_id: string
+          created_at: string
+          feed_post_id: string
+          id: string
+          is_read: boolean
+          subscriber_user_id: string
+        }
+        Insert: {
+          artist_user_id: string
+          created_at?: string
+          feed_post_id: string
+          id?: string
+          is_read?: boolean
+          subscriber_user_id: string
+        }
+        Update: {
+          artist_user_id?: string
+          created_at?: string
+          feed_post_id?: string
+          id?: string
+          is_read?: boolean
+          subscriber_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_alerts_feed_post_id_fkey"
+            columns: ["feed_post_id"]
+            isOneToOne: false
+            referencedRelation: "feed_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      release_subscriptions: {
+        Row: {
+          artist_user_id: string
+          created_at: string
+          id: string
+          subscriber_user_id: string
+        }
+        Insert: {
+          artist_user_id: string
+          created_at?: string
+          id?: string
+          subscriber_user_id: string
+        }
+        Update: {
+          artist_user_id?: string
+          created_at?: string
+          id?: string
+          subscriber_user_id?: string
+        }
+        Relationships: []
+      }
       profit_artists: {
         Row: {
           artist_url: string | null

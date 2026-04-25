@@ -220,16 +220,19 @@ export interface FeedState {
   pendingNewCount: number;
   feedView: FeedView;
   billboardMode: BillboardMode;
+  artistFilter: string | null;
   lyricDataMap: Map<string, LyricDanceData>;
 
   setFeedView: (v: FeedView) => void;
   setBillboardMode: (m: BillboardMode) => void;
+  clearArtistFilter: () => void;
   loadMore: () => Promise<void>;
   consumeNewDrops: () => void;
 }
 
-export function useFeedPosts(): FeedState {
+export function useFeedPosts(opts?: { artistFilter?: string | null }): FeedState {
   const { user } = useAuth();
+  const artistFilter = opts?.artistFilter ?? null;
 
   // ── Core state ──
   const [posts, setPosts] = useState<FmlyPost[]>(() => {
@@ -309,7 +312,7 @@ export function useFeedPosts(): FeedState {
   // ── fetchPosts: initial load & refresh ────────────────────────────────
   const fetchPosts = useCallback(async () => {
     
-    if (feedView === "billboard") {
+    if (feedView === "billboard" && !artistFilter) {
       if (posts.length === 0) setLoading(true);
       const { posts: billboardPosts } = await scoreBillboard(billboardMode);
       setPosts(billboardPosts);
@@ -335,12 +338,16 @@ export function useFeedPosts(): FeedState {
     const shellPrefetched = consumeFeedShellPrefetch();
     const { data: shellRaw } = shellPrefetched
       ? await shellPrefetched
-      : await supabase
-          .from("feed_posts" as any)
-          .select(FEED_SHELL_COLUMNS)
-          .eq("status", "live")
-          .limit(PAGE_SIZE)
-          .order("created_at", { ascending: false });
+      : await (() => {
+          let q = supabase
+            .from("feed_posts" as any)
+            .select(FEED_SHELL_COLUMNS)
+            .eq("status", "live")
+            .limit(PAGE_SIZE)
+            .order("created_at", { ascending: false });
+          if (artistFilter) q = q.eq("user_id", artistFilter);
+          return q;
+        })();
 
     const shellPosts = (shellRaw ?? []) as unknown as FmlyPost[];
     const shellFiltered = shellPosts.filter((p) => matchesView(p, feedView));
@@ -371,12 +378,16 @@ export function useFeedPosts(): FeedState {
     const fullPrefetched = consumeFeedFullPrefetch();
     const { data: fullRaw } = fullPrefetched
       ? await fullPrefetched
-      : await supabase
-          .from("feed_posts" as any)
-          .select(POST_SELECT)
-          .eq("status", "live")
-          .limit(PAGE_SIZE)
-          .order("created_at", { ascending: false });
+      : await (() => {
+          let q = supabase
+            .from("feed_posts" as any)
+            .select(POST_SELECT)
+            .eq("status", "live")
+            .limit(PAGE_SIZE)
+            .order("created_at", { ascending: false });
+          if (artistFilter) q = q.eq("user_id", artistFilter);
+          return q;
+        })();
 
     const fullPosts = (fullRaw ?? []) as unknown as FmlyPost[];
     const fullFiltered = fullPosts.filter((p) => matchesView(p, feedView));
@@ -403,22 +414,24 @@ export function useFeedPosts(): FeedState {
 
     // Font preloading handled by prefetch.ts (module eval) and engine (kickFontStabilizationLoad).
     // ensureFontReady deduplicates, so this was a no-op burning dynamic import overhead.
-  }, [feedView, billboardMode, lyricDataMap, mergeLyricCaches, posts.length]);
+  }, [feedView, billboardMode, lyricDataMap, mergeLyricCaches, posts.length, artistFilter]);
 
   // ── loadMore: cursor-based pagination ─────────────────────────────────
   const loadMore = useCallback(async () => {
-    if (feedView === "billboard" || loadingMoreRef.current || !cursorRef.current) return;
+    if ((feedView === "billboard" && !artistFilter) || loadingMoreRef.current || !cursorRef.current) return;
     loadingMoreRef.current = true;
     setLoadingMore(true);
 
     try {
-      const { data } = await supabase
+      let query = supabase
         .from("feed_posts" as any)
         .select(POST_SELECT)
         .eq("status", "live")
         .lt("created_at", cursorRef.current)
         .order("created_at", { ascending: false })
         .limit(PAGE_SIZE);
+      if (artistFilter) query = query.eq("user_id", artistFilter);
+      const { data } = await query;
 
       let nextPosts = (data ?? []) as unknown as FmlyPost[];
       nextPosts = nextPosts.filter((p) => matchesView(p, feedView));
@@ -443,7 +456,7 @@ export function useFeedPosts(): FeedState {
       loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [feedView, lyricDataMap, mergeLyricCaches]);
+  }, [feedView, lyricDataMap, mergeLyricCaches, artistFilter]);
 
   // ── Initial fetch + re-fetch on view/mode change ──────────────────────
   useEffect(() => {
@@ -460,6 +473,7 @@ export function useFeedPosts(): FeedState {
         (payload) => {
           const newRow = payload.new as { created_at?: string; user_id?: string };
           if (!newRow?.created_at) return;
+          if (artistFilter && newRow.user_id !== artistFilter) return;
           if (user?.id && newRow.user_id === user.id) return;
           const head = newestRef.current;
           if (head && newRow.created_at <= head) return;
@@ -469,7 +483,7 @@ export function useFeedPosts(): FeedState {
       .subscribe();
 
     return () => { void supabase.removeChannel(channel); };
-  }, [user?.id]);
+  }, [user?.id, artistFilter]);
 
   useEffect(() => {
     const q = searchTerm.trim();
@@ -524,6 +538,8 @@ export function useFeedPosts(): FeedState {
     void fetchPosts();
   }, [fetchPosts]);
 
+  const clearArtistFilter = useCallback(() => {}, []);
+
   return {
     posts,
     loading,
@@ -536,9 +552,11 @@ export function useFeedPosts(): FeedState {
     pendingNewCount,
     feedView,
     billboardMode,
+    artistFilter,
     lyricDataMap,
     setFeedView,
     setBillboardMode,
+    clearArtistFilter,
     loadMore,
     consumeNewDrops,
   };
