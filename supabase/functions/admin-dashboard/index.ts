@@ -74,8 +74,6 @@ serve(async (req) => {
         "verification_requests",
         "invites", "collab_points",
         "ai_prompts", "site_copy",
-        // TODO: PR #2 — remove this once artist_pages table is dropped.
-        "artist_pages",
       ];
 
       const errors: string[] = [];
