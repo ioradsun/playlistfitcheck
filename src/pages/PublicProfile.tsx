@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   ExternalLink, Pencil, Wallet, ArrowLeft, Music, Trophy,
-  Camera, X, Check, Loader2, Flame, MessageCircle, BarChart2, Sparkles,
+  Camera, X, Check, Loader2, Flame, MessageCircle, BarChart2, Instagram, Music2, Youtube, Globe, ShoppingBag,
 } from "lucide-react";
 import { FmlyBadge } from "@/components/FmlyBadge";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -29,6 +29,11 @@ interface PublicProfileData {
   bio: string | null;
   avatar_url: string | null;
   spotify_embed_url: string | null;
+  instagram_url: string | null;
+  tiktok_url: string | null;
+  youtube_url: string | null;
+  website_url: string | null;
+  merch_url: string | null;
   wallet_address: string | null;
   is_verified: boolean;
 }
@@ -86,6 +91,11 @@ const PublicProfile = () => {
   const [displayName, setDisplayName] = useState(() => "");
   const [bio, setBio] = useState(() => "");
   const [spotifyUrl, setSpotifyUrl] = useState(() => "");
+  const [instagramUrl, setInstagramUrl] = useState(() => "");
+  const [tiktokUrl, setTiktokUrl] = useState(() => "");
+  const [youtubeUrl, setYoutubeUrl] = useState(() => "");
+  const [websiteUrl, setWebsiteUrl] = useState(() => "");
+  const [merchUrl, setMerchUrl] = useState(() => "");
   const [uploading, setUploading] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -135,7 +145,7 @@ const PublicProfile = () => {
       const [profileRes, rolesRes, postsRes, lockedCountRes, lockStateRes, recentFiresRes, recentCommentsRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("display_name, bio, avatar_url, spotify_embed_url, wallet_address, is_verified")
+          .select("display_name, bio, avatar_url, spotify_embed_url, instagram_url, tiktok_url, youtube_url, website_url, merch_url, wallet_address, is_verified")
           .eq("id", viewedUserId)
           .single(),
         supabase.from("user_roles").select("role").eq("user_id", viewedUserId),
@@ -218,6 +228,11 @@ const PublicProfile = () => {
         setDisplayName(profileRes.data.display_name ?? "");
         setBio(profileRes.data.bio ?? "");
         setSpotifyUrl(profileRes.data.spotify_embed_url ?? "");
+        setInstagramUrl(profileRes.data.instagram_url ?? "");
+        setTiktokUrl(profileRes.data.tiktok_url ?? "");
+        setYoutubeUrl(profileRes.data.youtube_url ?? "");
+        setWebsiteUrl(profileRes.data.website_url ?? "");
+        setMerchUrl(profileRes.data.merch_url ?? "");
       }
     };
 
@@ -266,7 +281,16 @@ const PublicProfile = () => {
   }, [isLocked, navigate, user, viewedUserId]);
 
   // Auto-save for owner
-  const autoSave = useCallback((fields: { display_name?: string; bio?: string; spotify_embed_url?: string }) => {
+  const autoSave = useCallback((fields: {
+    display_name?: string;
+    bio?: string;
+    spotify_embed_url?: string | null;
+    instagram_url?: string | null;
+    tiktok_url?: string | null;
+    youtube_url?: string | null;
+    website_url?: string | null;
+    merch_url?: string | null;
+  }) => {
     if (!user) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setAutoSaveStatus("saving");
@@ -298,6 +322,24 @@ const PublicProfile = () => {
   const handleSpotifyUrlChange = (val: string) => {
     setSpotifyUrl(val);
     autoSave({ display_name: displayName, bio, spotify_embed_url: val });
+  };
+  const normalizeUrl = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    try {
+      new URL(trimmed);
+      return trimmed;
+    } catch {
+      return null;
+    }
+  };
+  const handleSocialUrlChange = (
+    val: string,
+    setter: (value: string) => void,
+    key: "instagram_url" | "tiktok_url" | "youtube_url" | "website_url" | "merch_url",
+  ) => {
+    setter(val);
+    autoSave({ [key]: normalizeUrl(val) });
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -365,6 +407,13 @@ const PublicProfile = () => {
     ? submissions
     : [...submissions].sort((a, b) => (b.fires_count ?? 0) - (a.fires_count ?? 0));
   const hasMusic = profile.spotify_embed_url && isMusicUrl(profile.spotify_embed_url);
+  const socials = [
+    { url: profile.instagram_url, icon: Instagram, label: "Instagram" },
+    { url: profile.tiktok_url, icon: Music2, label: "TikTok" },
+    { url: profile.youtube_url, icon: Youtube, label: "YouTube" },
+    { url: profile.website_url, icon: Globe, label: "Website" },
+    { url: profile.merch_url, icon: ShoppingBag, label: "Merch" },
+  ].filter((social) => !!social.url);
   const initials = (profile.display_name ?? "?")
     .split(" ")
     .map((w) => w[0])
@@ -401,17 +450,6 @@ const PublicProfile = () => {
               <span className="text-[11px] font-mono text-muted-foreground flex items-center gap-1">
                 🔔 {lockedInCount} <span className="text-muted-foreground/60">locked in</span>
               </span>
-              {profile.is_verified && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
-                  onClick={() => navigate(`/artist/${profile.display_name?.toLowerCase().replace(/\s+/g, "-") || viewedUserId}`)}
-                >
-                  <Sparkles size={13} />
-                  ME
-                </Button>
-              )}
               <Button
                 variant={editing ? "secondary" : "outline"}
                 size="sm"
@@ -469,6 +507,22 @@ const PublicProfile = () => {
               <FmlyBadge userId={viewedUserId} />
             </div>
             {profile.bio && !editing && <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>}
+            {socials.length > 0 && !editing && (
+              <div className="flex items-center gap-3 mt-2">
+                {socials.map((social) => (
+                  <a
+                    key={social.label}
+                    href={social.url!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={social.label}
+                    className="text-muted-foreground/60 hover:text-foreground transition-colors"
+                  >
+                    <social.icon size={16} />
+                  </a>
+                ))}
+              </div>
+            )}
             {hasMusic && !editing && (
               <a
                 href={profile.spotify_embed_url!}
@@ -512,6 +566,29 @@ const PublicProfile = () => {
                 <Label>Music Profile URL</Label>
                 <Input value={spotifyUrl} onChange={e => handleSpotifyUrlChange(e.target.value)} placeholder="Spotify or SoundCloud URL..." />
                 <p className="text-xs text-muted-foreground">Your Spotify or SoundCloud profile link</p>
+              </div>
+              <div className="pt-1">
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground/70">Links</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Instagram URL</Label>
+                <Input value={instagramUrl} onChange={e => handleSocialUrlChange(e.target.value, setInstagramUrl, "instagram_url")} placeholder="https://instagram.com/..." />
+              </div>
+              <div className="space-y-2">
+                <Label>TikTok URL</Label>
+                <Input value={tiktokUrl} onChange={e => handleSocialUrlChange(e.target.value, setTiktokUrl, "tiktok_url")} placeholder="https://www.tiktok.com/@..." />
+              </div>
+              <div className="space-y-2">
+                <Label>YouTube URL</Label>
+                <Input value={youtubeUrl} onChange={e => handleSocialUrlChange(e.target.value, setYoutubeUrl, "youtube_url")} placeholder="https://youtube.com/..." />
+              </div>
+              <div className="space-y-2">
+                <Label>Website URL</Label>
+                <Input value={websiteUrl} onChange={e => handleSocialUrlChange(e.target.value, setWebsiteUrl, "website_url")} placeholder="https://..." />
+              </div>
+              <div className="space-y-2">
+                <Label>Merch URL</Label>
+                <Input value={merchUrl} onChange={e => handleSocialUrlChange(e.target.value, setMerchUrl, "merch_url")} placeholder="https://..." />
               </div>
             </CardContent>
           </Card>

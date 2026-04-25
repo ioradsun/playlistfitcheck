@@ -1221,9 +1221,11 @@ export type Database = {
           is_claimed: boolean
           is_unlimited: boolean
           is_verified: boolean
+          merch_url: string | null
           spotify_artist_id: string | null
           spotify_artist_slug: string | null
           spotify_embed_url: string | null
+          tiktok_url: string | null
           theme: string
           trailblazer_number: number | null
           wallet_address: string | null
@@ -1243,9 +1245,11 @@ export type Database = {
           is_claimed?: boolean
           is_unlimited?: boolean
           is_verified?: boolean
+          merch_url?: string | null
           spotify_artist_id?: string | null
           spotify_artist_slug?: string | null
           spotify_embed_url?: string | null
+          tiktok_url?: string | null
           theme?: string
           trailblazer_number?: number | null
           wallet_address?: string | null
@@ -1265,9 +1269,11 @@ export type Database = {
           is_claimed?: boolean
           is_unlimited?: boolean
           is_verified?: boolean
+          merch_url?: string | null
           spotify_artist_id?: string | null
           spotify_artist_slug?: string | null
           spotify_embed_url?: string | null
+          tiktok_url?: string | null
           theme?: string
           trailblazer_number?: number | null
           wallet_address?: string | null
