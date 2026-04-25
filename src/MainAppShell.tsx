@@ -32,7 +32,6 @@ const SongDetail = lazy(() => import("./pages/SongDetail"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Terms = lazy(() => import("./pages/Terms"));
-const ArtistStage = lazy(() => import("./pages/ArtistStage"));
 const SeoPages = lazy(() => import("./pages/SeoPages"));
 const FitWidget = lazy(() => importWithRetry(() => import("@/components/FitWidget").then(m => ({ default: m.FitWidget }))));
 const SignalsPanel = lazy(() => importWithRetry(() => import("@/components/signals/SignalsPanel").then(m => ({ default: m.SignalsPanel }))));
@@ -121,7 +120,6 @@ export default function MainAppShell() {
                   <Route path="/reset-password" element={<Suspense fallback={null}><PageLayout title="Reset Password"><ResetPassword /></PageLayout></Suspense>} />
                   <Route path="/u/:userId" element={<Suspense fallback={null}><PageLayout title="Profile"><PublicProfile /></PageLayout></Suspense>} />
                   <Route path="/song/:postId" element={<Suspense fallback={null}><PageLayout title="Song Details" subtitle="Submission stats"><SongDetail /></PageLayout></Suspense>} />
-                  <Route path="/artist/:username" element={<Suspense fallback={null}><ArtistStage /></Suspense>} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<Suspense fallback={null}><PageLayout><NotFound /></PageLayout></Suspense>} />
                 </Routes>

@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
 import { Music, X } from "lucide-react";
@@ -44,7 +43,6 @@ export function FitWidget() {
   const siteCopy = useSiteCopy();
   const { user, profile } = useAuth();
   const { resolvedTheme } = useTheme();
-  const location = useLocation();
   const [collapsed, setCollapsed] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [socialUnlocked, setSocialUnlocked] = useState(false);
@@ -120,8 +118,8 @@ export function FitWidget() {
 
   if (reelsHidden) return null;
 
-  // Don't render if growth flow is disabled or on artist stage pages
-  if (!siteCopy.features.growth_flow || location.pathname.startsWith("/artist/")) return null;
+  // Don't render if growth flow is disabled
+  if (!siteCopy.features.growth_flow) return null;
 
   return (
     <TooltipProvider>
