@@ -2,7 +2,7 @@
  * FmlyFeed — the FMLY feed.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useFeedPosts } from "./useFeedPosts";
 import { unlockAudio } from "@/lib/reelsAudioUnlock";
@@ -182,12 +182,21 @@ function FeedList({
 interface FmlyFeedProps {
   reelsMode?: boolean;
   onScrolledChange?: (scrolled: boolean) => void;
+  artistFilter?: string | null;
+  artistDisplayName?: string | null;
+  onClearArtistFilter?: () => void;
 }
 
-export function FmlyFeed({ reelsMode = false, onScrolledChange }: FmlyFeedProps) {
+export function FmlyFeed({
+  reelsMode = false,
+  onScrolledChange,
+  artistFilter = null,
+  artistDisplayName = null,
+  onClearArtistFilter,
+}: FmlyFeedProps) {
   const { user } = useAuth();
   const [contentFilter, setContentFilter] = useState<ContentFilter>("all");
-  const feed = useFeedPosts();
+  const feed = useFeedPosts({ artistFilter });
   const hasSearchQuery = feed.searchTerm.trim().length > 0;
 
   const displayPosts = hasSearchQuery
@@ -237,6 +246,17 @@ export function FmlyFeed({ reelsMode = false, onScrolledChange }: FmlyFeedProps)
         user={user}
         hasSearchQuery={hasSearchQuery}
       />
+
+      {artistFilter && (
+        <div className="flex items-center justify-center py-2">
+          <button
+            onClick={() => onClearArtistFilter?.()}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00FF78]/10 text-[#00FF78] text-xs font-mono border border-[#00FF78]/20"
+          >
+            @{artistDisplayName || "artist"} <X size={12} />
+          </button>
+        </div>
+      )}
 
       {feed.pendingNewCount > 0 && !feed.loading && (
         reelsMode ? (

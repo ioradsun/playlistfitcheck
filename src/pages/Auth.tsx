@@ -44,6 +44,8 @@ const Auth = () => {
   const returnTab = (location.state as any)?.returnTab;
   const claimSlug = (location.state as any)?.claimSlug ?? null;
   const claimToken = (location.state as any)?.claimToken ?? null;
+  const intent = searchParams.get("intent");
+  const artistId = searchParams.get("artist");
 
   useEffect(() => {
     if (user) {
@@ -74,11 +76,27 @@ const Auth = () => {
               state: { justClaimed: true },
             });
           });
+      } else if (intent === "drop_alert" && artistId) {
+        supabase
+          .from("release_subscriptions")
+          .upsert(
+            {
+              subscriber_user_id: user.id,
+              artist_user_id: artistId,
+            },
+            { onConflict: "subscriber_user_id,artist_user_id", ignoreDuplicates: true },
+          )
+          .then(({ error }) => {
+            if (error) {
+              toast.error(error.message);
+            }
+            navigate(`/u/${artistId}`, { replace: true });
+          });
       } else {
         navigate("/", { state: { returnTab } });
       }
     }
-  }, [user, navigate, returnTab, refCode, claimSlug, claimToken]);
+  }, [user, navigate, returnTab, refCode, claimSlug, claimToken, intent, artistId]);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +153,20 @@ const Auth = () => {
           navigate(`/artist/${claimSlug}/claim-page`, {
             state: { justClaimed: true },
           });
+        } else if (intent === "drop_alert" && artistId) {
+          const userId = (await supabase.auth.getUser()).data.user?.id;
+          if (userId) {
+            await supabase
+              .from("release_subscriptions")
+              .upsert(
+                {
+                  subscriber_user_id: userId,
+                  artist_user_id: artistId,
+                },
+                { onConflict: "subscriber_user_id,artist_user_id", ignoreDuplicates: true },
+              );
+          }
+          navigate(`/u/${artistId}`, { replace: true });
         } else {
           navigate("/", { state: { returnTab } });
         }

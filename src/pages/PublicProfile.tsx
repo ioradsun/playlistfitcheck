@@ -20,6 +20,10 @@ import { isMusicUrl, getPlatformLabel } from "@/lib/platformUtils";
 import { useSiteCopy } from "@/hooks/useSiteCopy";
 import type { FmlyPost } from "@/components/fmly/types";
 
+type VoiceLine =
+  | { kind: "fire"; actor: string; postId: string; songTitle: string; ts: string }
+  | { kind: "comment"; actor: string; postId: string; songTitle: string; content: string; ts: string };
+
 interface PublicProfileData {
   display_name: string | null;
   bio: string | null;
@@ -35,8 +39,19 @@ interface ProfileViewState {
   profile: PublicProfileData | null;
   roles: string[];
   submissions: FmlyPost[];
-  playCountsByPostId: Record<string, number>;
+  voiceLines: VoiceLine[];
 }
+
+const formatRelative = (ts?: string | null) => {
+  if (!ts) return "now";
+  const diff = Date.now() - new Date(ts).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes <= 0) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+};
 
 const LOADING_SHELL = (
   <div className="min-h-screen bg-background pt-20 flex items-center justify-center">
@@ -61,8 +76,10 @@ const PublicProfile = () => {
     profile: null,
     roles: [],
     submissions: [],
-    playCountsByPostId: {},
+    voiceLines: [],
   });
+  const [isLocked, setIsLocked] = useState<boolean | null>(null);
+  const [lockedInCount, setLockedInCount] = useState<number>(0);
 
   // Owner editing state
   const [editing, setEditing] = useState(false);
@@ -84,19 +101,58 @@ const PublicProfile = () => {
 
       setViewState(prev => ({ ...prev, loading: true, notFound: false }));
 
-      const [profileRes, rolesRes, postsRes] = await Promise.all([
+      const postsPromise = supabase
+        .from("feed_posts" as any)
+        .select("*")
+        .eq("user_id", viewedUserId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      const firesPromise = postsPromise.then((postsRes) => {
+        const posts = (postsRes.data as unknown as FmlyPost[]) ?? [];
+        const postIds = posts.map((s) => s.id);
+        if (postIds.length === 0) return { data: [], error: null };
+        return supabase
+          .from("feed_likes")
+          .select("user_id, post_id, created_at, profiles:user_id(display_name)")
+          .in("post_id", postIds)
+          .order("created_at", { ascending: false })
+          .limit(5);
+      });
+
+      const commentsPromise = postsPromise.then((postsRes) => {
+        const posts = (postsRes.data as unknown as FmlyPost[]) ?? [];
+        const postIds = posts.map((s) => s.id);
+        if (postIds.length === 0) return { data: [], error: null };
+        return supabase
+          .from("feed_comments" as any)
+          .select("user_id, post_id, content, created_at, profiles:user_id(display_name)")
+          .in("post_id", postIds)
+          .order("created_at", { ascending: false })
+          .limit(5);
+      });
+
+      const [profileRes, rolesRes, postsRes, lockedCountRes, lockStateRes, recentFiresRes, recentCommentsRes] = await Promise.all([
         supabase
           .from("profiles")
           .select("display_name, bio, avatar_url, spotify_embed_url, wallet_address, is_verified")
           .eq("id", viewedUserId)
           .single(),
         supabase.from("user_roles").select("role").eq("user_id", viewedUserId),
+        postsPromise,
         supabase
-          .from("feed_posts" as any)
-          .select("*")
-          .eq("user_id", viewedUserId)
-          .order("created_at", { ascending: false })
-          .limit(50),
+          .from("release_subscriptions")
+          .select("subscriber_user_id", { count: "exact", head: true })
+          .eq("artist_user_id", viewedUserId),
+        user && user.id !== viewedUserId
+          ? supabase
+              .from("release_subscriptions")
+              .select("id", { head: true, count: "exact" })
+              .eq("artist_user_id", viewedUserId)
+              .eq("subscriber_user_id", user.id)
+          : Promise.resolve({ count: 0, error: null }),
+        firesPromise,
+        commentsPromise,
       ]);
 
       if (isCancelled) return;
@@ -108,59 +164,44 @@ const PublicProfile = () => {
           profile: null,
           roles: [],
           submissions: [],
-          playCountsByPostId: {},
+          voiceLines: [],
         });
         return;
       }
 
       const submissions = (postsRes.data as unknown as FmlyPost[]) ?? [];
       const roles = rolesRes.data?.map((r: any) => r.role) ?? [];
+      const postById = new Map(submissions.map((s) => [s.id, s]));
 
-      // Optional bonus: aggregate lyric dance plays per post via project_id -> shareable_lyric_dances -> lyric_dance_plays
-      const playCountsByPostId: Record<string, number> = {};
-      const projectIds = Array.from(
-        new Set(submissions.map((s) => s.project_id).filter((id): id is string => !!id)),
-      );
-
-      if (projectIds.length > 0) {
-        const { data: dances } = await supabase
-          .from("shareable_lyric_dances" as any)
-          .select("id, project_id")
-          .in("project_id", projectIds);
-
-        const dancesByProjectId = new Map<string, string[]>();
-        (dances ?? []).forEach((dance: any) => {
-          if (!dance?.project_id || !dance?.id) return;
-          const existing = dancesByProjectId.get(dance.project_id) ?? [];
-          existing.push(dance.id);
-          dancesByProjectId.set(dance.project_id, existing);
-        });
-
-        const danceIds = (dances ?? [])
-          .map((dance: any) => dance?.id)
-          .filter((id: string | null | undefined): id is string => !!id);
-
-        const playsByDanceId = new Map<string, number>();
-        if (danceIds.length > 0) {
-          const { data: plays } = await supabase
-            .from("lyric_dance_plays" as any)
-            .select("shareable_lyric_dance_id")
-            .in("shareable_lyric_dance_id", danceIds);
-
-          (plays ?? []).forEach((play: any) => {
-            const danceId = play?.shareable_lyric_dance_id;
-            if (!danceId) return;
-            playsByDanceId.set(danceId, (playsByDanceId.get(danceId) ?? 0) + 1);
-          });
-        }
-
-        submissions.forEach((submission) => {
-          if (!submission.project_id) return;
-          const relatedDanceIds = dancesByProjectId.get(submission.project_id) ?? [];
-          const totalForPost = relatedDanceIds.reduce((sum, danceId) => sum + (playsByDanceId.get(danceId) ?? 0), 0);
-          if (totalForPost > 0) playCountsByPostId[submission.id] = totalForPost;
+      const voiceLines: VoiceLine[] = [];
+      for (const fire of recentFiresRes.data ?? []) {
+        if (!fire?.post_id || !fire?.user_id || fire.user_id === viewedUserId) continue;
+        const submission = postById.get(fire.post_id);
+        const actor = (fire as any)?.profiles?.display_name?.trim();
+        if (!actor) continue;
+        voiceLines.push({
+          kind: "fire",
+          actor,
+          postId: fire.post_id,
+          songTitle: submission?.lyric_projects?.title ?? submission?.caption ?? "—",
+          ts: fire.created_at,
         });
       }
+      for (const comment of recentCommentsRes.data ?? []) {
+        if (!comment?.post_id || !comment?.user_id || comment.user_id === viewedUserId) continue;
+        const submission = postById.get(comment.post_id);
+        const actor = (comment as any)?.profiles?.display_name?.trim();
+        if (!actor) continue;
+        voiceLines.push({
+          kind: "comment",
+          actor,
+          postId: comment.post_id,
+          songTitle: submission?.lyric_projects?.title ?? submission?.caption ?? "—",
+          content: comment.content ?? "",
+          ts: comment.created_at,
+        });
+      }
+      voiceLines.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
 
       setViewState({
         loading: false,
@@ -168,8 +209,10 @@ const PublicProfile = () => {
         profile: profileRes.data as PublicProfileData,
         roles,
         submissions,
-        playCountsByPostId,
+        voiceLines: voiceLines.slice(0, 3),
       });
+      setLockedInCount(lockedCountRes.count ?? 0);
+      setIsLocked(user && user.id !== viewedUserId ? (lockStateRes.count ?? 0) > 0 : false);
 
       if (isOwner) {
         setDisplayName(profileRes.data.display_name ?? "");
@@ -183,7 +226,44 @@ const PublicProfile = () => {
     return () => {
       isCancelled = true;
     };
-  }, [viewedUserId, isOwner]);
+  }, [viewedUserId, isOwner, user]);
+
+  const handleDropToggle = useCallback(async () => {
+    if (!viewedUserId) return;
+    if (!user) {
+      navigate(`/auth?intent=drop_alert&artist=${viewedUserId}`);
+      return;
+    }
+    if (user.id === viewedUserId || isLocked === null) return;
+
+    if (isLocked) {
+      setIsLocked(false);
+      setLockedInCount((c) => Math.max(0, c - 1));
+      const { error } = await supabase
+        .from("release_subscriptions")
+        .delete()
+        .eq("artist_user_id", viewedUserId)
+        .eq("subscriber_user_id", user.id);
+      if (error) {
+        setIsLocked(true);
+        setLockedInCount((c) => c + 1);
+        toast.error(error.message);
+      }
+      return;
+    }
+
+    setIsLocked(true);
+    setLockedInCount((c) => c + 1);
+    const { error } = await supabase.from("release_subscriptions").insert({
+      subscriber_user_id: user.id,
+      artist_user_id: viewedUserId,
+    });
+    if (error) {
+      setIsLocked(false);
+      setLockedInCount((c) => Math.max(0, c - 1));
+      toast.error(error.message);
+    }
+  }, [isLocked, navigate, user, viewedUserId]);
 
   // Auto-save for owner
   const autoSave = useCallback((fields: { display_name?: string; bio?: string; spotify_embed_url?: string }) => {
@@ -280,7 +360,10 @@ const PublicProfile = () => {
     return LOADING_SHELL;
   }
 
-  const { profile, roles, submissions, playCountsByPostId } = viewState;
+  const { profile, roles, submissions, voiceLines } = viewState;
+  const sortedSubmissions = isOwner
+    ? submissions
+    : [...submissions].sort((a, b) => (b.fires_count ?? 0) - (a.fires_count ?? 0));
   const hasMusic = profile.spotify_embed_url && isMusicUrl(profile.spotify_embed_url);
   const initials = (profile.display_name ?? "?")
     .split(" ")
@@ -315,6 +398,9 @@ const PublicProfile = () => {
           <h1 className="text-xl font-semibold truncate">{profile.display_name || "User"}</h1>
           {isOwner && (
             <div className="flex items-center gap-2 ml-auto">
+              <span className="text-[11px] font-mono text-muted-foreground flex items-center gap-1">
+                🔔 {lockedInCount} <span className="text-muted-foreground/60">locked in</span>
+              </span>
               {profile.is_verified && (
                 <Button
                   variant="outline"
@@ -333,6 +419,23 @@ const PublicProfile = () => {
                 onClick={() => setEditing(!editing)}
               >
                 {editing ? <><X size={14} /> Cancel</> : <><Pencil size={14} /> Edit</>}
+              </Button>
+            </div>
+          )}
+          {!isOwner && (
+            <div className="ml-auto">
+              <Button
+                variant={isLocked ? "secondary" : "outline"}
+                size="sm"
+                className={isLocked
+                  ? "gap-1.5 bg-[#00FF78]/10 text-[#00FF78] border-[#00FF78]/30 hover:bg-[#00FF78]/15"
+                  : "gap-1.5"}
+                onClick={handleDropToggle}
+                disabled={isLocked === null}
+              >
+                {isLocked
+                  ? <><span>Locked in</span> <Check size={14} /></>
+                  : <>🔔 Next drop</>}
               </Button>
             </div>
           )}
@@ -453,6 +556,34 @@ const PublicProfile = () => {
           </div>
         )}
 
+        {voiceLines.length > 0 && (
+          <div className="space-y-1.5 px-1">
+            {voiceLines.map((line, i) => (
+              <button
+                key={`${line.postId}-${line.kind}-${i}`}
+                onClick={() => navigate(`/song/${line.postId}`)}
+                className="w-full text-left text-[11px] font-mono text-muted-foreground/70 hover:text-foreground transition-colors flex items-baseline gap-1.5"
+              >
+                <span>{line.kind === "fire" ? "🔥" : "💬"}</span>
+                <span className="text-foreground/90">@{line.actor}</span>
+                {line.kind === "fire" ? (
+                  <span>fired</span>
+                ) : (
+                  <span className="truncate max-w-[180px]">
+                    "{line.content.slice(0, 40)}{line.content.length > 40 ? "…" : ""}"
+                  </span>
+                )}
+                <span className="text-foreground/70 truncate flex-1">
+                  {line.kind === "fire" ? line.songTitle : ""}
+                </span>
+                <span className="text-muted-foreground/40 ml-auto shrink-0">
+                  {formatRelative(line.ts)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {submissions.length > 0 && (
           <Card className="glass-card border-border overflow-hidden">
             <div className="px-4 pt-4 pb-0 flex items-center justify-between">
@@ -467,12 +598,12 @@ const PublicProfile = () => {
             </CardHeader>
 
             <CardContent className="pt-1 pb-4 space-y-2">
-              {submissions.map(s => {
+              {sortedSubmissions.map(s => {
                 const peakRank = s.peak_rank;
                 return (
                   <button
                     key={s.id}
-                    onClick={() => navigate(`/song/${s.id}`)}
+                    onClick={() => navigate(`/fmly?artist=${viewedUserId}`)}
                     className="w-full flex items-center justify-between p-3 rounded-lg bg-secondary/50 border border-border hover:bg-secondary/80 transition-colors text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -490,14 +621,14 @@ const PublicProfile = () => {
                           <span className="text-[10px] text-muted-foreground font-mono">
                             💬 <span className="text-foreground font-semibold">{s.comments_count ?? 0}</span>
                           </span>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            ▶ <span className="text-foreground font-semibold">{playCountsByPostId[s.id] ?? 0}</span>
-                          </span>
                           {peakRank && (
                             <span className="text-[10px] text-muted-foreground font-mono">
                               #<span className="text-foreground font-semibold">{peakRank}</span>
                             </span>
                           )}
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            · {formatRelative(s.created_at)}
+                          </span>
                         </div>
                       </div>
                     </div>
