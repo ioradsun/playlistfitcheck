@@ -58,7 +58,7 @@ export function useDropAlerts(): {
   const [loading, setLoading] = useState(false);
 
   const fetchAlertById = useCallback(async (alertId: string): Promise<DropAlert | null> => {
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from("release_alerts")
       .select(
         `
@@ -89,7 +89,7 @@ export function useDropAlerts(): {
 
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("release_alerts")
         .select(
           `
@@ -167,7 +167,7 @@ export function useDropAlerts(): {
         prev.map((a) => (a.id === alertId ? { ...a, is_read: true } : a)),
       );
 
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from("release_alerts")
         .update({ is_read: true })
         .eq("id", alertId);
@@ -186,7 +186,7 @@ export function useDropAlerts(): {
     const previousAlerts = alerts;
     setAlerts((prev) => prev.map((a) => ({ ...a, is_read: true })));
 
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("release_alerts")
       .update({ is_read: true })
       .eq("subscriber_user_id", user.id)

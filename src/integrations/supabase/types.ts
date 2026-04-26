@@ -97,69 +97,6 @@ export type Database = {
           },
         ]
       }
-      artist_pages: {
-        Row: {
-          accent_color: string
-          created_at: string
-          featured_track_art: string | null
-          featured_track_id: string | null
-          featured_track_title: string | null
-          featured_track_url: string | null
-          hero_content_type: string | null
-          hero_content_url: string | null
-          id: string
-          instagram_url: string | null
-          merch_url: string | null
-          sonic_identity: string | null
-          theme: string
-          tiktok_url: string | null
-          updated_at: string
-          user_id: string
-          website_url: string | null
-          youtube_url: string | null
-        }
-        Insert: {
-          accent_color?: string
-          created_at?: string
-          featured_track_art?: string | null
-          featured_track_id?: string | null
-          featured_track_title?: string | null
-          featured_track_url?: string | null
-          hero_content_type?: string | null
-          hero_content_url?: string | null
-          id?: string
-          instagram_url?: string | null
-          merch_url?: string | null
-          sonic_identity?: string | null
-          theme?: string
-          tiktok_url?: string | null
-          updated_at?: string
-          user_id: string
-          website_url?: string | null
-          youtube_url?: string | null
-        }
-        Update: {
-          accent_color?: string
-          created_at?: string
-          featured_track_art?: string | null
-          featured_track_id?: string | null
-          featured_track_title?: string | null
-          featured_track_url?: string | null
-          hero_content_type?: string | null
-          hero_content_url?: string | null
-          id?: string
-          instagram_url?: string | null
-          merch_url?: string | null
-          sonic_identity?: string | null
-          theme?: string
-          tiktok_url?: string | null
-          updated_at?: string
-          user_id?: string
-          website_url?: string | null
-          youtube_url?: string | null
-        }
-        Relationships: []
-      }
       battle_comments: {
         Row: {
           battle_id: string
@@ -1221,10 +1158,12 @@ export type Database = {
           is_claimed: boolean
           is_unlimited: boolean
           is_verified: boolean
+          merch_url: string | null
           spotify_artist_id: string | null
           spotify_artist_slug: string | null
           spotify_embed_url: string | null
           theme: string
+          tiktok_url: string | null
           trailblazer_number: number | null
           wallet_address: string | null
           website_url: string | null
@@ -1243,10 +1182,12 @@ export type Database = {
           is_claimed?: boolean
           is_unlimited?: boolean
           is_verified?: boolean
+          merch_url?: string | null
           spotify_artist_id?: string | null
           spotify_artist_slug?: string | null
           spotify_embed_url?: string | null
           theme?: string
+          tiktok_url?: string | null
           trailblazer_number?: number | null
           wallet_address?: string | null
           website_url?: string | null
@@ -1265,10 +1206,12 @@ export type Database = {
           is_claimed?: boolean
           is_unlimited?: boolean
           is_verified?: boolean
+          merch_url?: string | null
           spotify_artist_id?: string | null
           spotify_artist_slug?: string | null
           spotify_embed_url?: string | null
           theme?: string
+          tiktok_url?: string | null
           trailblazer_number?: number | null
           wallet_address?: string | null
           website_url?: string | null
@@ -1668,6 +1611,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      release_alerts: {
+        Row: {
+          artist_user_id: string
+          created_at: string
+          feed_post_id: string
+          id: string
+          is_read: boolean
+          subscriber_user_id: string
+        }
+        Insert: {
+          artist_user_id: string
+          created_at?: string
+          feed_post_id: string
+          id?: string
+          is_read?: boolean
+          subscriber_user_id: string
+        }
+        Update: {
+          artist_user_id?: string
+          created_at?: string
+          feed_post_id?: string
+          id?: string
+          is_read?: boolean
+          subscriber_user_id?: string
+        }
+        Relationships: []
+      }
+      release_subscriptions: {
+        Row: {
+          artist_user_id: string
+          created_at: string
+          id: string
+          subscriber_user_id: string
+        }
+        Insert: {
+          artist_user_id: string
+          created_at?: string
+          id?: string
+          subscriber_user_id: string
+        }
+        Update: {
+          artist_user_id?: string
+          created_at?: string
+          id?: string
+          subscriber_user_id?: string
+        }
+        Relationships: []
       }
       saved_hitfit: {
         Row: {
