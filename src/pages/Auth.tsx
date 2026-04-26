@@ -61,7 +61,7 @@ const Auth = () => {
           .catch(console.error);
       }
       if (claimSlug && claimToken) {
-        (supabase as any)
+        supabase
           .from("ghost_artist_profiles")
           .update({
             is_claimed: true,
@@ -77,7 +77,7 @@ const Auth = () => {
             });
           });
       } else if (intent === "drop_alert" && artistId) {
-        (supabase as any)
+        supabase
           .from("release_subscriptions")
           .upsert(
             {
@@ -140,7 +140,7 @@ const Auth = () => {
         localStorage.setItem("tfm_has_account", "1");
         if (claimSlug && claimToken) {
           const userId = (await supabase.auth.getUser()).data.user?.id;
-          await (supabase as any)
+          await supabase
             .from("ghost_artist_profiles")
             .update({
               is_claimed: true,
@@ -156,7 +156,7 @@ const Auth = () => {
         } else if (intent === "drop_alert" && artistId) {
           const userId = (await supabase.auth.getUser()).data.user?.id;
           if (userId) {
-            await (supabase as any)
+            await supabase
               .from("release_subscriptions")
               .upsert(
                 {
