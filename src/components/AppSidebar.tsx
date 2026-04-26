@@ -105,7 +105,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const location = useLocation();
   const { state: sidebarState, setOpenMobile, isMobile } = useSidebar();
   const { toggleSidebar } = useSidebar();
-  const { totalUnread } = useDmContext();
+  const { unreadCount, dropUnreadCount, totalUnread } = useDmContext();
   const { number: pioneerNumber, isBlazer } = useFmlyNumber(user?.id);
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
@@ -371,6 +371,15 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
 
   const closeMobileIfNeeded = () => {
     if (isMobile) setOpenMobile(false);
+  };
+
+  const navigateToSignals = () => {
+    if (unreadCount === 0 && dropUnreadCount > 0) {
+      navigate("/Signals?tab=drops");
+    } else {
+      navigate("/Signals");
+    }
+    closeMobileIfNeeded();
   };
 
   const handleToolClick = (tool: ToolItem) => {
@@ -889,7 +898,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
         {authLoading ? null : user ? (
           <div className="space-y-1">
             <button
-              onClick={() => { navigate("/Signals"); closeMobileIfNeeded(); }}
+              onClick={navigateToSignals}
               className="flex items-center gap-2.5 w-full px-2 py-2 rounded-md hover:bg-sidebar-accent transition-colors"
             >
               <div className="relative">

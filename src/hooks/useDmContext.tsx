@@ -7,6 +7,7 @@ interface DmContextValue {
   threads: DmThreadSummary[];
   loading: boolean;
   unreadCount: number;
+  dropUnreadCount: number;
   totalUnread: number;
   reload: () => void;
   composePartnerId: string | null;
@@ -18,6 +19,7 @@ const DmContext = createContext<DmContextValue>({
   threads: [],
   loading: false,
   unreadCount: 0,
+  dropUnreadCount: 0,
   totalUnread: 0,
   reload: () => {},
   composePartnerId: null,
@@ -41,6 +43,7 @@ export function DmProvider({ children }: { children: ReactNode }) {
         threads,
         loading,
         unreadCount: dmUnreadCount,
+        dropUnreadCount,
         totalUnread,
         reload,
         composePartnerId,
