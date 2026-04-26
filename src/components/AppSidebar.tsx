@@ -105,7 +105,7 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
   const location = useLocation();
   const { state: sidebarState, setOpenMobile, isMobile } = useSidebar();
   const { toggleSidebar } = useSidebar();
-  const { unreadCount } = useDmContext();
+  const { totalUnread } = useDmContext();
   const { number: pioneerNumber, isBlazer } = useFmlyNumber(user?.id);
   const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
@@ -894,15 +894,15 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
             >
               <div className="relative">
                 <Bell size={18} className="text-primary" />
-                {unreadCount > 0 && (
+                {totalUnread > 0 && (
                   <span className="absolute -top-1.5 -right-2 flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-                    {unreadCount > 9 ? "9+" : unreadCount}
+                    {totalUnread > 9 ? "9+" : totalUnread}
                   </span>
                 )}
               </div>
               <span className="text-sm font-medium text-sidebar-foreground">Signals</span>
-              {unreadCount > 0 && (
-                <span className="ml-auto text-xs text-primary font-medium">{unreadCount} new</span>
+              {totalUnread > 0 && (
+                <span className="ml-auto text-xs text-primary font-medium">{totalUnread} new</span>
               )}
             </button>
 
@@ -923,9 +923,9 @@ export const AppSidebar = memo(function AppSidebar({ activeTab, onTabChange, onL
                 {(profile as any)?.is_verified && (
                   <span className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={10} /></span>
                 )}
-                {unreadCount > 0 && (
+                {totalUnread > 0 && (
                   <span className="absolute -top-0.5 -left-0.5 flex items-center justify-center h-4 min-w-4 px-0.5 rounded-full bg-primary text-[9px] font-bold text-primary-foreground ring-2 ring-sidebar">
-                    {unreadCount > 9 ? "9+" : unreadCount}
+                    {totalUnread > 9 ? "9+" : totalUnread}
                   </span>
                 )}
               </div>
