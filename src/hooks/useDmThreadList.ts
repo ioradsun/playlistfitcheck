@@ -24,7 +24,15 @@ export function useDmThreadList() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("get-dm-threads");
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke("get-dm-threads", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (error) {
         console.warn("[dm-threads] fetch failed:", error);
       } else if (data) {
