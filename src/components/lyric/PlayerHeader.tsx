@@ -36,6 +36,7 @@ interface PlayerHeaderProps {
   artistName?: string;
   songTitle: string;
   spotifyArtistId?: string | null;
+  spotifyEmbedUrl?: string | null;
   /** Optional UI to render in the top-left menu slot.
    *  Feed passes a menu trigger; standalone contexts leave this undefined. */
   menuSlot?: ReactNode;
@@ -115,6 +116,7 @@ export function PlayerHeader({
   artistName,
   songTitle,
   spotifyArtistId,
+  spotifyEmbedUrl,
   menuSlot,
   isVerified,
   userId,
@@ -130,6 +132,11 @@ export function PlayerHeader({
   const avatarRef = useRef<HTMLButtonElement>(null);
   const modeTriggerRef = useRef<HTMLButtonElement>(null);
   const modePillRef = useRef<HTMLDivElement>(null);
+  const spotifyHref = spotifyArtistId
+    ? `https://open.spotify.com/artist/${spotifyArtistId}`
+    : spotifyEmbedUrl
+      ? spotifyEmbedUrl.replace("open.spotify.com/embed/", "open.spotify.com/")
+      : null;
 
   useClickOutside([pillRef, avatarRef], () => setMenuOpen(false), menuOpen);
   useClickOutside([modePillRef, modeTriggerRef], () => setModeOpen(false), modeOpen);
@@ -190,9 +197,9 @@ export function PlayerHeader({
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {spotifyArtistId && (
+              {spotifyHref && (
                 <motion.a
-                  href={`https://open.spotify.com/artist/${spotifyArtistId}`}
+                  href={spotifyHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   initial={{ opacity: 0 }}
@@ -216,7 +223,7 @@ export function PlayerHeader({
                 type="button"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: spotifyArtistId ? 0.1 : 0.05 }}
+                transition={{ delay: spotifyHref ? 0.1 : 0.05 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onProfileClick?.();
@@ -233,7 +240,7 @@ export function PlayerHeader({
                 type="button"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: spotifyArtistId ? 0.15 : 0.1 }}
+                transition={{ delay: spotifyHref ? 0.15 : 0.1 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (userId) openCompose(userId);

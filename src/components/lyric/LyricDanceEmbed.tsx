@@ -80,6 +80,7 @@ export interface LyricDanceEmbedProps {
   lyricDanceUrl?: string | null;
   spotifyTrackId?: string | null;
   spotifyArtistId?: string | null;
+  spotifyEmbedUrl?: string | null;
   avatarUrl?: string | null;
   isVerified?: boolean;
   userId?: string | null;
@@ -123,6 +124,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     lyricDanceUrl = null,
     spotifyTrackId,
     spotifyArtistId,
+    spotifyEmbedUrl,
     avatarUrl,
     isVerified,
     userId,
@@ -1023,6 +1025,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
         artistName={artistName}
         songTitle={songTitle}
         spotifyArtistId={spotifyArtistId}
+        spotifyEmbedUrl={spotifyEmbedUrl}
         menuSlot={live ? menuSlot : undefined}
         isVerified={isVerified}
         userId={userId}
