@@ -47,7 +47,7 @@ export default function PublicProfile() {
   const isOwner = Boolean(user?.id && viewedUserId && user.id === viewedUserId);
   const fromMenu = Boolean((location.state as { fromMenu?: boolean } | null)?.fromMenu);
 
-  const { loading, notFound, profile, songs, featuredSong, voiceLines, momentum, career, heroTint } = useProfileData(viewedUserId);
+  const { loading, notFound, profile, songs, featuredSong, featuredLyricData, voiceLines, momentum, career, heroTint } = useProfileData(viewedUserId);
   const { topSupporters, whoTheyBack, mutuals, recentLocks } = useFmlyFabric(viewedUserId, user?.id ?? null);
 
   const [editing, setEditing] = useState(false);
@@ -234,8 +234,9 @@ export default function PublicProfile() {
 
         <HookSection
           song={featuredSong}
+          lyricData={featuredLyricData}
+          profile={draftProfile}
           isOwner={isOwner}
-          onOpenSong={openSong}
           onCreateFirstSong={() => navigate("/the-director?mode=song")}
         />
         <MomentumStrip momentum={{ ...momentum, lockedInCount }} />

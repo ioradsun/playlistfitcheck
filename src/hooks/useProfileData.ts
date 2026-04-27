@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
+import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
 import type { CareerStats, Momentum, ProfileRecord, ProfileSong, VoiceLine } from "@/components/profile/types";
 
 interface ProfileDataState {
@@ -10,6 +13,7 @@ interface ProfileDataState {
   voiceLines: VoiceLine[];
   momentum: Momentum;
   career: CareerStats;
+  featuredLyricData: LyricDanceData | null;
 }
 
 const EMPTY_MOMENTUM: Momentum = {
@@ -27,7 +31,8 @@ const EMPTY_CAREER: CareerStats = {
 };
 
 const SONG_SELECT =
-  "id,user_id,caption,status,created_at,fires_count,comments_count,lyric_projects(id,title,artist_slug,url_slug,album_art_url,palette)";
+  "id,user_id,caption,status,created_at,fires_count,comments_count," +
+  "lyric_projects(id,title,artist_slug,url_slug,album_art_url,section_images,palette)";
 
 export function useProfileData(viewedUserId: string | null) {
   const [state, setState] = useState<ProfileDataState>({
@@ -38,6 +43,7 @@ export function useProfileData(viewedUserId: string | null) {
     voiceLines: [],
     momentum: EMPTY_MOMENTUM,
     career: EMPTY_CAREER,
+    featuredLyricData: null,
   });
 
   useEffect(() => {
@@ -83,6 +89,14 @@ export function useProfileData(viewedUserId: string | null) {
       }));
 
       const postIds = allSongs.map((song) => song.id);
+      const featuredProjectId = allSongs.find((song) => song.status === "live")?.lyric_projects?.id ?? null;
+      const featuredLyricPromise = featuredProjectId
+        ? supabase
+            .from("lyric_projects" as any)
+            .select(LYRIC_DANCE_COLUMNS)
+            .eq("id", featuredProjectId)
+            .maybeSingle()
+        : Promise.resolve({ data: null as LyricDanceData | null });
       const [likesRes, commentsRes] = postIds.length
         ? await Promise.all([
             supabase
@@ -142,6 +156,7 @@ export function useProfileData(viewedUserId: string | null) {
 
       const now = Date.now();
       const latestLive = allSongs.find((song) => song.status === "live") ?? null;
+      const featuredLyricRes = await featuredLyricPromise;
 
       const totalFires = allSongs.reduce((acc, song) => acc + (song.fires_count ?? 0), 0);
       const songsCount = allSongs.length;
@@ -166,6 +181,14 @@ export function useProfileData(viewedUserId: string | null) {
           avgFires: songsCount ? Math.round((totalFires / songsCount) * 10) / 10 : 0,
           tenureDays,
         },
+        featuredLyricData: featuredLyricRes.data
+          ? ({
+              ...(featuredLyricRes.data as LyricDanceData),
+              cinematic_direction: (featuredLyricRes.data as LyricDanceData).cinematic_direction
+                ? normalizeCinematicDirection((featuredLyricRes.data as LyricDanceData).cinematic_direction)
+                : (featuredLyricRes.data as LyricDanceData).cinematic_direction,
+            } as LyricDanceData)
+          : null,
       });
     }
 

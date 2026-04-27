@@ -9,15 +9,17 @@ interface Props {
 }
 
 export function SongCard({ song, isOwner, onOpenSong }: Props) {
+  const cover = song.lyric_projects?.album_art_url ?? song.lyric_projects?.section_images?.[0];
+
   return (
     <button
       type="button"
       onClick={() => onOpenSong(song)}
       className="rounded-xl border border-white/10 p-2 text-left hover:border-white/20 transition-colors"
     >
-      {song.lyric_projects?.album_art_url ? (
+      {cover ? (
         <img
-          src={cdnImage(song.lyric_projects.album_art_url, "live")}
+          src={cdnImage(cover, "live")}
           alt={song.lyric_projects?.title ?? "song cover"}
           className="w-full aspect-square rounded-lg object-cover"
         />
