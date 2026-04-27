@@ -1,4 +1,4 @@
-import { Globe, Instagram, MessageCircle, Music2, ShoppingBag, Spotify, Youtube } from "lucide-react";
+import { Globe, Instagram, MessageCircle, Music2, ShoppingBag, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ProfileRecord } from "@/components/profile/types";
@@ -12,7 +12,7 @@ interface Props {
 }
 
 const socialDefs = [
-  { key: "spotify_embed_url", label: "Spotify", icon: Spotify },
+  { key: "spotify_embed_url", label: "Spotify", icon: SpotifyGlyph },
   { key: "instagram_url", label: "Instagram", icon: Instagram },
   { key: "tiktok_url", label: "TikTok", icon: Music2 },
   { key: "youtube_url", label: "YouTube", icon: Youtube },
@@ -64,5 +64,13 @@ export function ProfileSocials({ profile, isOwner, editing, onSocialChange, onDm
         {isOwner && !entries.length && <p className="text-sm text-muted-foreground">Add your social links while editing.</p>}
       </div>
     </section>
+  );
+}
+
+function SpotifyGlyph({ size = 14, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className}>
+      <path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.5 17.34a.75.75 0 0 1-1.03.24c-2.81-1.72-6.34-2.11-10.5-1.15a.75.75 0 1 1-.34-1.46c4.54-1.04 8.43-.61 11.63 1.35a.75.75 0 0 1 .24 1.02zm1.47-3.26a.94.94 0 0 1-1.29.31c-3.22-1.98-8.12-2.55-11.93-1.37a.94.94 0 0 1-.56-1.8c4.17-1.3 9.53-.66 13.48 1.74.44.27.58.84.3 1.12zm.13-3.4C15.56 8.6 9.73 8.42 6.36 9.43a1.13 1.13 0 0 1-.66-2.16c3.87-1.18 10.31-.95 14.55 1.59a1.13 1.13 0 1 1-1.16 1.82z" />
+    </svg>
   );
 }

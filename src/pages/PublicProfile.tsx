@@ -231,7 +231,12 @@ export default function PublicProfile() {
           onDm={() => viewedUserId && openCompose(viewedUserId)}
         />
 
-        <HookSection song={featuredSong} onOpenSong={openSong} />
+        <HookSection
+          song={featuredSong}
+          isOwner={isOwner}
+          onOpenSong={openSong}
+          onCreateFirstSong={() => navigate("/the-director?mode=song")}
+        />
         <MomentumStrip momentum={{ ...momentum, lockedInCount }} />
         <CatalogGrid songs={visibleSongs} isOwner={isOwner} onOpenSong={openSong} />
         <VoiceStrip lines={voiceLines} isOwner={isOwner} onOpenPost={(postId) => navigate(`/song/${postId}`)} />
