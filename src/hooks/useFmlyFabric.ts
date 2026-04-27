@@ -39,6 +39,8 @@ export function useFmlyFabric(viewedUserId: string | null, viewerUserId: string 
               .select("user_id,created_at,profiles:user_id(display_name,avatar_url)")
               .in("post_id", postIds)
               .neq("user_id", viewedUserId)
+              .order("created_at", { ascending: false })
+              .limit(500)
           : Promise.resolve({ data: [] as any[] }),
         postIds.length
           ? supabase
@@ -62,7 +64,8 @@ export function useFmlyFabric(viewedUserId: string | null, viewerUserId: string 
         const uid = like.user_id;
         if (!uid) continue;
         const existing = supporterCount.get(uid);
-        const displayName = (like as any)?.profiles?.display_name ?? "artist";
+        const displayName = (like as any)?.profiles?.display_name?.trim();
+        if (!displayName) continue;
         const avatar = (like as any)?.profiles?.avatar_url ?? null;
 
         if (existing) {
@@ -99,16 +102,18 @@ export function useFmlyFabric(viewedUserId: string | null, viewerUserId: string 
 
       const mutuals = topSupporters.filter((supporter) => mutualCandidates.has(supporter.user_id)).slice(0, 12);
 
-      if (viewerUserId && viewerUserId === viewedUserId && mutuals.length === 0 && topSupporters.length > 0) {
-        mutuals.push(...topSupporters.slice(0, 4));
-      }
-
-      const recentLocks: PersonChip[] = (recentLocksRes.data ?? []).map((row: any) => ({
-        user_id: row.subscriber_user_id,
-        display_name: row?.profiles?.display_name ?? "artist",
-        avatar_url: row?.profiles?.avatar_url ?? null,
-        created_at: row.created_at,
-      }));
+      const recentLocks: PersonChip[] = (recentLocksRes.data ?? [])
+        .map((row: any) => {
+          const name = row?.profiles?.display_name?.trim();
+          if (!name) return null;
+          return {
+            user_id: row.subscriber_user_id,
+            display_name: name,
+            avatar_url: row?.profiles?.avatar_url ?? null,
+            created_at: row.created_at,
+          };
+        })
+        .filter(Boolean) as PersonChip[];
 
       setState({
         loading: false,

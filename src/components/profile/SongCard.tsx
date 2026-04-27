@@ -29,7 +29,7 @@ export function SongCard({ song, isOwner, onOpenSong }: Props) {
         <span className="inline-flex items-center gap-1"><Flame size={11} className="text-orange-300" />{song.fires_count}</span>
         <span className="inline-flex items-center gap-1"><MessageCircle size={11} />{song.comments_count}</span>
       </div>
-      {isOwner && <span className="mt-1 inline-block text-[10px] font-mono uppercase tracking-wide text-muted-foreground">{song.status}</span>}
+      {isOwner && song.status !== "live" && <span className="mt-1 inline-block text-[10px] font-mono uppercase tracking-wide text-muted-foreground">{song.status}</span>}
     </button>
   );
 }

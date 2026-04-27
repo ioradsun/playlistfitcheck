@@ -134,12 +134,14 @@ export function useProfileData(viewedUserId: string | null) {
 
       voiceLines.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
 
+      const weekAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const firesThisWeekRes = postIds.length
+        ? await supabase.from("feed_likes").select("id", { count: "exact", head: true }).in("post_id", postIds).gte("created_at", weekAgoIso)
+        : { count: 0 };
+      const firesThisWeek = firesThisWeekRes.count ?? 0;
+
       const now = Date.now();
-      const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-      const firesThisWeek = allSongs.reduce((acc, song) => {
-        return +new Date(song.created_at) >= weekAgo ? acc + (song.fires_count ?? 0) : acc;
-      }, 0);
-      const latestDrop = allSongs.find((song) => song.status === "live") ?? allSongs[0] ?? null;
+      const latestLive = allSongs.find((song) => song.status === "live") ?? null;
 
       const totalFires = allSongs.reduce((acc, song) => acc + (song.fires_count ?? 0), 0);
       const songsCount = allSongs.length;
@@ -153,8 +155,8 @@ export function useProfileData(viewedUserId: string | null) {
         songs: allSongs,
         voiceLines: voiceLines.slice(0, 6),
         momentum: {
-          latestDropAt: latestDrop?.created_at ?? null,
-          latestDropTitle: latestDrop?.lyric_projects?.title ?? latestDrop?.caption ?? null,
+          latestDropAt: latestLive?.created_at ?? null,
+          latestDropTitle: latestLive?.lyric_projects?.title ?? latestLive?.caption ?? null,
           firesThisWeek,
           lockedInCount: lockCountRes.count ?? 0,
         },
@@ -175,8 +177,9 @@ export function useProfileData(viewedUserId: string | null) {
   }, [viewedUserId]);
 
   const featuredSong = useMemo(() => {
-    if (!state.songs.length) return null;
-    return [...state.songs].sort((a, b) => (b.fires_count ?? 0) - (a.fires_count ?? 0))[0];
+    const live = state.songs.filter((song) => song.status === "live");
+    if (!live.length) return null;
+    return [...live].sort((a, b) => (b.fires_count ?? 0) - (a.fires_count ?? 0))[0];
   }, [state.songs]);
 
   const heroTint = useMemo(() => {
