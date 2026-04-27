@@ -28,6 +28,7 @@ export interface ProfileSong {
     artist_slug: string | null;
     url_slug: string | null;
     album_art_url: string | null;
+    section_images: string[] | null;
     palette: string[] | null;
   } | null;
 }

@@ -1,15 +1,16 @@
-import { Flame, Play } from "lucide-react";
-import { cdnImage } from "@/lib/cdnImage";
-import type { ProfileSong } from "@/components/profile/types";
+import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
+import type { LyricDanceData } from "@/engine/LyricDancePlayer";
+import type { ProfileRecord, ProfileSong } from "@/components/profile/types";
 
 interface Props {
   song: ProfileSong | null;
+  lyricData: LyricDanceData | null;
+  profile: ProfileRecord;
   isOwner: boolean;
-  onOpenSong: (song: ProfileSong) => void;
   onCreateFirstSong: () => void;
 }
 
-export function HookSection({ song, isOwner, onOpenSong, onCreateFirstSong }: Props) {
+export function HookSection({ song, lyricData, profile, isOwner, onCreateFirstSong }: Props) {
   if (!song) {
     if (!isOwner) return null;
 
@@ -25,42 +26,32 @@ export function HookSection({ song, isOwner, onOpenSong, onCreateFirstSong }: Pr
     );
   }
 
+  const lp = song.lyric_projects;
+  const lyricDanceUrl = lp?.artist_slug && lp?.url_slug ? `/${lp.artist_slug}/${lp.url_slug}/lyric-dance` : null;
+
   return (
-    <button
-      type="button"
-      onClick={() => onOpenSong(song)}
-      className="w-full rounded-2xl border border-white/10 overflow-hidden text-left hover:border-white/20 transition-colors"
+    <section
+      className="w-full rounded-2xl overflow-hidden border border-white/10"
+      style={{ height: 320, background: "#0a0a0a" }}
     >
-      <div className="relative aspect-[16/9]">
-        {song.lyric_projects?.album_art_url ? (
-          <img
-            src={cdnImage(song.lyric_projects.album_art_url, "live")}
-            alt={song.lyric_projects?.title ?? "song cover"}
-            className="absolute inset-0 h-full w-full object-cover brightness-50"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-[#101218]" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0a0a0e]" />
-
-        <div className="absolute left-3 top-3 rounded-full border border-orange-300/50 bg-black/35 px-2 py-1 text-[10px] font-mono uppercase tracking-[0.2em] text-orange-300">
-          Featured
-        </div>
-
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-black">
-            <Play size={20} fill="currentColor" className="ml-0.5" />
-          </span>
-        </div>
-
-        <div className="absolute inset-x-0 bottom-0 p-4">
-          <p className="truncate text-base font-semibold text-white">{song.lyric_projects?.title ?? song.caption ?? "Untitled"}</p>
-          <p className="mt-1 flex items-center gap-1.5 text-xs font-mono text-white/85">
-            <Flame size={12} className="text-orange-300" />
-            {song.fires_count ?? 0} fires
-          </p>
-        </div>
-      </div>
-    </button>
+      <LyricDanceEmbed
+        lyricDanceId={lp?.id ?? ""}
+        postId={song.id}
+        songTitle={lp?.title ?? song.caption ?? "Untitled"}
+        artistName={profile.display_name ?? undefined}
+        avatarUrl={profile.avatar_url}
+        isVerified={profile.is_verified}
+        userId={song.user_id}
+        spotifyTrackId={lyricData?.spotify_track_id ?? null}
+        spotifyArtistId={profile.spotify_artist_id}
+        spotifyEmbedUrl={profile.spotify_embed_url}
+        lyricDanceUrl={lyricDanceUrl}
+        prefetchedData={lyricData}
+        previewPaletteColor={lyricData?.auto_palettes?.[0]?.[0] ?? lyricData?.palette?.[0] ?? lp?.palette?.[0] ?? null}
+        previewImageUrl={lyricData?.section_images?.[0] ?? lp?.album_art_url ?? null}
+        live={true}
+        autoPlay={false}
+      />
+    </section>
   );
 }
