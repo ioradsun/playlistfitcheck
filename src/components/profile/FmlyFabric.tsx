@@ -4,13 +4,14 @@ import { PeopleRow } from "@/components/profile/PeopleRow";
 interface Props {
   isOwner: boolean;
   topSupporters: PersonChip[];
+  whoTheyBack: PersonChip[];
   mutuals: PersonChip[];
   recentLocks: PersonChip[];
   onOpenPerson: (userId: string) => void;
 }
 
-export function FmlyFabric({ isOwner, topSupporters, mutuals, recentLocks, onOpenPerson }: Props) {
-  const hasData = topSupporters.length || mutuals.length || recentLocks.length;
+export function FmlyFabric({ isOwner, topSupporters, whoTheyBack, mutuals, recentLocks, onOpenPerson }: Props) {
+  const hasData = topSupporters.length || whoTheyBack.length || mutuals.length || recentLocks.length;
   if (!hasData && !isOwner) return null;
 
   return (
@@ -20,6 +21,12 @@ export function FmlyFabric({ isOwner, topSupporters, mutuals, recentLocks, onOpe
         title="Top supporters"
         people={topSupporters}
         emptyText={isOwner ? "Top supporters will appear here once fans fire your songs." : undefined}
+        onOpenPerson={onOpenPerson}
+      />
+      <PeopleRow
+        title="Who they back"
+        people={whoTheyBack}
+        emptyText={isOwner ? "When you fire someone's song, they'll show up here." : undefined}
         onOpenPerson={onOpenPerson}
       />
       <PeopleRow
