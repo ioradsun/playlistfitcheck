@@ -48,7 +48,7 @@ export default function PublicProfile() {
   const fromMenu = Boolean((location.state as { fromMenu?: boolean } | null)?.fromMenu);
 
   const { loading, notFound, profile, songs, featuredSong, voiceLines, momentum, career, heroTint } = useProfileData(viewedUserId);
-  const { topSupporters, mutuals, recentLocks } = useFmlyFabric(viewedUserId, user?.id ?? null);
+  const { topSupporters, whoTheyBack, mutuals, recentLocks } = useFmlyFabric(viewedUserId, user?.id ?? null);
 
   const [editing, setEditing] = useState(false);
   const [draftProfile, setDraftProfile] = useState<ProfileRecord | null>(null);
@@ -245,6 +245,7 @@ export default function PublicProfile() {
         <FmlyFabric
           isOwner={isOwner}
           topSupporters={topSupporters}
+          whoTheyBack={whoTheyBack}
           mutuals={mutuals}
           recentLocks={recentLocks}
           onOpenPerson={(personId) => navigate(`/u/${personId}`)}

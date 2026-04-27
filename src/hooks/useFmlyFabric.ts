@@ -6,6 +6,7 @@ interface FabricState {
   loading: boolean;
   topSupporters: PersonChip[];
   mutuals: PersonChip[];
+  whoTheyBack: PersonChip[];
   recentLocks: PersonChip[];
 }
 
@@ -14,6 +15,7 @@ export function useFmlyFabric(viewedUserId: string | null, viewerUserId: string 
     loading: false,
     topSupporters: [],
     mutuals: [],
+    whoTheyBack: [],
     recentLocks: [],
   });
 
@@ -87,6 +89,7 @@ export function useFmlyFabric(viewedUserId: string | null, viewerUserId: string 
 
       const artistFiredPosts = new Set((artistLikesRes.data ?? []).map((r: any) => r.post_id));
       const mutualCandidates = new Set<string>();
+      const backingMap = new Map<string, PersonChip>();
 
       if (artistFiredPosts.size > 0) {
         const { data: owners } = await supabase
@@ -97,8 +100,27 @@ export function useFmlyFabric(viewedUserId: string | null, viewerUserId: string 
         for (const row of owners ?? []) {
           if (!row.user_id || row.user_id === viewedUserId) continue;
           mutualCandidates.add(row.user_id);
+
+          const name = row?.profiles?.display_name?.trim();
+          if (!name) continue;
+          const existing = backingMap.get(row.user_id);
+          if (existing) {
+            existing.value = (existing.value ?? 0) + 1;
+          } else {
+            backingMap.set(row.user_id, {
+              user_id: row.user_id,
+              display_name: name,
+              avatar_url: row?.profiles?.avatar_url ?? null,
+              value: 1,
+              created_at: null,
+            });
+          }
         }
       }
+
+      const whoTheyBack = [...backingMap.values()]
+        .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+        .slice(0, 12);
 
       const mutuals = topSupporters.filter((supporter) => mutualCandidates.has(supporter.user_id)).slice(0, 12);
 
@@ -118,6 +140,7 @@ export function useFmlyFabric(viewedUserId: string | null, viewerUserId: string 
       setState({
         loading: false,
         topSupporters,
+        whoTheyBack,
         mutuals,
         recentLocks,
       });
