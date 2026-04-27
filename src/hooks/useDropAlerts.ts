@@ -78,7 +78,7 @@ export function useDropAlerts(): {
       return null;
     }
 
-    return mapAlertRow(data as ReleaseAlertRow);
+    return mapAlertRow(data as unknown as ReleaseAlertRow);
   }, []);
 
   const loadAlerts = useCallback(async () => {
@@ -112,7 +112,7 @@ export function useDropAlerts(): {
         return;
       }
 
-      setAlerts(((data ?? []) as ReleaseAlertRow[]).map(mapAlertRow));
+      setAlerts(((data ?? []) as unknown as ReleaseAlertRow[]).map(mapAlertRow));
     } finally {
       setLoading(false);
     }

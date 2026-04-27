@@ -1221,10 +1221,12 @@ export type Database = {
           is_claimed: boolean
           is_unlimited: boolean
           is_verified: boolean
+          merch_url: string | null
           spotify_artist_id: string | null
           spotify_artist_slug: string | null
           spotify_embed_url: string | null
           theme: string
+          tiktok_url: string | null
           trailblazer_number: number | null
           wallet_address: string | null
           website_url: string | null
@@ -1243,10 +1245,12 @@ export type Database = {
           is_claimed?: boolean
           is_unlimited?: boolean
           is_verified?: boolean
+          merch_url?: string | null
           spotify_artist_id?: string | null
           spotify_artist_slug?: string | null
           spotify_embed_url?: string | null
           theme?: string
+          tiktok_url?: string | null
           trailblazer_number?: number | null
           wallet_address?: string | null
           website_url?: string | null
@@ -1265,10 +1269,12 @@ export type Database = {
           is_claimed?: boolean
           is_unlimited?: boolean
           is_verified?: boolean
+          merch_url?: string | null
           spotify_artist_id?: string | null
           spotify_artist_slug?: string | null
           spotify_embed_url?: string | null
           theme?: string
+          tiktok_url?: string | null
           trailblazer_number?: number | null
           wallet_address?: string | null
           website_url?: string | null
@@ -1668,6 +1674,62 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      release_alerts: {
+        Row: {
+          artist_user_id: string
+          created_at: string
+          feed_post_id: string
+          id: string
+          is_read: boolean
+          subscriber_user_id: string
+        }
+        Insert: {
+          artist_user_id: string
+          created_at?: string
+          feed_post_id: string
+          id?: string
+          is_read?: boolean
+          subscriber_user_id: string
+        }
+        Update: {
+          artist_user_id?: string
+          created_at?: string
+          feed_post_id?: string
+          id?: string
+          is_read?: boolean
+          subscriber_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_alerts_feed_post_id_fkey"
+            columns: ["feed_post_id"]
+            isOneToOne: false
+            referencedRelation: "feed_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      release_subscriptions: {
+        Row: {
+          artist_user_id: string
+          created_at: string
+          id: string
+          subscriber_user_id: string
+        }
+        Insert: {
+          artist_user_id: string
+          created_at?: string
+          id?: string
+          subscriber_user_id: string
+        }
+        Update: {
+          artist_user_id?: string
+          created_at?: string
+          id?: string
+          subscriber_user_id?: string
+        }
+        Relationships: []
       }
       saved_hitfit: {
         Row: {
