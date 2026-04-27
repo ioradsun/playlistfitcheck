@@ -8,14 +8,7 @@ interface Props {
 }
 
 export function CatalogGrid({ songs, isOwner, onOpenSong }: Props) {
-  if (!songs.length) {
-    if (!isOwner) return null;
-    return (
-      <section className="rounded-xl border border-white/10 p-4">
-        <p className="text-sm text-muted-foreground">Drop your first song.</p>
-      </section>
-    );
-  }
+  if (!songs.length) return null;
 
   return (
     <section className="space-y-2">
