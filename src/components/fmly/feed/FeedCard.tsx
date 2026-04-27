@@ -6,6 +6,7 @@ import type { FmlyPost } from "@/components/fmly/types";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { CARD_CONTENT_HEIGHT_PX } from "@/components/fmly/feed/constants";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
 
 interface Props {
   post: FmlyPost;
@@ -29,6 +30,7 @@ export const FeedCard = memo(function FeedCard({
   onRequestPrimary,
   reelsMode = false,
 }: Props) {
+  const navigate = useNavigate();
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +55,7 @@ export const FeedCard = memo(function FeedCard({
     userId: post.user_id,
     spotifyTrackId: lp?.spotify_track_id ?? null,
     spotifyArtistId: (post.profiles as any)?.spotify_artist_id,
+    spotifyEmbedUrl: (post.profiles as any)?.spotify_embed_url ?? null,
     lyricDanceUrl,
     prefetchedData: lyricData,
     previewPaletteColor: (lp as any)?.auto_palettes?.[0]?.[0] ?? lp?.palette?.[0] ?? null,
@@ -71,6 +74,7 @@ export const FeedCard = memo(function FeedCard({
       </SidebarTrigger>
     ),
     onRequestPrimary: handleRequestPrimary,
+    onProfileClick: post.user_id ? () => navigate(`/u/${post.user_id}`) : undefined,
   };
 
   return (

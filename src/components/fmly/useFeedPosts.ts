@@ -34,7 +34,7 @@ const PAGE_SIZE = 20;
 
 const POST_SELECT =
   "id, user_id, project_id, caption, created_at, status, " +
-  "profiles:user_id(display_name, avatar_url, spotify_artist_id, wallet_address, is_verified), " +
+  "profiles:user_id(display_name, avatar_url, spotify_artist_id, spotify_embed_url, wallet_address, is_verified), " +
   "lyric_projects(id, title, artist_name, artist_slug, url_slug, audio_url, album_art_url, spotify_track_id, palette, cinematic_direction, beat_grid, section_images, auto_palettes, lines, words, physics_spec, empowerment_promise)";
 
 // ── Filter helpers ──────────────────────────────────────────────────────────

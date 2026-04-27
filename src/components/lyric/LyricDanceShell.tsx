@@ -18,6 +18,7 @@ export const LyricDanceShell = memo(function LyricDanceShell({
   prefetchedData,
   lyricDanceUrl = null,
   spotifyArtistId,
+  spotifyEmbedUrl,
   avatarUrl,
   isVerified,
   userId,
@@ -52,6 +53,7 @@ export const LyricDanceShell = memo(function LyricDanceShell({
         artistName={artistName}
         songTitle={songTitle}
         spotifyArtistId={spotifyArtistId}
+        spotifyEmbedUrl={spotifyEmbedUrl}
         menuSlot={undefined}
         isVerified={isVerified}
         userId={userId}
