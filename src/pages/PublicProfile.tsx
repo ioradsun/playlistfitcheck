@@ -96,9 +96,10 @@ export default function PublicProfile() {
 
   const visibleSongs = useMemo(() => {
     const source = isOwner ? songs : songs.filter((song) => song.status === "live");
-    if (isOwner) return source;
-    return [...source].sort((a, b) => (b.fires_count ?? 0) - (a.fires_count ?? 0));
-  }, [isOwner, songs]);
+    const filtered = featuredSong ? source.filter((song) => song.id !== featuredSong.id) : source;
+    if (isOwner) return filtered;
+    return [...filtered].sort((a, b) => (b.fires_count ?? 0) - (a.fires_count ?? 0));
+  }, [isOwner, songs, featuredSong]);
 
   const updateProfileDraft = (patch: Partial<ProfileRecord>) => {
     setDraftProfile((prev) => (prev ? { ...prev, ...patch } : prev));

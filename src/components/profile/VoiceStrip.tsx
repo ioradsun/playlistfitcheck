@@ -25,13 +25,30 @@ export function VoiceStrip({ lines, isOwner, onOpenPost }: Props) {
       {!lines.length && isOwner ? (
         <p className="text-sm text-muted-foreground">When fans fire your songs, their voice shows up here.</p>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {lines.map((line) => (
-            <button key={`${line.kind}-${line.id}`} onClick={() => onOpenPost(line.postId)} className="w-full text-left text-xs">
-              <span className="font-mono text-muted-foreground mr-1">{line.kind === "fire" ? "🔥" : "💬"}</span>
-              <span className="text-foreground/90">{line.actorName}</span>{" "}
-              <span className="text-muted-foreground">{line.kind === "fire" ? "fired" : line.content?.slice(0, 40)}</span>
-              <span className="text-muted-foreground/70 ml-1">{since(line.createdAt)}</span>
+            <button
+              key={`${line.kind}-${line.id}`}
+              onClick={() => onOpenPost(line.postId)}
+              className="w-full text-left text-xs flex items-baseline gap-1.5 hover:bg-white/[0.02] rounded-md px-1 py-0.5 transition-colors"
+            >
+              <span aria-hidden>{line.kind === "fire" ? "🔥" : "💬"}</span>
+              <span className="text-foreground/90 shrink-0">@{line.actorName}</span>
+              {line.kind === "fire" ? (
+                <>
+                  <span className="text-muted-foreground shrink-0">fired</span>
+                  <span className="truncate text-foreground/75">{line.songTitle}</span>
+                </>
+              ) : (
+                <>
+                  <span className="truncate italic text-foreground/75">
+                    "{line.content?.slice(0, 60)}
+                    {(line.content?.length ?? 0) > 60 ? "…" : ""}"
+                  </span>
+                  <span className="text-muted-foreground shrink-0">on {line.songTitle}</span>
+                </>
+              )}
+              <span className="text-muted-foreground/70 ml-auto shrink-0 font-mono">{since(line.createdAt)}</span>
             </button>
           ))}
         </div>
