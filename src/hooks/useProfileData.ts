@@ -89,7 +89,11 @@ export function useProfileData(viewedUserId: string | null) {
       }));
 
       const postIds = allSongs.map((song) => song.id);
-      const featuredProjectId = allSongs.find((song) => song.status === "live")?.lyric_projects?.id ?? null;
+      const liveSongs = allSongs.filter((song) => song.status === "live");
+      const featuredLiveSong = liveSongs.length
+        ? [...liveSongs].sort((a, b) => (b.fires_count ?? 0) - (a.fires_count ?? 0))[0]
+        : null;
+      const featuredProjectId = featuredLiveSong?.lyric_projects?.id ?? null;
       const featuredLyricPromise = featuredProjectId
         ? supabase
             .from("lyric_projects" as any)
