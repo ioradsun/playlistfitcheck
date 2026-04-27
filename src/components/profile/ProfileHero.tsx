@@ -40,11 +40,12 @@ export function ProfileHero({
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const tintAt20 = tintColor.startsWith("#") ? `${tintColor}33` : tintColor;
 
   return (
     <section
       className="rounded-2xl border border-white/10 p-5 sm:p-6 relative overflow-hidden"
-      style={{ background: `radial-gradient(circle at 10% 15%, ${tintColor}33 0%, transparent 55%)` }}
+      style={{ background: `radial-gradient(circle at 10% 15%, ${tintAt20} 0%, transparent 55%)` }}
     >
       <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
         <button

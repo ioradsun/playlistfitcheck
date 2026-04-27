@@ -211,7 +211,7 @@ export function useProfileData(viewedUserId: string | null) {
 
   const heroTint = useMemo(() => {
     const raw = featuredSong?.lyric_projects?.palette?.[0];
-    if (!raw) return "hsl(var(--primary))";
+    if (!raw) return "#1e293b";
     return raw;
   }, [featuredSong]);
 
