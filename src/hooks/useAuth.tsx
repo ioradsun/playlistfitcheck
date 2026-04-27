@@ -88,7 +88,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (event === "SIGNED_IN" && !welcomeToastFiredRef.current) {
           welcomeToastFiredRef.current = true;
-          toast.success("Welcome to the FMly ♫");
+          if (localStorage.getItem("tfm_pending_welcome") === "1") {
+            localStorage.removeItem("tfm_pending_welcome");
+            toast.success("Welcome to the FMly ♫");
+          }
         }
       }
     );
