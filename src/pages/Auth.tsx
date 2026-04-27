@@ -133,6 +133,7 @@ const Auth = () => {
         });
         if (error) throw error;
         localStorage.setItem("tfm_has_account", "1");
+        localStorage.setItem("tfm_pending_welcome", "1");
         setCheckEmail(true);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
