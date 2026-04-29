@@ -101,6 +101,8 @@ export interface LyricDanceEmbedProps {
   /** Invoked when the user taps a non-live card. Feed wrappers implement this
    *  to promote the card to primary. Ignored when live=true (tap toggles mute). */
   onRequestPrimary?: () => void;
+  onSongEnd?: () => void;
+  loopOnListen?: boolean;
 }
 
 export interface LyricDanceEmbedHandle {
@@ -133,6 +135,8 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     autoPlay = true,
     menuSlot,
     onRequestPrimary,
+    onSongEnd,
+    loopOnListen = true,
   } = props;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -885,7 +889,7 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
     if (shouldEngage) {
       unlockAudio();
       player.setRegion(undefined, undefined);
-      player.audio.loop = true;
+      player.audio.loop = loopOnListen;
       player.setMuted(muted);
       if (!muted) everUnmutedRef.current = true;
       if (autoPlay) {
@@ -899,7 +903,15 @@ export const LyricDanceEmbed = memo(forwardRef<LyricDanceEmbedHandle, LyricDance
       // Don't pause — engine may need to continue for export/preview contexts.
       // Non-primary cards have live=false which tears down the engine via the hook.
     }
-  }, [player, playerReady, live, cardMode, muted, autoPlay]);
+  }, [player, playerReady, live, cardMode, muted, autoPlay, loopOnListen]);
+
+  useEffect(() => {
+    if (!player || !live || !onSongEnd) return;
+    const audio = player.audio;
+    const handleEnded = () => onSongEnd();
+    audio.addEventListener("ended", handleEnded);
+    return () => audio.removeEventListener("ended", handleEnded);
+  }, [player, live, onSongEnd]);
 
   // Clear any pending panel-play timer when cardMode or live changes.
   useEffect(() => {
