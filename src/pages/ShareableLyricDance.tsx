@@ -11,6 +11,7 @@ import { useParams, useNavigate, useSearchParams, useLocation } from "react-rout
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { consumeShareableDancePrefetch, readCachedDanceData } from "@/lib/prefetch";
+import { cacheDanceData } from "@/lib/prefetch";
 import ClaimBanner from "@/components/claim/ClaimBanner";
 import type { LyricDanceData } from "@/engine/LyricDancePlayer";
 import { SeoHead } from "@/components/SeoHead";
@@ -25,6 +26,15 @@ interface ProfileInfo {
   avatar_url: string | null;
   is_verified: boolean;
 }
+interface CatalogSong {
+  id: string;
+  title: string;
+  artist_name: string | null;
+  artist_slug: string;
+  url_slug: string;
+  album_art_url: string | null;
+  section_images: string[] | null;
+}
 
 export default function ShareableLyricDance() {
   const { artistSlug, songSlug } = useParams<{ artistSlug: string; songSlug: string }>();
@@ -38,6 +48,11 @@ export default function ShareableLyricDance() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  const [nextSong, setNextSong] = useState<CatalogSong | null>(null);
+  const [showUpNext, setShowUpNext] = useState(false);
+  const [countdownActive, setCountdownActive] = useState(false);
+  const countdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextSongPrefetchedRef = useRef<string | null>(null);
   const empowermentGenStarted = useRef(false);
   const isMobile = useIsMobile();
   const handleClose = () => {
@@ -113,6 +128,66 @@ export default function ShareableLyricDance() {
       });
   }, [artistSlug, songSlug]);
 
+  useEffect(() => {
+    if (!data?.user_id) return;
+    let cancelled = false;
+    (async () => {
+      const auth = await supabase.auth.getUser();
+      const isOwner = !!auth.data.user && auth.data.user.id === data.user_id;
+      let query = supabase
+        .from("lyric_projects" as any)
+        .select("id,title,artist_name,artist_slug,url_slug,album_art_url,section_images,status,fires_count")
+        .eq("user_id", data.user_id)
+        .neq("id", data.id)
+        .order("fires_count", { ascending: false });
+      if (!isOwner) query = query.eq("status", "live");
+      const { data: rows, error } = await query;
+      if (cancelled || error) return;
+      setNextSong((rows?.[0] as CatalogSong | undefined) ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [data?.id, data?.user_id]);
+
+  useEffect(() => {
+    if (!showUpNext || !nextSong?.artist_slug || !nextSong?.url_slug) return;
+    const key = `${nextSong.artist_slug}/${nextSong.url_slug}`;
+    if (nextSongPrefetchedRef.current === key) return;
+    nextSongPrefetchedRef.current = key;
+    const cached = readCachedDanceData(nextSong.artist_slug, nextSong.url_slug);
+    if (cached) return;
+    supabase
+      .from("lyric_projects" as any)
+      .select(LYRIC_DANCE_COLUMNS)
+      .eq("id", nextSong.id)
+      .maybeSingle()
+      .then(({ data: row }) => {
+        if (row) cacheDanceData(nextSong.artist_slug, nextSong.url_slug, row);
+      });
+  }, [showUpNext, nextSong]);
+
+  const cancelCountdown = () => {
+    if (countdownTimeoutRef.current) {
+      clearTimeout(countdownTimeoutRef.current);
+      countdownTimeoutRef.current = null;
+    }
+    setCountdownActive(false);
+    setShowUpNext(false);
+  };
+
+  const goToNextSong = () => {
+    if (!nextSong) return;
+    cancelCountdown();
+    navigate(`/${nextSong.artist_slug}/${nextSong.url_slug}/lyric-dance`);
+  };
+
+  const handleSongEnd = () => {
+    if (!nextSong) return;
+    setShowUpNext(true);
+    setCountdownActive(true);
+    if (countdownTimeoutRef.current) clearTimeout(countdownTimeoutRef.current);
+    countdownTimeoutRef.current = setTimeout(() => goToNextSong(), 5000);
+  };
+
   // ── Poll for section images (claim pipeline generates async) ───────────
   useEffect(() => {
     if (!data) return;
@@ -171,11 +246,20 @@ export default function ShareableLyricDance() {
   useEffect(() => {
     if (isMarketingView) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && showUpNext) {
+        event.preventDefault();
+        cancelCountdown();
+        return;
+      }
       if (event.key === "Escape") handleClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isMarketingView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isMarketingView, showUpNext]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => {
+    if (countdownTimeoutRef.current) clearTimeout(countdownTimeoutRef.current);
+  }, []);
 
   // ── Derived ────────────────────────────────────────────────────────────
   const coverSongName = data?.title ?? "";
@@ -260,9 +344,68 @@ export default function ShareableLyricDance() {
               ?? (data as any)?.album_art_url
               ?? null
             }
+            onSongEnd={handleSongEnd}
+            loopOnListen={false}
           />
         )}
       </div>
+
+      {showUpNext && nextSong && (
+        <button
+          type="button"
+          onClick={goToNextSong}
+          className="absolute left-1/2 z-[75] flex w-[min(92vw,360px)] -translate-x-1/2 items-center gap-3 rounded-2xl border border-white/15 bg-black/80 px-3 py-3 text-left backdrop-blur-md"
+          style={{ bottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}
+        >
+          <div className="relative h-10 w-10 shrink-0">
+            <img
+              src={nextSong.section_images?.[0] || nextSong.album_art_url || "/placeholder.svg"}
+              alt=""
+              className="h-10 w-10 rounded-md object-cover"
+            />
+            {countdownActive && (
+              <svg className="absolute -inset-1 h-12 w-12 -rotate-90" viewBox="0 0 48 48" aria-hidden="true">
+                <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="3" />
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="20"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray={126}
+                  style={{ animation: "up-next-countdown 5s linear forwards" }}
+                />
+              </svg>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-white">Up next: {nextSong.title}</p>
+            <p className="truncate text-xs text-white/60">{nextSong.artist_name ?? coverArtist}</p>
+          </div>
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label="Dismiss up next"
+            onClick={(event) => {
+              event.stopPropagation();
+              cancelCountdown();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                cancelCountdown();
+              }
+            }}
+            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full text-white/70 hover:bg-white/10"
+          >
+            <X size={16} />
+          </span>
+        </button>
+      )}
+
+      <style>{`@keyframes up-next-countdown { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 126; } }`}</style>
 
       {isMobile && <div style={{ height: "env(safe-area-inset-bottom, 0px)" }} />}
     </div>
