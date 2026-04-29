@@ -18,6 +18,7 @@ import { invokeWithTimeout } from "@/lib/invokeWithTimeout";
 import { LyricDanceEmbed } from "@/components/lyric/LyricDanceEmbed";
 import { normalizeCinematicDirection } from "@/engine/cinematicResolver";
 import { LYRIC_DANCE_COLUMNS } from "@/lib/lyricDanceColumns";
+import { X } from "lucide-react";
 
 interface ProfileInfo {
   display_name: string | null;
@@ -39,6 +40,10 @@ export default function ShareableLyricDance() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const empowermentGenStarted = useRef(false);
   const isMobile = useIsMobile();
+  const handleClose = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/");
+  };
 
   // ── Data fetch ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -163,6 +168,15 @@ export default function ShareableLyricDance() {
     return () => { style.remove(); };
   }, []);
 
+  useEffect(() => {
+    if (isMarketingView) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") handleClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isMarketingView]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Derived ────────────────────────────────────────────────────────────
   const coverSongName = data?.title ?? "";
   const coverArtist = profile?.display_name ?? data?.artist_name ?? "";
@@ -197,6 +211,17 @@ export default function ShareableLyricDance() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0a0a" }}>
+      {!isMarketingView && (
+        <button
+          type="button"
+          aria-label="Close lyric dance"
+          onClick={handleClose}
+          className="absolute left-4 z-[70] flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white/90 backdrop-blur-md transition-colors hover:bg-black/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          style={{ top: "calc(16px + env(safe-area-inset-top, 0px))" }}
+        >
+          <X size={22} />
+        </button>
+      )}
       <SeoHead
         title={ogTitle} description={ogDescription}
         canonical={`https://tools.fm${location.pathname}${location.search}`}
