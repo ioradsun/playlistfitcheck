@@ -143,7 +143,7 @@ export default function ShareableLyricDance() {
       if (!isOwner) query = query.eq("status", "live");
       const { data: rows, error } = await query;
       if (cancelled || error) return;
-      setNextSong((rows?.[0] as CatalogSong | undefined) ?? null);
+      setNextSong((rows?.[0] as unknown as CatalogSong | undefined) ?? null);
     })();
     return () => { cancelled = true; };
   }, [data?.id, data?.user_id]);
