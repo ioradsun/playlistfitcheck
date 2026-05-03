@@ -97,7 +97,7 @@ export function useFmlyFabric(viewedUserId: string | null, viewerUserId: string 
           .select("id,user_id,profiles:user_id(display_name,avatar_url)")
           .in("id", [...artistFiredPosts]);
 
-        for (const row of owners ?? []) {
+        for (const row of (owners ?? []) as any[]) {
           if (!row.user_id || row.user_id === viewedUserId) continue;
           mutualCandidates.add(row.user_id);
 
