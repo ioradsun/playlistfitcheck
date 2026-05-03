@@ -82,7 +82,7 @@ export function useProfileData(viewedUserId: string | null) {
         return;
       }
 
-      const allSongs = ((songsRes.data ?? []) as ProfileSong[]).map((song) => ({
+      const allSongs = ((songsRes.data ?? []) as unknown as ProfileSong[]).map((song) => ({
         ...song,
         fires_count: song.fires_count ?? 0,
         comments_count: song.comments_count ?? 0,
