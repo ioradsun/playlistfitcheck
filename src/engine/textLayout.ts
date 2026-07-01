@@ -95,112 +95,53 @@ const EDGE_PAD_RATIO = 0.05;
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
- * Balanced line breaking — distributes words so all lines are similar width.
+ * Split words into EXACTLY `lineCount` contiguous lines, minimising the width
+ * of the widest line. Contiguous (reading order preserved) + min-max width is a
+ * clean balance objective: it never leaves one line far longer than the rest,
+ * which is what lets the caller push the font size up without overflowing.
  *
- * Greedy wrapping produces: "I can feel the fire" + "burning" (lopsided).
- * Balanced produces: "I can feel" + "the fire burning" (even).
- *
- * Uses minimum raggedness: tries all possible break points and picks
- * the split that minimizes the difference between the longest and shortest line.
+ * Returns an array of `lineCount` index arrays. Uses DP; word counts per phrase
+ * are small so this is cheap.
  */
-function balancedWrap(
+function splitIntoLines(
   wordWidths: number[],
   spaceW: number,
-  maxWidth: number,
-  maxLines: number,
+  lineCount: number,
 ): number[][] {
   const n = wordWidths.length;
-  if (n === 0) return [];
-  if (n === 1 || maxLines === 1) return [[...Array(n).keys()]];
+  const range = (a: number, b: number) =>
+    Array.from({ length: Math.max(0, b - a) }, (_, k) => a + k);
+  if (lineCount <= 1 || n <= 1) return [range(0, n)];
+  if (lineCount >= n) return range(0, n).map((i) => [i]);
 
-  // For small word counts, try all possible splits and pick the most balanced
-  if (n <= 12 && maxLines >= 2) {
-    let bestSplit: number[][] = [[...Array(n).keys()]];
-    let bestRaggedness = Infinity;
+  const pre = [0];
+  for (let i = 0; i < n; i++) pre.push(pre[i] + wordWidths[i]);
+  // Width of words [i, j) on one line (j exclusive).
+  const lineWidth = (i: number, j: number) => pre[j] - pre[i] + spaceW * (j - i - 1);
 
-    const lineWidth = (indices: number[]): number => {
-      let w = 0;
-      for (let i = 0; i < indices.length; i++) {
-        w += wordWidths[indices[i]];
-        if (i < indices.length - 1) w += spaceW;
-      }
-      return w;
-    };
-
-    // Try 2-line splits
-    for (let split1 = 1; split1 < n; split1++) {
-      const line1 = Array.from({ length: split1 }, (_, i) => i);
-      const line2 = Array.from({ length: n - split1 }, (_, i) => i + split1);
-      const w1 = lineWidth(line1);
-      const w2 = lineWidth(line2);
-      if (w1 > maxWidth || w2 > maxWidth) continue;
-      const raggedness = Math.abs(w1 - w2);
-      if (raggedness < bestRaggedness) {
-        bestRaggedness = raggedness;
-        bestSplit = [line1, line2];
-      }
+  const memo = new Map<string, { max: number; cut: number }>();
+  const solve = (i: number, lines: number): { max: number; cut: number } => {
+    if (lines === 1) return { max: lineWidth(i, n), cut: n };
+    const key = i + "|" + lines;
+    const cached = memo.get(key);
+    if (cached) return cached;
+    let best = { max: Infinity, cut: i + 1 };
+    for (let j = i + 1; j <= n - (lines - 1); j++) {
+      const mx = Math.max(lineWidth(i, j), solve(j, lines - 1).max);
+      if (mx < best.max) best = { max: mx, cut: j };
     }
+    memo.set(key, best);
+    return best;
+  };
 
-    // Try 3-line splits if allowed and needed
-    if (maxLines >= 3 && n >= 3 && bestRaggedness > maxWidth * 0.3) {
-      for (let s1 = 1; s1 < n - 1; s1++) {
-        for (let s2 = s1 + 1; s2 < n; s2++) {
-          const l1 = Array.from({ length: s1 }, (_, i) => i);
-          const l2 = Array.from({ length: s2 - s1 }, (_, i) => i + s1);
-          const l3 = Array.from({ length: n - s2 }, (_, i) => i + s2);
-          const w1 = lineWidth(l1);
-          const w2 = lineWidth(l2);
-          const w3 = lineWidth(l3);
-          if (w1 > maxWidth || w2 > maxWidth || w3 > maxWidth) continue;
-          const maxW = Math.max(w1, w2, w3);
-          const minW = Math.min(w1, w2, w3);
-          const raggedness = maxW - minW;
-          if (raggedness < bestRaggedness) {
-            bestRaggedness = raggedness;
-            bestSplit = [l1, l2, l3];
-          }
-        }
-      }
-    }
-
-    // Try 4-line splits if allowed (portrait)
-    if (maxLines >= 4 && n >= 4 && bestRaggedness > maxWidth * 0.3) {
-      // Use even distribution as starting point
-      const perLine = Math.ceil(n / 4);
-      const lines: number[][] = [];
-      for (let i = 0; i < n; i += perLine) {
-        lines.push(Array.from({ length: Math.min(perLine, n - i) }, (_, j) => i + j));
-      }
-      const widths = lines.map(lineWidth);
-      if (widths.every(w => w <= maxWidth)) {
-        const raggedness = Math.max(...widths) - Math.min(...widths);
-        if (raggedness < bestRaggedness) {
-          bestSplit = lines;
-        }
-      }
-    }
-
-    return bestSplit;
+  const result: number[][] = [];
+  let i = 0;
+  for (let l = lineCount; l >= 1; l--) {
+    const cut = l === 1 ? n : solve(i, l).cut;
+    result.push(range(i, cut));
+    i = cut;
   }
-
-  // For longer word lists, use greedy wrapping (still better than nothing)
-  const lines: number[][] = [];
-  let currentLine: number[] = [];
-  let currentWidth = 0;
-
-  for (let i = 0; i < n; i++) {
-    const addedWidth = currentLine.length > 0 ? currentWidth + spaceW + wordWidths[i] : wordWidths[i];
-    if (currentLine.length > 0 && addedWidth > maxWidth && lines.length < maxLines - 1) {
-      lines.push(currentLine);
-      currentLine = [i];
-      currentWidth = wordWidths[i];
-    } else {
-      currentLine.push(i);
-      currentWidth = addedWidth;
-    }
-  }
-  if (currentLine.length > 0) lines.push(currentLine);
-  return lines;
+  return result;
 }
 
 // ─── fitTextToViewport ──────────────────────────────────────────────────────
@@ -282,7 +223,7 @@ export function fitTextToViewport(
 
   const slotH = slot?.height ?? canvasH * 0.65;
   const slotCenterY = slot?.yCenter ?? canvasH * 0.5;
-  const availH = slotH * 0.90; // 10% internal vertical padding
+  const availH = slotH * 0.94; // small internal vertical padding
 
   // Apply text transform
   const displayWords = transform === 'uppercase'
@@ -323,61 +264,53 @@ export function fitTextToViewport(
     return Math.max(measured, size * MIN_GAP_EM);
   };
 
-  const measureLineWidth = (wordIndices: number[], wordWidths: number[], spaceW: number): number => {
-    let total = 0;
-    for (let i = 0; i < wordIndices.length; i++) {
-      total += wordWidths[wordIndices[i]];
-      if (i < wordIndices.length - 1) total += spaceW;
+  // ── Choose the line count + font size that MAXIMISE size (fill the stage) ──
+  // For a scalable font, word and line widths scale linearly with font size, so
+  // we measure each word once at a reference size and, for every allowed line
+  // count L, compute the largest font that fits both width and height:
+  //   fontW = availW / (widest line at 1px)   fontH = availH / (L · lineHeight)
+  //   font(L) = min(fontW, fontH, ceiling)
+  // The L with the biggest font wins. This is what keeps a long word or a
+  // multi-word phrase from shrinking more than necessary: it adds a line
+  // (using the vertical space) instead of forcing a tiny width-bound font.
+  const REF = 100;
+  const unitW: number[] = [];
+  for (let i = 0; i < displayWords.length; i++) {
+    unitW.push(measureWordByIndex(i, displayWords[i], REF) / REF);
+  }
+  const spaceUnit = getSpaceW(REF) / REF;
+
+  const maxFontCeiling = Math.min(availH * 0.85, availW * 0.9);
+
+  const lineMaxUnit = (lines: number[][]): number => {
+    let maxUnit = 0;
+    for (const ln of lines) {
+      let u = 0;
+      for (let k = 0; k < ln.length; k++) {
+        u += unitW[ln[k]];
+        if (k < ln.length - 1) u += spaceUnit;
+      }
+      if (u > maxUnit) maxUnit = u;
     }
-    return total;
+    return maxUnit;
   };
 
-  // ── Binary search for the LARGEST font that fits ──
-  // Same ceiling for all phrases — let the width constraint do the work.
-  // Short phrases fill the screen. Long phrases shrink to fit.
-  const maxFontCeiling = Math.min(availH * 0.75, availW * 0.9);
-
-  let lo = minFont;
-  let hi = Math.max(minFont, Math.floor(maxFontCeiling));
   let bestSize = minFont;
   let bestLines: number[][] = [[...Array(displayWords.length).keys()]];
-
-  for (let iter = 0; iter < 12; iter++) {
-    if (lo > hi) break;
-    const mid = Math.floor((lo + hi) / 2);
-
-    // Measure all words at this size (including scaled hero headroom)
-    const wordWidths: number[] = [];
-    for (let i = 0; i < displayWords.length; i++) {
-      wordWidths.push(measureWordByIndex(i, displayWords[i], mid));
-    }
-    const spaceW = getSpaceW(mid);
-
-    // Try balanced wrapping
-    const wrapped = balancedWrap(wordWidths, spaceW, layoutW, autoMaxLines);
-
-    // Check: does every line fit in available width?
-    let widthOk = true;
-    for (const line of wrapped) {
-      if (measureLineWidth(line, wordWidths, spaceW) > layoutW) {
-        widthOk = false;
-        break;
-      }
-    }
-
-    // Check: do all lines fit in available height?
-    const lineH = mid * LINE_HEIGHT;
-    const totalH = wrapped.length * lineH;
-    const heightOk = totalH <= availH;
-
-    if (widthOk && heightOk) {
-      bestSize = mid;
-      bestLines = wrapped;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
+  for (let L = 1; L <= autoMaxLines && L <= displayWords.length; L++) {
+    const lines = splitIntoLines(unitW, spaceUnit, L);
+    if (lines.length !== L) continue; // couldn't form exactly L lines
+    const maxUnit = lineMaxUnit(lines);
+    const fontW = maxUnit > 0 ? layoutW / maxUnit : maxFontCeiling;
+    const fontH = availH / (L * LINE_HEIGHT);
+    const font = Math.floor(Math.min(fontW, fontH, maxFontCeiling));
+    // Strict '>' means ties keep the FEWER-line option (larger per-line text).
+    if (font > bestSize) {
+      bestSize = font;
+      bestLines = lines;
     }
   }
+  bestSize = Math.max(minFont, bestSize);
 
   const fontSize = bestSize;
 
