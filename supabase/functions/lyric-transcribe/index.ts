@@ -138,6 +138,141 @@ function wordsToLines(words: Word[], maxGap = 0.7, maxWords = 12): Line[] {
   return lines;
 }
 
+// ── Reference-lyrics alignment ───────────────────────────────────────────────
+// When the user pastes the real lyrics alongside the audio, keep the
+// transcription's word-level TIMING but replace the (often wrong) transcribed
+// TEXT with the pasted lyrics. Anchor words are matched with a longest-common-
+// subsequence pass on normalized text; unmatched reference words receive
+// interpolated timings between their surrounding anchors.
+
+function normForMatch(w: string): string {
+  return w.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+interface RefToken { text: string; norm: string; lineIndex: number }
+
+function parseReferenceLyrics(reference: string): RefToken[] {
+  const tokens: RefToken[] = [];
+  let lineIndex = 0;
+  for (const raw of reference.split(/\r?\n/)) {
+    const line = raw.trim();
+    // Skip blank lines and section markers like [Chorus] / (Verse 2).
+    if (!line || /^[([{].*[)\]}]$/.test(line)) continue;
+    let added = false;
+    for (const part of line.split(/\s+/)) {
+      const norm = normForMatch(part);
+      if (!norm) continue; // punctuation-only token
+      tokens.push({ text: part, norm, lineIndex });
+      added = true;
+    }
+    if (added) lineIndex++;
+  }
+  return tokens;
+}
+
+function lcsMatchPairs(a: string[], b: string[]): Array<[number, number]> {
+  const n = a.length, m = b.length;
+  if (!n || !m) return [];
+  const dp: Uint16Array[] = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    const row = dp[i], next = dp[i + 1];
+    for (let j = m - 1; j >= 0; j--) {
+      row[j] = a[i] === b[j] ? next[j + 1] + 1 : Math.max(next[j], row[j + 1]);
+    }
+  }
+  const pairs: Array<[number, number]> = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { pairs.push([i, j]); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  return pairs;
+}
+
+// Distribute reference words [from, to) evenly across the [left, right] time span.
+function fillRange(out: Word[], from: number, to: number, left: number, right: number): void {
+  const count = to - from;
+  if (count <= 0) return;
+  const step = Math.max(0, right - left) / (count + 1);
+  for (let k = 0; k < count; k++) {
+    out[from + k].start = left + step * (k + 1);
+    out[from + k].end = left + step * (k + 2);
+  }
+}
+
+function alignReferenceToWords(
+  reference: string,
+  transWords: Word[],
+): { words: Word[]; lines: Line[] } | null {
+  const tokens = parseReferenceLyrics(reference);
+  if (!tokens.length || !transWords.length) return null;
+
+  const out: Word[] = tokens.map((t) => ({ word: t.text, start: 0, end: 0 }));
+  const refNorm = tokens.map((t) => t.norm);
+  const transNorm = transWords.map((w) => normForMatch(w.word));
+
+  // Cap the DP for pathological inputs; fall back to even distribution.
+  const tooLarge = refNorm.length * transNorm.length > 6_000_000;
+  const pairs = tooLarge ? [] : lcsMatchPairs(refNorm, transNorm);
+
+  if (!pairs.length) {
+    fillRange(out, 0, out.length, transWords[0].start, transWords[transWords.length - 1].end);
+  } else {
+    // Anchors: matched reference words take the transcription word's timing.
+    for (const [ri, tj] of pairs) {
+      out[ri].start = transWords[tj].start;
+      out[ri].end = transWords[tj].end;
+    }
+    const anchors = pairs.map((p) => p[0]);
+    const first = anchors[0];
+    if (first > 0) {
+      fillRange(out, 0, first, Math.max(0, out[first].start - 0.4 * first), out[first].start);
+    }
+    for (let a = 0; a < anchors.length - 1; a++) {
+      const from = anchors[a], to = anchors[a + 1];
+      if (to - from > 1) fillRange(out, from + 1, to, out[from].end, out[to].start);
+    }
+    const last = anchors[anchors.length - 1];
+    if (last < out.length - 1) {
+      const tail = out.length - 1 - last;
+      fillRange(out, last + 1, out.length, out[last].end, out[last].end + 0.4 * tail);
+    }
+  }
+
+  // Enforce finite, non-negative, non-decreasing timings.
+  let prevEnd = 0;
+  for (const w of out) {
+    let s = Number.isFinite(w.start) ? w.start : prevEnd;
+    let e = Number.isFinite(w.end) ? w.end : s;
+    if (s < 0) s = 0;
+    if (s < prevEnd) s = prevEnd;
+    if (e < s) e = s;
+    w.start = s; w.end = e; prevEnd = e;
+  }
+
+  // Lines follow the pasted lyric line breaks.
+  const lines: Line[] = [];
+  let buf: Word[] = [];
+  let curLine = tokens[0].lineIndex;
+  const flushLine = () => {
+    if (!buf.length) return;
+    lines.push({
+      start: buf[0].start,
+      end: buf[buf.length - 1].end,
+      text: buf.map((w) => w.word).join(" "),
+    });
+    buf = [];
+  };
+  for (let k = 0; k < tokens.length; k++) {
+    if (tokens[k].lineIndex !== curLine) { flushLine(); curLine = tokens[k].lineIndex; }
+    buf.push(out[k]);
+  }
+  flushLine();
+
+  return { words: out, lines };
+}
+
 // ── Provider: xAI Grok STT ──────────────────────────────────────────────────
 async function transcribeGrok(input: ParsedInput): Promise<any> {
   const key = Deno.env.get("XAI_API_KEY");
@@ -292,6 +427,23 @@ Deno.serve(async (req) => {
       result = await transcribeAssembly(input);
     } else {
       result = await transcribeScribe(input);
+    }
+
+    // ── Reference-lyrics override ──
+    // Keep the transcription's timing, but use the pasted lyrics for the actual
+    // word text so the on-screen words are always correct. Applies to whichever
+    // provider ran above.
+    if (input.referenceLyrics && input.referenceLyrics.trim()) {
+      const aligned = alignReferenceToWords(input.referenceLyrics, result.words as Word[]);
+      if (aligned && aligned.words.length) {
+        result.words = aligned.words;
+        result.lines = aligned.lines;
+        result._debug = {
+          ...(result._debug || {}),
+          reference_lyrics: true,
+          reference_word_count: aligned.words.length,
+        };
+      }
     }
 
     return json(200, result);
