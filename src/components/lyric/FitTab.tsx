@@ -579,11 +579,14 @@ export function FitTab({
       const mainLines = getMainLines(linesRef);
       if (mainLines.length === 0) return;
 
-      // Use the reconciled words from the player engine — updateTranscript() maps
-      // edited line text back onto word timestamp slots. Those reconciled words
-      // are what compileScene actually renders on the shareable page.
-      // Fall back to raw Whisper words if player isn't ready yet.
-      const reconciledWords = wordsRef.current ?? null;
+      // Persist the reconciled words from the player engine. The 300ms
+      // transcript sync above calls updateTranscript(), which maps edited line
+      // text back onto the word timestamp slots and stores the result on
+      // currentData.words. Those reconciled words — not the raw Whisper words —
+      // are what compileScene renders on reload, on the shareable page, and on a
+      // video regenerate. Fall back to the raw words only if the player isn't ready.
+      const player = dancePlayerRef.current?.getPlayer();
+      const reconciledWords = player?.currentData?.words ?? wordsRef.current ?? null;
 
       const { error } = await supabase
         .from("lyric_projects" as any)
@@ -1107,6 +1110,23 @@ export function FitTab({
                   }}
                 />
               ) : null}
+              <button
+                onClick={() => void handleRetryImages()}
+                disabled={
+                  generationStatus.cinematicDirection === "running" ||
+                  generationStatus.sectionImages === "running"
+                }
+                className="flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-[0.12em] uppercase transition-colors border rounded-lg px-3 py-2.5 text-foreground hover:text-primary border-border/40 hover:border-primary/40 disabled:opacity-50"
+                title="Regenerate video from the current lyrics"
+              >
+                {generationStatus.cinematicDirection === "running" ||
+                generationStatus.sectionImages === "running" ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={14} />
+                )}
+                Regenerate Video
+              </button>
               <a
                 href={danceUrl}
                 target="_blank"

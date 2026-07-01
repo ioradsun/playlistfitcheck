@@ -798,6 +798,25 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       if (isHeroCheck) heroWordIndices.push(wi);
     }
 
+    // ── Per-phrase letter spacing (must match the word compile loop) ──
+    // Computed here so the layout reserves the exact width the renderer will
+    // draw with — otherwise letter-spaced words overflow their slots and touch.
+    const lsHoldClass = (group as any).holdClass ?? matchPhrase?.holdClass ?? 'medium_groove';
+    const lsEnergyTier =
+      secTypo.weight === 'black' ? 'impact' :
+      secTypo.weight === 'bold' ? 'lift' :
+      secTypo.weight === 'regular' ? 'groove' :
+      'intimate';
+    const lsHold = lsHoldClass === 'short_hit' ? -0.02
+      : lsHoldClass === 'long_emotional' ? 0.04
+      : 0;
+    const lsEnergy = lsEnergyTier === 'intimate' ? 0.02
+      : lsEnergyTier === 'impact' ? -0.02
+      : lsEnergyTier === 'lift' ? -0.01
+      : 0;
+    const phraseLetterSpacing = lsHold + lsEnergy;
+    (group as any)._letterSpacing = phraseLetterSpacing;
+
     const layout = fitTextToViewport(
       measureCtx as MeasureContext,
       groupWords,
@@ -811,6 +830,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
         heroWordIndices,
         heroScaleBoost: HERO_SCALE_BOOST,
         targetFillRatio: targetFill,
+        letterSpacingEm: phraseLetterSpacing,
       },
     );
 
@@ -959,16 +979,9 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
       return sectionWeightNum;
     })();
 
-    // ── Letter spacing: holdClass sets base, energyTier modifies ──
-    // Values in em — scales with font size. Range: -0.04em (tight slam) to +0.06em (wide emotional)
-    const holdSpacing = holdClass === 'short_hit' ? -0.02
-      : holdClass === 'long_emotional' ? 0.04
-      : 0; // medium_groove
-    const energySpacing = energyTier === 'intimate' ? 0.02
-      : energyTier === 'impact' ? -0.02
-      : energyTier === 'lift' ? -0.01
-      : 0; // groove
-    const phraseLetterSpacing = holdSpacing + energySpacing;
+    // ── Letter spacing: computed once in the layout loop and stored on the
+    // group so layout reservation and draw-time spacing always match. ──
+    const phraseLetterSpacing = (group as any)._letterSpacing ?? 0;
 
     const wordsCompiled: CompiledWord[] = group.words.flatMap((wm, wi) => {
       const pos = positions[wi] ?? { x: REF_W / 2, y: REF_H / 2, width: 40 };

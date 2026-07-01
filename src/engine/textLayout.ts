@@ -251,6 +251,12 @@ export function fitTextToViewport(
      * since it doesn't specify which word is the hero.
      */
     hasHeroWord?: boolean;
+    /**
+     * Per-phrase letter spacing (em) applied to every word at draw time.
+     * Layout must reserve this width so letter-spaced words don't render wider
+     * than their slots and collide with neighbors. Default 0.
+     */
+    letterSpacingEm?: number;
   },
 ): TextLayout {
   const targetFill = options?.targetFillRatio ?? 0.88;
@@ -258,6 +264,7 @@ export function fitTextToViewport(
   const minFont = options?.minFontPx ?? 16;
   const slot = options?.slot ?? null;
   const transform = options?.textTransform ?? 'none';
+  const letterSpacingEm = options?.letterSpacingEm ?? 0;
   // Keep deprecated option accepted for callsite compatibility.
   void options?.hasHeroWord;
 
@@ -298,7 +305,11 @@ export function fitTextToViewport(
   // ── Measurement helpers ──
   const measureWord = (word: string, size: number): number => {
     ctx.font = buildFont(size);
-    return ctx.measureText(word).width;
+    // Reserve letter-spacing width so slots match what the renderer draws.
+    // Canvas adds letterSpacing after each glyph; word.length is a safe
+    // (slightly over-reserving) approximation that prevents collisions.
+    const lsExtra = letterSpacingEm !== 0 ? letterSpacingEm * size * word.length : 0;
+    return ctx.measureText(word).width + lsExtra;
   };
   const measureWordByIndex = (wordIndex: number, word: string, size: number): number => {
     const w = measureWord(word, size);

@@ -3974,7 +3974,15 @@ export class LyricDancePlayer {
       const text = chunk.text;
 
       const measureFont = `${fontWeight} ${safeFontSize}px ${family}`;
-      const textWidth = this.getCachedMetrics(text, measureFont).width;
+      const rawTextWidth = this.getCachedMetrics(text, measureFont).width;
+      // Include letter-spacing in the width used for centering so the visual
+      // center lands on the layout slot. The compiler reserves the same width
+      // (letterSpacingEm × fontSize × charCount), so words stay inside their
+      // slots instead of bleeding into neighbors.
+      const lsEmForWidth = (chunk as any)._letterSpacing ?? 0;
+      const textWidth = lsEmForWidth !== 0
+        ? rawTextWidth + lsEmForWidth * safeFontSize * text.length
+        : rawTextWidth;
       const centerX = rawDrawX;
       const centerY = rawDrawY;
 

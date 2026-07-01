@@ -333,6 +333,13 @@ export function LyricDisplay({
   const loopRegionRef = useRef<{ start: number; end: number } | null>(null);
 
   const initialLines: LyricLine[] = (() => {
+    // data.lines is the authoritative source: the parent already phrase-builds it
+    // and updates it live on every edit. Prefer it so edits survive a remount
+    // (e.g. switching between the Lyrics and Video tabs). Only rebuild phrases
+    // from words when there are no lines yet.
+    if (data.lines?.length) {
+      return data.lines;
+    }
     if (words?.length) {
       const result = buildPhrases(words);
       return result.phrases.map((p) => ({
@@ -451,6 +458,9 @@ export function LyricDisplay({
   useEffect(() => {
     if (!words?.length || phrasesSynced.current) return;
     phrasesSynced.current = true;
+    // Lines already present (loaded from DB or edited by the user) are
+    // authoritative — don't overwrite them by rebuilding phrases from words.
+    if (data.lines?.length) return;
     const result = buildPhrases(words);
     const phraseLines: LyricLine[] = result.phrases.map((p) => ({
       start: p.start,
@@ -459,7 +469,7 @@ export function LyricDisplay({
       tag: "main" as const,
     }));
     setExplicitLines(phraseLines);
-  }, [words, wordsSyncKey]);
+  }, [words, wordsSyncKey, data.lines]);
 
   const activeLinesRaw =
     activeVersion === "explicit" ? explicitLines : (fmlyLines ?? explicitLines);
