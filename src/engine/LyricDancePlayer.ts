@@ -4037,12 +4037,16 @@ export class LyricDancePlayer {
       );
       this.ctx.setTransform(ma, mb, mc, md, me, mf);
 
-      // Hero glow: subtle white bloom behind hero words (quality tier >= 2 only)
+      // Hero glow: a soft white bloom behind hero words that BLOOMS as the word
+      // arrives (tied to the same push envelope) then settles — light reinforces
+      // the forward motion for depth. (quality tier >= 2 only)
       const isHero = (chunk as any).isHeroWord === true && !isAdlib;
       if (isHero && this._qualityTier >= 2) {
-        const heroAlpha = Math.min(0.3, ((chunk as any)._heroScore ?? 0.4) * 0.5);
+        const pulse = Math.max(0, Math.min(1, (((chunk as any)._heroPush ?? 1) - 1) / 0.07));
+        const baseAlpha = Math.min(0.3, ((chunk as any)._heroScore ?? 0.4) * 0.5);
+        const heroAlpha = baseAlpha * (0.6 + 0.4 * pulse);
         this.ctx.shadowColor = `rgba(255, 255, 255, ${heroAlpha})`;
-        this.ctx.shadowBlur = 6;
+        this.ctx.shadowBlur = 6 + 8 * pulse;
         this.ctx.fillText(text, 0, 0);
         // Reset shadow immediately — don't bleed into next word
         this.ctx.shadowColor = 'transparent';
@@ -5221,7 +5225,20 @@ export class LyricDancePlayer {
       for (let wi = 0; wi < group.words.length; wi++) {
         const word = group.words[wi];
         const ws = wordAnimStates[wi];
-        const scale = ws.waveScale * phraseState.pushInScale;
+        // ── Hero "arrival": a brief push toward the viewer as the word is sung ──
+        // The focal word steps forward on its own onset, then settles back to its
+        // resting 1.15× size. Depth from z-motion synced to the vocal — no color,
+        // no opacity change. ~60ms attack, ~200ms exponential settle, up to +7%.
+        let heroPush = 1.0;
+        if (word.isHeroWord && !word.isAdlib && Number.isFinite(word.wordStart)) {
+          const dt = tSec - word.wordStart;
+          if (dt >= 0) {
+            const attack = Math.min(1, dt / 0.06);
+            const settle = Math.exp(-Math.max(0, dt - 0.06) / 0.20);
+            heroPush = 1 + 0.07 * attack * settle;
+          }
+        }
+        const scale = ws.waveScale * phraseState.pushInScale * heroPush;
 
         const chunk = chunks[ci] ?? ({} as ScaledKeyframe['chunks'][number]);
         chunks[ci] = chunk;
@@ -5266,6 +5283,7 @@ export class LyricDancePlayer {
 
         chunk.color = word.color;
         chunk.isHeroWord = word.isHeroWord;
+        (chunk as any)._heroPush = heroPush;
         chunk.isAdlib = word.isAdlib;
         chunk._wordStart = word.wordStart;
         chunk.emphasisLevel = word.emphasisLevel;
