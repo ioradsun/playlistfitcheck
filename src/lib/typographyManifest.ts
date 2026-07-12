@@ -1,15 +1,15 @@
 /**
- * typographyManifest.ts — Single source of truth for all font data.
+ * typographyManifest.ts — Browser-side typed view over the single-source
+ * font data at supabase/functions/_shared/fontManifest.data.json.
  *
- * Everything is derived from this file:
- * - AI prompt font library text (generated at build or inline)
- * - Runtime validation list
- * - Preload font names
- * - Pairing rules
- * - Fallback behavior
+ * That JSON file is the ONLY place to add/edit fonts. Both this module
+ * (browser/Vite) and supabase/functions/_shared/fontManifest.ts (edge/Deno)
+ * import from it, so there is no longer a second copy to keep in sync.
  *
- * To add a font: add it here AND in index.html's Google Fonts URL.
+ * When adding a font: edit the JSON AND index.html's Google Fonts URL.
  */
+
+import rawManifest from '../../supabase/functions/_shared/fontManifest.data.json';
 
 export interface FontDef {
   name: string;
@@ -23,11 +23,16 @@ export interface FontDef {
   casePreference: ('uppercase' | 'sentence')[];
   genreFit: string[];
   roles: ('primary' | 'accent' | 'hero')[];
-  /** Prose description for the AI prompt — what this font FEELS like */
+  /** Prose description for UI copy — what this font FEELS like. */
   vibe: string;
+  /** Short label used by the edge AI prompt. */
+  promptVibe: string;
 }
 
-export const FONT_MANIFEST: FontDef[] = [
+export const FONT_MANIFEST: FontDef[] = rawManifest as FontDef[];
+
+// Legacy inline array retained below as reference only — do not use.
+const _LEGACY_UNUSED: unknown[] = [
   {
     name: 'Bebas Neue',
     cssFamily: '"Bebas Neue", sans-serif',
