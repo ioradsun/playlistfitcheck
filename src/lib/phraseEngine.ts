@@ -52,11 +52,26 @@ type PhraseDraft = {
   wordCount: number;
 };
 
-const MAX_PHRASE_WORDS = 6;
 const SOLO_THRESHOLD_MS = 350;
 const COLLAPSE_MS = 10;
-const PUNCT_END = /[.?!]["']?\s*$/;
 const COMMA_END = /,\s*$/;
+
+// ─── Grouping model: edit to the voice, size to the clock ───────────────────
+// (see buildPhrases — laws 2/3/4/6 of the presentation design)
+const BREATH_GAP_MIN_MS = 250;   // a silence this long is at least a micro-breath
+const BREATH_GAP_FACTOR = 2.5;   // ...or this multiple of the local median gap
+const BREATH_GAP_HARD_MS = 900;  // an unambiguous rest — always a boundary
+const READ_WPS = 3.0;            // comfortable read-along rate (viewer also hears it)
+const GESTALT_WPS = 5.0;         // faster than this is unreadable → show as one burst
+const MIN_SHOW_MS = 450;         // never create a chunk shown for less than this
+const GROUP_HARD_CAP = 7;        // Miller ceiling; the time budget usually binds first
+
+// Words that must never END a chunk — connective tissue that needs its noun/verb.
+const TRAILING_BAN = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'by',
+  'for', 'from', 'with', 'my', 'your', 'his', 'her', 'their', 'our',
+  'is', 'are', 'was', 'were', 'been', 'be',
+]);
 const VALID_EXIT_EFFECTS = new Set([
   "fade", "drift_up", "shrink", "dissolve",
   "cascade", "scatter", "slam", "glitch", "burn",
@@ -107,95 +122,6 @@ export function detectCollapsedRuns(
     .map((w, index) => ({ ...w, index }))
     .filter((w) => !adlibIndices.has(w.index));
   return { mainWords, adlibIndices };
-}
-
-export function splitOnPunctuation(words: WordMeta[]): WordMeta[][] {
-  const phrases: WordMeta[][] = [];
-  let current: WordMeta[] = [];
-  for (const word of words) {
-    current.push(word);
-    if (PUNCT_END.test(word.word)) {
-      phrases.push(current);
-      current = [];
-    }
-  }
-  if (current.length) phrases.push(current);
-  return phrases;
-}
-
-export function splitOversized(phrase: WordMeta[]): WordMeta[][] {
-  if (phrase.length <= MAX_PHRASE_WORDS) return [phrase];
-
-  const splitAt = (idx: number): WordMeta[][] => {
-    const left = phrase.slice(0, idx + 1);
-    const right = phrase.slice(idx + 1);
-    return [...splitOversized(left), ...splitOversized(right)];
-  };
-
-  for (let i = 0; i < phrase.length - 1; i++) {
-    if (COMMA_END.test(phrase[i].word)) {
-      return splitAt(i);
-    }
-  }
-
-  const mid = phrase.length / 2;
-  let bestScore = -Infinity;
-  let bestIndex = Math.floor(mid) - 1;
-  for (let i = 0; i < phrase.length - 1; i++) {
-    const gap = phrase[i].gap;
-    const isWeak = phrase[i].clean.length <= 1;
-    const hasComma = COMMA_END.test(phrase[i].word);
-    const balanceBonus = -Math.abs(i - mid) * 10;
-    const score = gap + (isWeak ? -500 : 0) + (hasComma ? 200 : 0) + balanceBonus;
-    if (score > bestScore) {
-      bestScore = score;
-      bestIndex = i;
-    }
-  }
-  return splitAt(bestIndex);
-}
-
-export function applySoloSplits(blocks: PhraseDraft[]): PhraseDraft[] {
-  const output: PhraseDraft[] = [];
-  for (const block of blocks) {
-    const last = block.words[block.words.length - 1];
-    if (!last) {
-      output.push(block);
-      continue;
-    }
-
-    const remainingWords = block.words.slice(0, -1);
-    const remainingDurationMs = remainingWords.length
-      ? Math.round((remainingWords[remainingWords.length - 1].end - remainingWords[0].start) * 1000)
-      : 0;
-    const canSplit = last.d >= SOLO_THRESHOLD_MS &&
-      last.clean.length > 1 &&
-      remainingWords.length >= 1 &&
-      remainingDurationMs >= SOLO_THRESHOLD_MS;
-
-    if (!canSplit) {
-      output.push(block);
-      continue;
-    }
-
-    output.push({
-      words: remainingWords,
-      durationMs: remainingDurationMs,
-      startTime: remainingWords[0].start,
-      endTime: remainingWords[remainingWords.length - 1].end,
-      text: normalizePhraseText(remainingWords.map((w) => w.word).join(" ")),
-      wordCount: remainingWords.length,
-    });
-    output.push({
-      words: [last],
-      durationMs: last.d,
-      startTime: last.start,
-      endTime: last.end,
-      text: normalizePhraseText(last.word),
-      wordCount: 1,
-    });
-  }
-  return output;
 }
 
 // Common words that rarely earn hero status. Scored with a penalty in the
@@ -471,9 +397,157 @@ function assignHoldClass(block: PhraseDraft): 'short_hit' | 'medium_groove' | 'l
   return 'medium_groove';
 }
 
+function median(nums: number[]): number {
+  if (!nums.length) return 0;
+  const s = [...nums].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+const spanMs = (ws: WordMeta[]) =>
+  Math.round((ws[ws.length - 1].end - ws[0].start) * 1000);
+
+/**
+ * Law 2 — One breath, one thought. Split the word stream wherever the silence
+ * between words exceeds a breath threshold, adaptive to the local tempo. This
+ * replaces punctuation as the primary boundary: the ear parses on breath, and
+ * lyric transcripts punctuate unreliably.
+ */
+function splitOnBreaths(words: WordMeta[]): WordMeta[][] {
+  if (words.length <= 1) return words.length ? [words] : [];
+  const gaps = words.slice(0, -1).map((w) => w.gap);
+  const threshold = Math.max(BREATH_GAP_MIN_MS, median(gaps) * BREATH_GAP_FACTOR);
+  const groups: WordMeta[][] = [];
+  let cur: WordMeta[] = [words[0]];
+  for (let i = 1; i < words.length; i++) {
+    // Adaptive threshold catches tempo-relative breaths; the hard cap catches
+    // unambiguous rests even when few words make the median unreliable.
+    if (words[i - 1].gap > threshold || words[i - 1].gap > BREATH_GAP_HARD_MS) {
+      groups.push(cur);
+      cur = [];
+    }
+    cur.push(words[i]);
+  }
+  if (cur.length) groups.push(cur);
+  return groups;
+}
+
+/**
+ * Law 3 — The clock rules the chunk. Duration is the referee:
+ *  • too fast to read  → keep whole as a gestalt burst (viewer reads the shape)
+ *  • fits the budget   → keep whole
+ *  • otherwise         → split at the strongest internal seam and recurse,
+ *                        never stranding a function word, never below the floor.
+ */
+function fitBudget(group: WordMeta[]): WordMeta[][] {
+  if (group.length <= 1) return [group];
+  const durSec = spanMs(group) / 1000;
+  const wps = group.length / Math.max(0.1, durSec);
+  if (wps > GESTALT_WPS) return [group]; // Case B: unreadable fast run → one burst
+
+  const budget = Math.max(1, Math.floor(durSec * READ_WPS));
+  const cap = Math.min(GROUP_HARD_CAP, budget);
+  if (group.length <= cap) return [group]; // Case A-keep / Case C (held, few words)
+
+  // Strongest seam that leaves both sides readable (≥ floor) and unstranded.
+  const mid = (group.length - 1) / 2;
+  let bestIdx = -1;
+  let bestScore = -Infinity;
+  for (let i = 0; i < group.length - 1; i++) {
+    if (spanMs(group.slice(0, i + 1)) < MIN_SHOW_MS) continue;
+    if (spanMs(group.slice(i + 1)) < MIN_SHOW_MS) continue;
+    const strands = TRAILING_BAN.has(group[i].clean);
+    const hasComma = COMMA_END.test(group[i].word);
+    const score = group[i].gap
+      + (hasComma ? 250 : 0)
+      + (strands ? -1000 : 0)
+      - Math.abs(i - mid) * 8;
+    if (score > bestScore) { bestScore = score; bestIdx = i; }
+  }
+  if (bestIdx < 0) return [group]; // no clean cut → whole beats strobing
+  return [
+    ...fitBudget(group.slice(0, bestIdx + 1)),
+    ...fitBudget(group.slice(bestIdx + 1)),
+  ];
+}
+
+/**
+ * Law 4 — Earn the isolation. A word deserves its own moment only if it is a
+ * content word, prosodically peaked (held, or landing on a downbeat), and has
+ * time to land. Cheap stop-words never qualify, so isolation stays meaningful.
+ */
+function isEarnedSolo(w: WordMeta, siblings: WordMeta[], beats?: number[]): boolean {
+  if (w.clean.length < 2 || STOP_WORDS.has(w.clean)) return false;
+  const med = median(siblings.map((s) => s.d)) || w.d;
+  const held = w.d >= Math.max(600, med * 1.5);
+  const onDownbeat = !!beats?.some((b) => Math.abs(b - w.start) <= 0.08);
+  const enoughTime = w.d >= MIN_SHOW_MS;
+  return enoughTime && (held || onDownbeat);
+}
+
+/**
+ * Peel an earned hero at a chunk's trailing edge into its own moment, so it
+ * truly stands alone on screen rather than merely being emphasized in place.
+ * Only the last word is peeled — isolating a middle word fragments the thought.
+ */
+function extractSoloHeroes(chunks: WordMeta[][], beats?: number[]): WordMeta[][] {
+  const out: WordMeta[][] = [];
+  for (const chunk of chunks) {
+    if (chunk.length >= 2) {
+      const last = chunk[chunk.length - 1];
+      const rest = chunk.slice(0, -1);
+      if (isEarnedSolo(last, chunk, beats)
+        && spanMs(rest) >= MIN_SHOW_MS
+        && last.d >= MIN_SHOW_MS) {
+        out.push(rest, [last]);
+        continue;
+      }
+    }
+    out.push(chunk);
+  }
+  return out;
+}
+
+/**
+ * Law 6 — Lock the refrain. A recurring hook must look identical every time so
+ * repetition compounds into memory. Force every occurrence of the same short
+ * line to share one presentation (composition, reveal, hero, hold).
+ */
+function lockRefrains(phrases: PhraseBlock[]): void {
+  const byKey = new Map<string, PhraseBlock[]>();
+  for (const p of phrases) {
+    if (p.wordCount > 6) continue;
+    const key = normalizeHookKey(p.text);
+    if (!key) continue;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(p);
+  }
+  for (const group of byKey.values()) {
+    if (group.length < 2) continue;
+    // Canonical = the longest-held occurrence (the most deliberate performance).
+    const canon = group.reduce((a, b) => (b.durationMs > a.durationMs ? b : a));
+    for (const p of group) {
+      p.composition = canon.composition;
+      p.revealStyle = canon.revealStyle;
+      p.heroWord = canon.heroWord;
+      p.holdClass = canon.holdClass;
+    }
+  }
+}
+
+/**
+ * Group words into display phrases by editing to the voice, not to punctuation:
+ *   1. breath groups (law 2)      — split on silence, the ear's own boundary
+ *   2. reading budget (law 3)     — duration decides keep / sub-split / gestalt
+ *   3. earned solo heroes (law 4) — isolate a peaked, salient content word
+ *   4. refrain lock (law 6)       — recurring hooks presented identically
+ * `beats` (downbeat times, seconds) is optional; when absent, downbeat-based
+ * isolation is simply inactive.
+ */
 export function buildPhrases(
   words: RawWord[],
   sectionContext?: SectionContext[],
+  beats?: number[],
 ): PhraseEngineResult {
   if (!words.length) return { hookPhrase: "", signaturePhrase: "", phrases: [], adlibIndices: new Set<number>() };
 
@@ -490,9 +564,11 @@ export function buildPhrases(
     };
   });
 
-  const punctPhrases = splitOnPunctuation(wordMeta);
-  const subPhrases = punctPhrases.flatMap((phrase) => splitOversized(phrase));
-  const initialBlocks: PhraseDraft[] = subPhrases.filter((p) => p.length > 0).map((p) => ({
+  // Segment to the voice: breath groups → reading budget → earned solo heroes.
+  const breathGroups = splitOnBreaths(wordMeta);
+  const budgeted = breathGroups.flatMap((g) => fitBudget(g));
+  const chunks = extractSoloHeroes(budgeted, beats);
+  const finalBlocks: PhraseDraft[] = chunks.filter((p) => p.length > 0).map((p) => ({
     words: p,
     durationMs: Math.round((p[p.length - 1].end - p[0].start) * 1000),
     startTime: p[0].start,
@@ -500,8 +576,6 @@ export function buildPhrases(
     text: normalizePhraseText(p.map((w) => w.word).join(" ")),
     wordCount: p.length,
   }));
-
-  const finalBlocks = applySoloSplits(initialBlocks);
   const phrases: PhraseBlock[] = [];
   const variety = new VarietyEngine();
 
@@ -529,12 +603,18 @@ export function buildPhrases(
 
     const { heroWord } = selectHeroWord(block, sectionHeroes);
 
-    const aiWantsCenterWord =
-      (block.wordCount === 2 && block.durationMs >= 1500) ||
-      (block.wordCount <= 3 && !!heroWord && block.durationMs >= 1200);
+    // A lone word is inherently a center moment. It reads as a climax when it's
+    // held or lands on a downbeat (the isolation was already earned upstream in
+    // extractSoloHeroes; here we judge it against absolutes, not against itself).
+    const soloWord = block.wordCount === 1 ? block.words[0] : null;
+    const onDownbeat = !!(soloWord && beats?.some((b) => Math.abs(b - soloWord.start) <= 0.08));
+    const earnedSolo = !!soloWord && (block.durationMs >= 600 || onDownbeat);
+
+    const aiWantsCenterWord = block.wordCount === 1 ||
+      (block.wordCount === 2 && block.durationMs >= 1500);
 
     const aiDramaticExit = semanticDramaticExit(block, sectionEnergy);
-    const aiClimax = aiDramaticExit !== null ||
+    const aiClimax = aiDramaticExit !== null || earnedSolo ||
       (sectionEnergy !== undefined && sectionEnergy >= 0.8 && block.wordCount <= 4);
 
     const durationSec = block.durationMs / 1000;
@@ -571,6 +651,9 @@ export function buildPhrases(
       durationMs: block.durationMs,
     });
   }
+
+  // Recurring hooks look identical every time, so repetition builds memory.
+  lockRefrains(phrases);
 
   const hookPhrase = inferHookPhrase(phrases);
   const signaturePhrase = inferSignaturePhrase(
