@@ -66,12 +66,25 @@ const GESTALT_WPS = 5.0;         // faster than this is unreadable → show as o
 const MIN_SHOW_MS = 450;         // never create a chunk shown for less than this
 const GROUP_HARD_CAP = 7;        // Miller ceiling; the time budget usually binds first
 
-// Words that must never END a chunk — connective tissue that needs its noun/verb.
-const TRAILING_BAN = new Set([
-  'the', 'a', 'an', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'by',
-  'for', 'from', 'with', 'my', 'your', 'his', 'her', 'their', 'our',
-  'is', 'are', 'was', 'were', 'been', 'be',
+// Structural incompleteness: some words bind to what follows and cannot end a
+// reading unit (determiners, prepositions, comparatives, conjunctions, copula/
+// aux). A chunk must never end on one — grammar overrides a breath that lands
+// mid-clause. NOTE: emphatic particles (up/down/out/off) are deliberately absent
+// — "turn it UP" is a valid landing.
+const BIND_FORWARD = new Set([
+  'the', 'a', 'an',
+  'of', 'to', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'into', 'onto', 'upon', 'about',
+  // directional prepositions that take an object ("through the night") — distinct
+  // from emphatic particles (up/down/out/off), which can validly end a line.
+  'through', 'over', 'under', 'across', 'along', 'around', 'past', 'toward', 'towards', 'without', 'within',
+  'my', 'your', 'his', 'her', 'their', 'our', 'its',
+  'like', 'as', 'than',
+  'and', 'or', 'but', 'nor', 'so',
+  'is', 'are', 'was', 'were', 'been', 'be', 'am',
 ]);
+// Words that bind to what PRECEDES them and cannot START a unit (of-phrases,
+// comparatives, relativizers). Splitting before these orphans the head noun.
+const BIND_BACK = new Set(['of', 'than', 'which', 'whom', 'whose']);
 const VALID_EXIT_EFFECTS = new Set([
   "fade", "drift_up", "shrink", "dissolve",
   "cascade", "scatter", "slam", "glitch", "burn",
@@ -493,17 +506,23 @@ function fitBudget(group: WordMeta[]): WordMeta[][] {
   for (let i = 0; i < group.length - 1; i++) {
     if (spanMs(group.slice(0, i + 1)) < MIN_SHOW_MS) continue;
     if (spanMs(group.slice(i + 1)) < MIN_SHOW_MS) continue;
-    const strands = TRAILING_BAN.has(group[i].clean);
+    // A seam is only clean at a grammatical junction: don't strand a word that
+    // binds forward, and don't orphan a word that binds backward onto the next
+    // chunk. When every seam is dirty, keeping the group whole beats a broken cut.
+    const strandsFwd = BIND_FORWARD.has(group[i].clean);
+    const orphansBack = BIND_BACK.has(group[i + 1].clean);
     const hasComma = COMMA_END.test(group[i].word);
     const newClauseNext = startsClause(group[i + 1]); // break lands a fresh line
     const score = group[i].gap
       + (newClauseNext ? 400 : 0)
       + (hasComma ? 250 : 0)
-      + (strands ? -1000 : 0)
+      + (strandsFwd ? -1000 : 0)
+      + (orphansBack ? -1000 : 0)
       - Math.abs(i - mid) * 8;
     if (score > bestScore) { bestScore = score; bestIdx = i; }
   }
-  if (bestIdx < 0) return [group]; // no clean cut → whole beats strobing
+  // Reject a "best" seam that's still grammatically dirty — whole beats broken.
+  if (bestIdx < 0 || bestScore <= -500) return [group];
   return [
     ...fitBudget(group.slice(0, bestIdx + 1)),
     ...fitBudget(group.slice(bestIdx + 1)),
@@ -545,6 +564,32 @@ function extractSoloHeroes(chunks: WordMeta[][], beats?: number[]): WordMeta[][]
       }
     }
     out.push(chunk);
+  }
+  return out;
+}
+
+/**
+ * Heal boundaries where a breath fell mid-clause. No chunk may end on a
+ * forward-binder or begin on a backward-binder, so pull the next chunk's head
+ * across until the seam sits at a grammatical junction — e.g. a breath after
+ * "…Alone like | monacles I dont care" heals to "…Alone like monacles |
+ * I dont care". Bounded by the readable ceiling so a merge can't run away.
+ */
+function healBoundaries(chunks: WordMeta[][]): WordMeta[][] {
+  const out = chunks.map((c) => [...c]);
+  let i = 0;
+  while (i < out.length - 1) {
+    const A = out[i];
+    const B = out[i + 1];
+    while (
+      B.length > 0 &&
+      A.length <= GROUP_HARD_CAP + 1 &&
+      (BIND_FORWARD.has(A[A.length - 1].clean) || BIND_BACK.has(B[0].clean))
+    ) {
+      A.push(B.shift()!);
+    }
+    if (B.length === 0) { out.splice(i + 1, 1); continue; } // B fully absorbed
+    i++;
   }
   return out;
 }
@@ -611,7 +656,9 @@ export function buildPhrases(
   // Segment to the voice: breath groups → reading budget → earned solo heroes.
   const breathGroups = splitOnBreaths(wordMeta);
   const budgeted = breathGroups.flatMap((g) => fitBudget(g));
-  const chunks = extractSoloHeroes(budgeted, beats);
+  // Snap boundaries to grammatical junctions before isolating heroes.
+  const healed = healBoundaries(budgeted);
+  const chunks = extractSoloHeroes(healed, beats);
   const finalBlocks: PhraseDraft[] = chunks.filter((p) => p.length > 0).map((p) => ({
     words: p,
     durationMs: Math.round((p[p.length - 1].end - p[0].start) * 1000),
