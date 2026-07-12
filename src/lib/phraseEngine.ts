@@ -74,9 +74,6 @@ const GROUP_HARD_CAP = 7;        // Miller ceiling; the time budget usually bind
 const BIND_FORWARD = new Set([
   'the', 'a', 'an',
   'of', 'to', 'in', 'on', 'at', 'by', 'for', 'from', 'with', 'into', 'onto', 'upon', 'about',
-  // directional prepositions that take an object ("through the night") — distinct
-  // from emphatic particles (up/down/out/off), which can validly end a line.
-  'through', 'over', 'under', 'across', 'along', 'around', 'past', 'toward', 'towards', 'without', 'within',
   'my', 'your', 'his', 'her', 'their', 'our', 'its',
   'like', 'as', 'than',
   'and', 'or', 'but', 'nor', 'so',
