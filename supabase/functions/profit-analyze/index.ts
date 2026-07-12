@@ -245,7 +245,7 @@ ${JSON.stringify(signals, null, 2)}`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-3.5-flash",
           max_tokens: 4096,
           messages: [
             { role: "system", content: BLUEPRINT_SYSTEM_PROMPT },
@@ -320,7 +320,7 @@ ${JSON.stringify(signals, null, 2)}`;
       artist_id: dbArtist!.id,
       blueprint_json: blueprint,
       signals_json: signals,
-      model_info: "google/gemini-2.5-flash",
+      model_info: "google/gemini-3.5-flash",
     }).select("id, share_token").single();
 
     return new Response(JSON.stringify({

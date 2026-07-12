@@ -19,7 +19,9 @@ interface ModelPromptConfig {
 }
 
 const MODEL_OPTIONS = [
-  { value: "google/gemini-3-flash-preview", label: "Gemini 3 Flash (default)" },
+  { value: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash (default)" },
+  { value: "google/gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite" },
+  { value: "google/gemini-3-flash-preview", label: "Gemini 3 Flash Preview" },
   { value: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
   { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
   { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
@@ -27,6 +29,10 @@ const MODEL_OPTIONS = [
   { value: "openai/gpt-5", label: "GPT-5" },
   { value: "openai/gpt-5-mini", label: "GPT-5 Mini" },
   { value: "openai/gpt-5.2", label: "GPT-5.2" },
+  { value: "openai/gpt-5.4", label: "GPT-5.4" },
+  { value: "openai/gpt-5.4-mini", label: "GPT-5.4 Mini" },
+  { value: "openai/gpt-5.4-nano", label: "GPT-5.4 Nano" },
+  { value: "openai/gpt-5.5", label: "GPT-5.5" },
   { value: "xai/grok-4", label: "Grok 4 (xAI)" },
   { value: "xai/grok-4-fast", label: "Grok 4 Fast (xAI)" },
   { value: "xai/grok-2-image", label: "Grok 2 Image (xAI)" },
