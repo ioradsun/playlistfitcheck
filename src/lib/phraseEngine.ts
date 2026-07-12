@@ -404,6 +404,37 @@ function median(nums: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+// Collapse gap-smeared word runs BEFORE grouping (mirrors the render-side pass
+// in sceneCompiler). Without this, interpolated words each holding several
+// seconds make a breath group span 10s+ and the budget can't split it. See
+// sceneCompiler.repackSmearedRuns for the full rationale.
+const SMEAR_MAX_SUNG = 1.6;
+const SMEAR_FLOW_GAP = 0.3;
+const SMEAR_NAT_SLOT = 0.34;
+function repackSmearedRuns(words: RawWord[]): RawWord[] {
+  const out = words.map((w) => ({ ...w }));
+  const stretched = (w: RawWord) => w.end - w.start > SMEAR_MAX_SUNG;
+  let i = 0;
+  while (i < out.length) {
+    if (!stretched(out[i])) { i++; continue; }
+    let b = i;
+    while (b + 1 < out.length && stretched(out[b + 1]) && out[b + 1].start - out[b].end < SMEAR_FLOW_GAP) b++;
+    const anchor = b + 1 < out.length && out[b + 1].start - out[b].end < SMEAR_FLOW_GAP ? out[b + 1] : null;
+    if (anchor) {
+      const prevEnd = i > 0 ? out[i - 1].end : 0;
+      let end = anchor.start;
+      for (let k = b; k >= i; k--) {
+        let start = end - SMEAR_NAT_SLOT;
+        if (start < prevEnd) start = Math.max(prevEnd, end - 0.05);
+        if (start >= end) start = Math.max(0, end - 0.05);
+        out[k].start = start; out[k].end = end; end = start;
+      }
+    }
+    i = b + 1;
+  }
+  return out;
+}
+
 const spanMs = (ws: WordMeta[]) =>
   Math.round((ws[ws.length - 1].end - ws[0].start) * 1000);
 
@@ -450,7 +481,13 @@ function fitBudget(group: WordMeta[]): WordMeta[][] {
   if (group.length <= cap) return [group]; // Case A-keep / Case C (held, few words)
 
   // Strongest seam that leaves both sides readable (≥ floor) and unstranded.
+  // Split on grammatical grain, not just balance: prefer breaking BEFORE a new
+  // clause/line. The transcript capitalizes line/sentence starts, so a
+  // capitalized content word is a strong "new thought begins here" signal —
+  // e.g. "…treat you right | Get no goodbyes" instead of "…you right Get | no".
   const mid = (group.length - 1) / 2;
+  const startsClause = (w: WordMeta) =>
+    /^[A-Z]/.test(w.word) && w.clean.length > 1 && !STOP_WORDS.has(w.clean);
   let bestIdx = -1;
   let bestScore = -Infinity;
   for (let i = 0; i < group.length - 1; i++) {
@@ -458,7 +495,9 @@ function fitBudget(group: WordMeta[]): WordMeta[][] {
     if (spanMs(group.slice(i + 1)) < MIN_SHOW_MS) continue;
     const strands = TRAILING_BAN.has(group[i].clean);
     const hasComma = COMMA_END.test(group[i].word);
+    const newClauseNext = startsClause(group[i + 1]); // break lands a fresh line
     const score = group[i].gap
+      + (newClauseNext ? 400 : 0)
       + (hasComma ? 250 : 0)
       + (strands ? -1000 : 0)
       - Math.abs(i - mid) * 8;
@@ -479,7 +518,9 @@ function fitBudget(group: WordMeta[]): WordMeta[][] {
 function isEarnedSolo(w: WordMeta, siblings: WordMeta[], beats?: number[]): boolean {
   if (w.clean.length < 2 || STOP_WORDS.has(w.clean)) return false;
   const med = median(siblings.map((s) => s.d)) || w.d;
-  const held = w.d >= Math.max(600, med * 1.5);
+  // Held relative to the line, with a floor low enough to catch rhyme landings
+  // (e.g. a ~520ms final word) that the ear registers as the phrase's arrival.
+  const held = w.d >= Math.max(500, med * 1.5);
   const onDownbeat = !!beats?.some((b) => Math.abs(b - w.start) <= 0.08);
   const enoughTime = w.d >= MIN_SHOW_MS;
   return enoughTime && (held || onDownbeat);
@@ -551,7 +592,10 @@ export function buildPhrases(
 ): PhraseEngineResult {
   if (!words.length) return { hookPhrase: "", signaturePhrase: "", phrases: [], adlibIndices: new Set<number>() };
 
-  const { mainWords, adlibIndices } = detectCollapsedRuns(words);
+  // De-smear interpolated timings first so grouping sees when words are sung,
+  // not the padded gap. Preserves count/order, so wordRange indices are intact.
+  const cleanedWords = repackSmearedRuns(words);
+  const { mainWords, adlibIndices } = detectCollapsedRuns(cleanedWords);
   if (!mainWords.length) return { hookPhrase: "", signaturePhrase: "", phrases: [], adlibIndices };
 
   const wordMeta: WordMeta[] = mainWords.map((w, idx) => {
