@@ -429,6 +429,59 @@ function resolveV3Palette(payload: ScenePayload, chapterProgress?: number): stri
   return payload.palette;
 }
 
+/**
+ * Collapse interpolation artifacts in word timings.
+ *
+ * When a transcript is stretched across a silent gap — reference-lyric
+ * interpolation, or an STT model padding a rest — a run of words each gets an
+ * unnaturally long duration and flows straight into the next. The phrase then
+ * appears many seconds before it is actually sung and lingers over an empty
+ * screen (e.g. "To find me some peace" showing at 0:58 when it's sung at 1:07).
+ *
+ * Fix: find a run of over-long words that flows (near-zero gap) into a
+ * normally-timed "anchor" word, and re-pack the run backward from that anchor
+ * at a natural tempo — so the words arrive right before they're sung, not at
+ * the start of the gap. A trailing over-long word with NO anchor after it is
+ * left alone: that's a genuine held/melisma note ("peeeace"), which should
+ * appear early and breathe.
+ *
+ * Word count and order are preserved (indices must stay aligned with AI phrase
+ * wordRanges); only start/end are adjusted.
+ */
+const MAX_SUNG_SEC = 1.6;   // a normal sung word rarely holds this long mid-phrase
+const FLOW_GAP_SEC = 0.3;   // words closer than this are "flowing" (continuous)
+const NAT_SLOT_SEC = 0.34;  // per-word slot when re-packing a smeared run
+function repackSmearedRuns<T extends { start: number; end: number }>(words: T[]): T[] {
+  const out: T[] = words.map((w) => ({ ...w }) as T);
+  const isStretched = (w: { start: number; end: number }) => w.end - w.start > MAX_SUNG_SEC;
+  let i = 0;
+  while (i < out.length) {
+    if (!isStretched(out[i])) { i++; continue; }
+    // Extend over consecutive stretched words that flow into one another.
+    let b = i;
+    while (b + 1 < out.length && isStretched(out[b + 1]) && out[b + 1].start - out[b].end < FLOW_GAP_SEC) {
+      b++;
+    }
+    // The run [i..b] needs a normally-timed anchor immediately after it to
+    // re-pack against. No anchor → genuine held ending → leave untouched.
+    const anchor = b + 1 < out.length && out[b + 1].start - out[b].end < FLOW_GAP_SEC ? out[b + 1] : null;
+    if (anchor) {
+      const prevEnd = i > 0 ? out[i - 1].end : 0;
+      let end = anchor.start;
+      for (let k = b; k >= i; k--) {
+        let start = end - NAT_SLOT_SEC;
+        if (start < prevEnd) start = Math.max(prevEnd, end - 0.05); // don't collide with previous word
+        if (start >= end) start = Math.max(0, end - 0.05);
+        out[k].start = start;
+        out[k].end = end;
+        end = start;
+      }
+    }
+    i = b + 1;
+  }
+  return out;
+}
+
 export function compileScene(payload: ScenePayload, options?: { viewportWidth?: number; viewportHeight?: number }): CompiledScene {
   const durationSec = Math.max(0.01, payload.songEnd - payload.songStart);
   const rawChapters = ((payload.cinematic_direction as any)?.chapters ?? []) as Array<any>;
@@ -437,7 +490,7 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
   const rawWords = payload.words ?? [];
   // Fix zero-duration tokens: give them a visible duration instead of dropping them.
   // Dropping shifts all word indices and breaks AI phrase wordRange alignment.
-  const words = rawWords.map((w, i) => {
+  const zeroFixed = rawWords.map((w, i) => {
     if (w.start < 0 || w.end < 0) {
       // Truly invalid — give it the previous word's end time as both start and end
       const prev = i > 0 ? rawWords[i - 1] : null;
@@ -452,6 +505,10 @@ export function compileScene(payload: ScenePayload, options?: { viewportWidth?: 
     }
     return w;
   });
+  // Collapse gap-smeared word runs so text appears when it's sung, not at the
+  // start of a silent gap. Runs before grouping so group.start/end (which gate
+  // on-screen time) reflect the corrected timings.
+  const words = repackSmearedRuns(zeroFixed);
   const wordMeta: WordMetaEntry[] = words.map((w, i) => {
     // Normalize curly quotes/apostrophes before cleaning, then strip
     const normalized = w.word

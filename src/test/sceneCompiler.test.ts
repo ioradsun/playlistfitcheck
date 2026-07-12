@@ -129,4 +129,57 @@ describe('sceneCompiler', () => {
     expect(heroFlags).toEqual([true, false, false]);
   });
 
+  it('collapses gap-smeared word runs so text appears when sung, not early', () => {
+    // "To find me some peace": "To" and "find" were interpolated across a silent
+    // gap (each ~4.8s), so the phrase used to appear at 0:58 though it's sung at
+    // ~1:07. The lead words should be re-packed forward toward the sung burst.
+    const payload: ScenePayload = {
+      ...PAYLOAD,
+      lines: [{ text: 'To find me some peace', start: 58, end: 68.51 } as any],
+      words: [
+        { word: 'To', start: 58.09, end: 62.93 },
+        { word: 'find', start: 62.93, end: 67.76 },
+        { word: 'me', start: 67.76, end: 67.9 },
+        { word: 'some', start: 67.94, end: 68.14 },
+        { word: 'peace', start: 68.2, end: 68.51 },
+      ],
+      songStart: 0,
+      songEnd: 70,
+    };
+
+    const compiled = compileScene(payload);
+    const words = compiled.phraseGroups.flatMap((g) => g.words);
+    const to = words.find((w) => w.text.toLowerCase().includes('to'));
+    // "To" no longer reveals at 0:58 — it's pulled forward to just before the
+    // sung burst (~1:07), collapsing the smeared 10s window to a natural one.
+    expect(to).toBeTruthy();
+    expect(to!.wordStart).toBeGreaterThan(65);
+    // The earliest on-screen moment for the phrase is near the sung time.
+    const earliest = Math.min(...compiled.phraseGroups.map((g) => g.start));
+    expect(earliest).toBeGreaterThan(65);
+  });
+
+  it('leaves a genuinely held final word (melisma) untouched', () => {
+    // A long final note with a real gap after it has no "anchor" to re-pack
+    // against, so it should keep its early onset and breathe.
+    const payload: ScenePayload = {
+      ...PAYLOAD,
+      lines: [{ text: 'hold on tight', start: 0, end: 6 } as any],
+      words: [
+        { word: 'hold', start: 0.0, end: 0.4 },
+        { word: 'on', start: 0.41, end: 0.8 },
+        { word: 'tight', start: 0.81, end: 5.5 }, // held ~4.7s, nothing after
+      ],
+      songStart: 0,
+      songEnd: 6,
+    };
+
+    const compiled = compileScene(payload);
+    const tight = compiled.phraseGroups
+      .flatMap((g) => g.words)
+      .find((w) => w.text.toLowerCase().includes('tight'));
+    expect(tight).toBeTruthy();
+    expect(tight!.wordStart).toBeCloseTo(0.81, 1); // unchanged
+  });
+
 });
