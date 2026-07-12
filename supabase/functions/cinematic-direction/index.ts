@@ -1,4 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import {
+  findFont,
+  shortlistFonts,
+  buildFontListPrompt,
+  pickCase,
+  pickBaseWeight,
+  nearestFont,
+  type SongFeatures,
+  type EdgeFontDef,
+} from "../_shared/fontManifest.ts";
 
 // ═══════════════════════════════════════════════════════════════
 // Cinematic Direction v4
@@ -32,14 +42,8 @@ const VALID_TEXTURES = [
   "ash", "crystals", "confetti", "lightning", "bubbles", "moths", "glare", "glitch", "fire",
 ] as const;
 
-// SYNC REQUIREMENT: Must match FONT_MANIFEST in src/lib/typographyManifest.ts
-const VALID_FONTS = [
-  "Bebas Neue", "Permanent Marker", "Unbounded", "Dela Gothic One", "Oswald",
-  "Barlow Condensed", "Archivo", "Montserrat", "Inter", "Sora", "Rubik",
-  "Nunito", "Plus Jakarta Sans", "Bricolage Grotesque", "Playfair Display",
-  "EB Garamond", "Cormorant Garamond", "DM Serif Display", "Instrument Serif",
-  "Bitter", "JetBrains Mono", "Space Mono", "Caveat", "Lexend",
-] as const;
+// VALID_FONTS + the FONT LIST prompt text + the per-song shortlist are all
+// derived from FONT_MANIFEST in ../_shared/fontManifest.ts — single source.
 
 // Server-side block on stop-words reaching the client.
 // Without this, a bad heroWord like "THE" would score +50 in the
@@ -73,7 +77,7 @@ const MOOD_TEXTURE: Record<string, string> = {
 
 // ── The prompt ───────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a music video director.
+const buildSystemPrompt = (fontListText: string) => `You are a music video director.
 
 STEP 1: Read all the lyrics. Identify the song's central visual world — one setting, metaphor, or universe that every scene will live inside. Think about the emotional arc (setup → tension → resolution) but do not output it separately.
 
@@ -95,15 +99,8 @@ Return ONLY valid JSON:
   ]
 }
 
-FONT LIST (pick the one that matches the song's energy):
-  Bebas Neue — bold movie poster | Permanent Marker — raw sharpie | Unbounded — album cover display
-  Dela Gothic One — dark gothic weight | Oswald — tall authority | Barlow Condensed — industrial precision
-  Archivo — tech muscle | Montserrat — clean default | Inter — invisible, words only
-  Sora — soft modern | Rubik — rounded friendly | Nunito — pillowy soft
-  Plus Jakarta Sans — warm contemporary | Bricolage Grotesque — indie quirky | Lexend — calm clarity
-  Playfair Display — editorial drama | EB Garamond — literary warmth | Cormorant Garamond — whispered elegance
-  DM Serif Display — editorial confidence | Instrument Serif — poetry elegance | Bitter — slab storytelling
-  JetBrains Mono — hacker voice | Space Mono — retro-futuristic | Caveat — handwritten diary
+FONT LIST — these are pre-selected to fit this song's energy and genre. Pick the ONE whose feel best matches the world you designed:
+${fontListText}
 
 RULES:
 1. WORLD COHERENCE — Every moment belongs to the same world. The world is a universe, not a single prop. Scenes vary but the universe is consistent. No frame may belong to a different universe.
@@ -317,7 +314,12 @@ function validateColor(hex: string, fallbackMood: string): string {
   return MOOD_COLOR[fallbackMood] || "#C9A96E";
 }
 
-function validate(raw: Record<string, any>, sectionCount: number, body: RequestBody): Record<string, any> {
+function validate(
+  raw: Record<string, any>,
+  sectionCount: number,
+  body: RequestBody,
+  features: SongFeatures,
+): Record<string, any> {
   // ── World ──
   const description =
     typeof raw.world === "string" && raw.world.trim()
@@ -325,19 +327,20 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
       : "cinematic scene";
 
   // ── Font → typographyPlan ──
-  let fontName = typeof raw.font === "string" ? raw.font.trim() : "";
-  if (!fontName || !VALID_FONTS.some((f) => f.toLowerCase() === fontName.toLowerCase())) {
-    fontName = "Montserrat";
-  }
-  const matched = VALID_FONTS.find((f) => f.toLowerCase() === fontName.toLowerCase());
-  if (matched) fontName = matched;
+  // The AI returns a name; if it's valid we use it, otherwise we repair to the
+  // nearest real font by category/energy (never the boring collapse-to-default).
+  const rawName = typeof raw.font === "string" ? raw.font.trim() : "";
+  const fontDef: EdgeFontDef =
+    findFont(rawName) ?? nearestFont(rawName, features);
 
   const typographyPlan = {
     system: "single",
-    primary: fontName,
+    primary: fontDef.name,
     accent: "",
-    case: "sentence",
-    baseWeight: "bold",
+    // Case + weight now follow the chosen font's own preference and the
+    // song's energy, instead of being hardcoded sentence/bold for everything.
+    case: pickCase(fontDef, features.energy),
+    baseWeight: pickBaseWeight(fontDef, features.energy),
     heroStyle: "weight-shift",
     accentDensity: "low",
     sectionBehavior: {},
@@ -452,6 +455,7 @@ function validate(raw: Record<string, any>, sectionCount: number, body: RequestB
 
 async function callAI(
   apiKey: string,
+  systemPrompt: string,
   userMessage: string,
   audioBase64: string | undefined,
   model: string,
@@ -464,7 +468,7 @@ async function callAI(
     : userMessage;
 
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     { role: "user", content: userContent },
   ];
 
@@ -625,9 +629,28 @@ serve(async (req) => {
       .filter(Boolean)
       .join("\n");
 
+    // ── Song feature vector → font shortlist ──
+    // Aggregate energy across sections + tempo + genre hints from title/artist/
+    // direction. Used to pre-filter the font list the AI chooses from (so it
+    // can't pick something tonally wrong) and to drive case/weight later.
+    const avgEnergy = sections.length
+      ? sections.reduce((sum, s) => sum + (s.avgEnergy ?? 0), 0) / sections.length
+      : 0.5;
+    const genreHints = `${title} ${artist} ${body.artist_direction ?? ""}`
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .filter((w) => w.length >= 3);
+    const features: SongFeatures = { energy: avgEnergy, bpm, genreHints };
+
+    const shortlist = shortlistFonts(features);
+    const systemPrompt = buildSystemPrompt(buildFontListPrompt(shortlist));
+    console.log(
+      `[cinematic-direction] font shortlist (energy=${avgEnergy.toFixed(2)} bpm=${bpm}): ${shortlist.map((f) => f.name).join(", ")}`,
+    );
+
     // ── Call AI ──
-    const rawResult = await callAI(apiKey, userMessage, audioBase64, PRIMARY_MODEL);
-    const cinematicDirection = validate(rawResult, sections.length, body);
+    const rawResult = await callAI(apiKey, systemPrompt, userMessage, audioBase64, PRIMARY_MODEL);
+    const cinematicDirection = validate(rawResult, sections.length, body, features);
 
     console.log(
       `[cinematic-direction] v4 complete: font=${cinematicDirection.typographyPlan.primary}, world="${cinematicDirection.description}", sections=${cinematicDirection.sections.length}`,
