@@ -115,19 +115,28 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
     parts.push(`Visual direction: ${section.artistDirection}`);
   }
 
-  // ── Layer 2: SCENE — what the viewer sees RIGHT NOW ──
+  // ── Layers 2 + 3: LYRICS + SCENE with explicit balance weighting ──
+  // Lyrics lead (60%) so imagery is grounded in what the song is actually saying;
+  // the AI scene description supplies the remaining 40% of visual direction.
+  // When only one is present, it carries the full weight.
   const description = section.description?.trim();
-  if (description) {
-    parts.push(`Scene: ${description}`);
-  }
-
-  // ── Layer 3: LYRICS — ground the scene in the actual song ──
   const lyrics = section.lyrics?.trim();
-  if (lyrics) {
-    const excerpt = lyrics.length > 100 ? lyrics.slice(0, 100).replace(/\s+\S*$/, "...") : lyrics;
+  const excerpt = lyrics
+    ? (lyrics.length > 140 ? lyrics.slice(0, 140).replace(/\s+\S*$/, "...") : lyrics)
+    : "";
+
+  if (excerpt && description) {
     parts.push(
-      `Emotional context from the lyrics — DO NOT render these words in the image; they will be composited separately as video text: "${excerpt}"`
+      `Compose this image with roughly 60% emotional weight on the lyric being sung and 40% on the scene direction. ` +
+      `Lyric being sung — capture its FEELING and IMAGERY, but DO NOT render these words in the image (they'll be composited as video text separately): "${excerpt}". ` +
+      `Scene direction: ${description}`
     );
+  } else if (excerpt) {
+    parts.push(
+      `Build this image entirely from the feeling and imagery of the lyric being sung — DO NOT render these words in the image (they'll be composited as video text separately): "${excerpt}"`
+    );
+  } else if (description) {
+    parts.push(`Scene: ${description}`);
   }
 
   // ── Layer 4: CINEMATOGRAPHY — how it's shot ──
