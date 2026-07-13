@@ -319,7 +319,7 @@ async function transcribeScribe(input: ParsedInput): Promise<any> {
 
   const fd = new FormData();
   fd.append("file", new Blob([input.audio as BufferSource], { type: input.mime }), input.filename);
-  fd.append("model_id", "scribe_v1");
+  fd.append("model_id", "scribe_v2");
   fd.append("timestamps_granularity", "word");
 
   const resp = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
