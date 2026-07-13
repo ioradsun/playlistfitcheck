@@ -98,6 +98,45 @@ const MOOD_COLOR_VERBAL: Record<string, string> = {
 };
 
 function buildImagePrompt(section: SectionInput, totalSections: number): string {
+  return _buildImagePrompt(section, totalSections);
+}
+
+/**
+ * Pick the most representative line(s) for a section:
+ *  1. If any line repeats within the section, prefer the most-repeated one (hook/chorus energy).
+ *  2. Otherwise pick the two longest lines (usually the most emotionally loaded).
+ * Falls back to a joined slice if the structure is weird.
+ */
+function pickSectionHookLyrics(
+  sectionLines: Array<{ text?: string }>,
+  maxChars = 140,
+): string {
+  const cleaned = sectionLines
+    .map((l) => (typeof l?.text === "string" ? l.text.trim() : ""))
+    .filter((t) => t.length > 0);
+  if (cleaned.length === 0) return "";
+
+  // 1. Most-repeated line
+  const counts = new Map<string, number>();
+  for (const t of cleaned) counts.set(t, (counts.get(t) ?? 0) + 1);
+  let best = "";
+  let bestCount = 1;
+  for (const [text, count] of counts) {
+    if (count > bestCount || (count === bestCount && text.length > best.length)) {
+      best = text;
+      bestCount = count;
+    }
+  }
+  if (bestCount >= 2 && best) return best.slice(0, maxChars);
+
+  // 2. Two longest lines joined
+  const longest = [...cleaned].sort((a, b) => b.length - a.length).slice(0, 2);
+  const joined = longest.join(" / ");
+  if (joined.length <= maxChars) return joined;
+  return joined.slice(0, maxChars).replace(/\s+\S*$/, "...");
+}
+
+function _buildImagePrompt(section: SectionInput, totalSections: number): string {
   const parts: string[] = [];
 
   // ── Anti-typography directive — front-loaded because image models weight early tokens ──
@@ -115,19 +154,28 @@ function buildImagePrompt(section: SectionInput, totalSections: number): string 
     parts.push(`Visual direction: ${section.artistDirection}`);
   }
 
-  // ── Layer 2: SCENE — what the viewer sees RIGHT NOW ──
+  // ── Layers 2 + 3: LYRICS + SCENE with explicit balance weighting ──
+  // Lyrics lead (60%) so imagery is grounded in what the song is actually saying;
+  // the AI scene description supplies the remaining 40% of visual direction.
+  // When only one is present, it carries the full weight.
   const description = section.description?.trim();
-  if (description) {
-    parts.push(`Scene: ${description}`);
-  }
-
-  // ── Layer 3: LYRICS — ground the scene in the actual song ──
   const lyrics = section.lyrics?.trim();
-  if (lyrics) {
-    const excerpt = lyrics.length > 100 ? lyrics.slice(0, 100).replace(/\s+\S*$/, "...") : lyrics;
+  const excerpt = lyrics
+    ? (lyrics.length > 140 ? lyrics.slice(0, 140).replace(/\s+\S*$/, "...") : lyrics)
+    : "";
+
+  if (excerpt && description) {
     parts.push(
-      `Emotional context from the lyrics — DO NOT render these words in the image; they will be composited separately as video text: "${excerpt}"`
+      `Compose this image with roughly 60% emotional weight on the lyric being sung and 40% on the scene direction. ` +
+      `Lyric being sung — capture its FEELING and IMAGERY, but DO NOT render these words in the image (they'll be composited as video text separately): "${excerpt}". ` +
+      `Scene direction: ${description}`
     );
+  } else if (excerpt) {
+    parts.push(
+      `Build this image entirely from the feeling and imagery of the lyric being sung — DO NOT render these words in the image (they'll be composited as video text separately): "${excerpt}"`
+    );
+  } else if (description) {
+    parts.push(`Scene: ${description}`);
   }
 
   // ── Layer 4: CINEMATOGRAPHY — how it's shot ──
@@ -398,11 +446,10 @@ serve(async (req) => {
         // Extract lyrics for this section from inline lines
         let sectionLyrics = "";
         if (Array.isArray(body.lyrics_lines_inline) && s.startSec != null && s.endSec != null) {
-          sectionLyrics = body.lyrics_lines_inline
-            .filter((l) => l.start >= (s.startSec ?? 0) - 0.5 && l.start < (s.endSec ?? 0) + 0.5)
-            .map((l) => l.text)
-            .join(" ")
-            .slice(0, 120);
+          const sectionLines = body.lyrics_lines_inline.filter(
+            (l) => l.start >= (s.startSec ?? 0) - 0.5 && l.start < (s.endSec ?? 0) + 0.5,
+          );
+          sectionLyrics = pickSectionHookLyrics(sectionLines);
         }
         return {
           sectionIndex,
@@ -431,7 +478,7 @@ serve(async (req) => {
               (l: any) =>
                 l?.start != null && l?.end != null && l.start >= section.startSec - 0.5 && l.start < section.endSec + 0.5,
             );
-            sectionLyrics = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 120);
+            sectionLyrics = pickSectionHookLyrics(sectionLines);
           }
 
           const rawDesc = typeof section?.description === "string" ? section.description.trim() : "";
