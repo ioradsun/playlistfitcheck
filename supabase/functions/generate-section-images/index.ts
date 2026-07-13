@@ -98,6 +98,45 @@ const MOOD_COLOR_VERBAL: Record<string, string> = {
 };
 
 function buildImagePrompt(section: SectionInput, totalSections: number): string {
+  return _buildImagePrompt(section, totalSections);
+}
+
+/**
+ * Pick the most representative line(s) for a section:
+ *  1. If any line repeats within the section, prefer the most-repeated one (hook/chorus energy).
+ *  2. Otherwise pick the two longest lines (usually the most emotionally loaded).
+ * Falls back to a joined slice if the structure is weird.
+ */
+function pickSectionHookLyrics(
+  sectionLines: Array<{ text?: string }>,
+  maxChars = 140,
+): string {
+  const cleaned = sectionLines
+    .map((l) => (typeof l?.text === "string" ? l.text.trim() : ""))
+    .filter((t) => t.length > 0);
+  if (cleaned.length === 0) return "";
+
+  // 1. Most-repeated line
+  const counts = new Map<string, number>();
+  for (const t of cleaned) counts.set(t, (counts.get(t) ?? 0) + 1);
+  let best = "";
+  let bestCount = 1;
+  for (const [text, count] of counts) {
+    if (count > bestCount || (count === bestCount && text.length > best.length)) {
+      best = text;
+      bestCount = count;
+    }
+  }
+  if (bestCount >= 2 && best) return best.slice(0, maxChars);
+
+  // 2. Two longest lines joined
+  const longest = [...cleaned].sort((a, b) => b.length - a.length).slice(0, 2);
+  const joined = longest.join(" / ");
+  if (joined.length <= maxChars) return joined;
+  return joined.slice(0, maxChars).replace(/\s+\S*$/, "...");
+}
+
+function _buildImagePrompt(section: SectionInput, totalSections: number): string {
   const parts: string[] = [];
 
   // ── Anti-typography directive — front-loaded because image models weight early tokens ──
