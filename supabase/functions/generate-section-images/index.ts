@@ -446,11 +446,10 @@ serve(async (req) => {
         // Extract lyrics for this section from inline lines
         let sectionLyrics = "";
         if (Array.isArray(body.lyrics_lines_inline) && s.startSec != null && s.endSec != null) {
-          sectionLyrics = body.lyrics_lines_inline
-            .filter((l) => l.start >= (s.startSec ?? 0) - 0.5 && l.start < (s.endSec ?? 0) + 0.5)
-            .map((l) => l.text)
-            .join(" ")
-            .slice(0, 120);
+          const sectionLines = body.lyrics_lines_inline.filter(
+            (l) => l.start >= (s.startSec ?? 0) - 0.5 && l.start < (s.endSec ?? 0) + 0.5,
+          );
+          sectionLyrics = pickSectionHookLyrics(sectionLines);
         }
         return {
           sectionIndex,
@@ -479,7 +478,7 @@ serve(async (req) => {
               (l: any) =>
                 l?.start != null && l?.end != null && l.start >= section.startSec - 0.5 && l.start < section.endSec + 0.5,
             );
-            sectionLyrics = sectionLines.map((l: any) => l.text || "").join(" ").slice(0, 120);
+            sectionLyrics = pickSectionHookLyrics(sectionLines);
           }
 
           const rawDesc = typeof section?.description === "string" ? section.description.trim() : "";
